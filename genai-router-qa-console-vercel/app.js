@@ -1,12 +1,77 @@
 const state = {
   tests: [], questions: [], operations: [], results: {}, lastStream: '', aiRating: null,
   demo: false, createdConversationId: null, selectedTestId: null,
-  context: null, tokenMarkedAt: null, connectionOk: false
+  context: null, tokenMarkedAt: null, connectionOk: false,
+  lastExchange: null, bulkRunning: false, uiSelfTest: null
 };
 
 const $ = (id) => document.getElementById(id);
 const esc = (v='') => String(v ?? '').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const now = () => new Date().toISOString();
+
+const clone = (v) => v == null ? v : JSON.parse(JSON.stringify(v));
+function showToast(message,kind='info',ms=3200){
+  const host=$('toastHost'); if(!host){console.log(`[${kind}]`,message);return;}
+  const el=document.createElement('div'); el.className=`toast ${kind}`; el.textContent=message; host.appendChild(el);
+  setTimeout(()=>el.remove(),ms);
+}
+function activateTab(name){
+  const btn=[...document.querySelectorAll('.tab')].find(x=>x.dataset.tab===name); const page=$(name); if(!btn||!page)return;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); document.querySelectorAll('.tabpage').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); page.classList.add('active');
+}
+function plainTestExplanation(t){
+  const overrides={
+    'P0-001':'בדיקה שהאתר מצליח להגיע ל־Router האמיתי בסביבת TSH. זו בדיקת תקשורת/סביבה, לא בדיקה של איכות ה־AI.',
+    'P0-002':'בדיקה חיובית של ההזדהות: האתר שולח בקשה מוגנת ל־POST /v1/conversations/history עם Identity Token אמיתי ב־X-Serverless-Authorization. בלי Token שהופק ב־gcloud אין PASS אמיתי. במצב Demo מתקבלת רק סימולציה והיא מסומנת DEMO.',
+    'P0-003':'בדיקה שלילית: אותה גישה מוגנת נשלחת בלי Token בכלל. אנחנו מצפים שהשרת יחסום אותה ולא יחזיר מידע עסקי.',
+    'P0-004':'בדיקה שלילית: שולחים Token מזויף/לא תקין ומוודאים שהשרת חוסם את הבקשה.',
+    'P0-005':'פותחים Conversation חדש עם נתוני הבדיקה ומוודאים שהשרת מחזיר conversationId אמיתי.',
+    'P0-019':'מחיקת Conversation. זו פעולה משנה־state ולכן בהרצה כוללת היא נדחית לסוף, אחרי בדיקות שתלויות בשיחה.',
+    'P0-023':'שליחת הודעה אמיתית ל־Conversation ובדיקה שמתקבל SSE מה־Router.'
+  };
+  return overrides[t.ID] || `מטרת הבדיקה: ${t['תרחיש בדיקה']||'בדיקת התנהגות המערכת'}. נשלחת בקשה ל־${t.Endpoint||'ה־API'} ונבדקת התוצאה מול ה־Expected Result המוגדר.`;
+}
+function naResult(id,reason,details=''){ return result(id,'N/A',reason,details||'הבדיקה לא הורצה כי חסר תנאי מקדים/מידע נדרש.'); }
+function unavailableResult(id,reason,details='',bulk=false){ return result(id,bulk?'N/A':'BLOCKED',reason,details||'לא ניתן לבצע את הבדיקה כרגע.'); }
+function statusLabel(s){ return s==='N/A'?'N/A':s; }
+function testPrereqIssues(id,t,{bulk=false}={}){
+  const c=cfg(); const issues=[];
+  if(t?.mode==='manual') issues.push('בדיקה ידנית');
+  if(c.executionMode==='postman' && t?.mode!=='manual') issues.push('Execution Mode הוא Postman/cURL בלבד');
+  if(!state.demo && !c.baseUrl) issues.push('חסר TSH Base URL');
+  const noValidTokenNeeded=new Set(['P0-001','P0-003','P0-004','P2-001','P2-002']);
+  if(!state.demo && !noValidTokenNeeded.has(id) && !c.token) issues.push('חסר Identity Token אמיתי מ־gcloud');
+  if(!c.userId && !['P0-001','P2-001','P2-002'].includes(id)) issues.push('חסר User ID');
+  if(!c.appId && !['P0-001','P2-001','P2-002'].includes(id)) issues.push('חסר App ID');
+  const convNeeded=new Set(['P0-015','P0-018','P0-019','P0-020','P0-022','P0-023','P0-024','P0-025','P2-003','P2-005','P2-007']);
+  if(convNeeded.has(id) && !c.conversationId) issues.push('חסר Conversation ID');
+  if(id==='P1-021' && !c.messageId) issues.push('חסר Message ID');
+  if(['P0-014','P0-018','P0-020','P0-024'].includes(id) && !c.userIdB) issues.push('חסר User ID B');
+  if(['P0-029','P0-030','P0-031','P1-023'].includes(id)) issues.push('חסר Source אמיתי (bucket/file/chunk)');
+  if(id==='P0-036') issues.push('נדרש DB/Log visibility או Fault Injection');
+  return issues;
+}
+function safeEvidenceHeaders(token,authHeader){
+  const h={'Accept':'application/json, text/event-stream, */*'}; if(token) h[authHeader]='Bearer [REDACTED]'; return h;
+}
+function beginExchange({method,path,body,token,mode}){
+  const c=cfg(); let url; try{url=targetUrl(c.baseUrl||'<TSH_BASE_URL>',path)}catch{url=`${c.baseUrl||'<TSH_BASE_URL>'}${path}`;}
+  const tok=token===undefined?c.token:token;
+  state.lastExchange={mode:mode|| (state.demo?'DEMO':c.executionMode), startedAt:now(), request:{method:method.toUpperCase(),url,path,headers:safeEvidenceHeaders(tok,c.authHeader),body:body??null},response:null};
+  if(body!==undefined && body!==null && method.toUpperCase()!=='GET') state.lastExchange.request.headers['Content-Type']='application/json';
+  return state.lastExchange;
+}
+function finishExchange({status,body,latencyMs,contentType,stream=false,error=null}){
+  if(!state.lastExchange) return;
+  state.lastExchange.response={status:status??null,latencyMs:latencyMs??null,contentType:contentType||'',stream:!!stream,body:body??null,error:error||null,finishedAt:now()};
+}
+function evidenceCurl(ev){
+  if(!ev?.request)return '';
+  const r=ev.request; const parts=[`curl -i -X ${r.method} '${r.url}'`];
+  for(const [k,v] of Object.entries(r.headers||{})){ const val=String(v).includes('[REDACTED]')?'Bearer <IDENTITY_TOKEN>':v; parts.push(`  -H '${k}: ${val}'`); }
+  if(r.body!=null && r.method!=='GET'){const json=JSON.stringify(r.body).replace(/'/g,"'\\''");parts.push(`  --data '${json}'`);}
+  return parts.join(' \\\n');
+}
 
 const CONTRACT_GAPS = [
   {severity:'MEDIUM',area:'Authentication',gap:'ב־Swagger לא מוגדר securityScheme. לפי ההנחיה שהתקבלה ה-Identity Token מופק ב-gcloud auth print-identity-token ונשלח ב-X-Serverless-Authorization: Bearer <TOKEN>.',impact:'דרך ההזדהות ידועה כעת, אך עדיין חסרים תיעוד פורמלי ב-Swagger וקודי שגיאה מוסכמים.'},
@@ -79,9 +144,22 @@ function renderSseEvents(text){
 }
 function openTest(id){
   const t=state.tests.find(x=>x.ID===id); if(!t)return; state.selectedTestId=id;
+  const r=state.results[id];
   $('dialogTitle').textContent=`${t.ID} — ${t['תרחיש בדיקה']||''}`; $('dialogSubtitle').textContent=`${t.priority} · ${modeLabel(t.mode)} · ${t.Endpoint||''}`;
-  $('dialogBody').innerHTML=[['תנאים מקדימים',t['תנאים מקדימים']],['צעדים / קלט',t['צעדים / קלט']],['Expected Result',t['Expected Result']],['שאלה פתוחה',t['שאלה פתוחה / נדרש אישור']],['מקור / הערה',t['מקור / הערה']]].filter(x=>x[1]).map(([a,b])=>`<div class="detail-row"><b>${esc(a)}</b>${esc(b)}</div>`).join('');
-  $('manualNote').value=state.results[id]?.details||''; $('dialogRunBtn').style.display=t.mode==='manual'?'none':'inline-block'; $('testDialog').showModal();
+  const resultHtml=r?`<div class="detail-row test-result-line"><b>תוצאה אחרונה</b><span class="status-chip ${statusClass(r.status)}">${esc(statusLabel(r.status))}</span><span>${esc(r.actual||'')}</span></div>`:'';
+  $('dialogBody').innerHTML=`<div class="detail-row plain-explanation"><b>מה הבדיקה עושה בפשטות?</b>${esc(plainTestExplanation(t))}</div>`+resultHtml+
+    [['תנאים מקדימים',t['תנאים מקדימים']],['צעדים / קלט',t['צעדים / קלט']],['Expected Result',t['Expected Result']],['שאלה פתוחה',t['שאלה פתוחה / נדרש אישור']],['מקור / הערה',t['מקור / הערה']]].filter(x=>x[1]).map(([a,b])=>`<div class="detail-row"><b>${esc(a)}</b>${esc(b)}</div>`).join('');
+  renderDialogEvidence(r?.evidence||null,r?.status||'');
+  $('manualNote').value=r?.details||''; $('dialogRunBtn').style.display=t.mode==='manual'?'none':'inline-block'; $('testDialog').showModal();
+}
+function renderDialogEvidence(ev,status=''){
+  const host=$('dialogEvidence'), copy=$('dialogCopyCurlBtn'); if(!host||!copy)return;
+  if(!ev){host.innerHTML='<div class="detail-row na-explanation"><b>לוג הרצה</b>עדיין אין לוג. הרץ את הבדיקה כדי לראות Request / Response.</div>';copy.hidden=true;return;}
+  const mode=ev.mode||'unknown'; const demo=mode==='DEMO';
+  const req=ev.request||{}, resp=ev.response||{};
+  const modeMsg=demo?'סימולציה מקומית בלבד — לא נשלחה בקשה אמיתית ל־TSH.':'בקשה שנשלחה לפי Execution Mode המוצג.';
+  host.innerHTML=`<div class="evidence-card ${demo?'demo-explanation':''}"><h3>הוכחת הרצה / Request & Response</h3><div class="evidence-meta"><span class="pill">Mode: ${esc(mode)}</span><span class="pill">HTTP: ${esc(resp.status??'—')}</span><span class="pill">Latency: ${esc(resp.latencyMs??'—')} ms</span></div><p>${esc(modeMsg)}</p><b>Request</b><pre>${esc(JSON.stringify(req,null,2))}</pre><b>Response</b><pre>${esc(JSON.stringify(resp,null,2))}</pre></div>`;
+  copy.hidden=false; copy.onclick=async()=>{const txt=evidenceCurl(ev);try{await navigator.clipboard.writeText(txt);showToast('cURL הועתק. ה־Token נשאר מוסתר.','success');}catch{prompt('העתק cURL',txt);}};
 }
 function saveManual(status){ const id=state.selectedTestId;if(!id)return; result(id,status,'Manual review',$('manualNote').value.trim()||'סומן ידנית');$('testDialog').close(); }
 
@@ -177,25 +255,29 @@ async function directRequest({method,path,body,token,stream=false}){
   const tok=token===undefined?c.token:token; if(tok) headers[c.authHeader]=tok.startsWith('Bearer ')?tok:`Bearer ${tok}`;
   let payload;
   if(body!==undefined && body!==null && method.toUpperCase()!=='GET'){headers['Content-Type']='application/json';payload=JSON.stringify(body);}
-  const started=Date.now();
-  let res;
+  const started=Date.now(); let res;
   try{res=await fetch(url,{method:method.toUpperCase(),headers,body:payload});}
-  catch(e){throw new Error('Browser Direct נכשל. ייתכן CORS או שאין גישה מהרשת הנוכחית ל-TSH. נסה Postman מתוך SH/TSH. '+(e.message||''));}
-  const ct=res.headers.get('content-type')||'';
-  if(stream||ct.includes('text/event-stream')) return {status:res.status,stream:res.body,headers:res.headers,latencyMs:Date.now()-started};
+  catch(e){finishExchange({error:e.message,latencyMs:Date.now()-started});throw new Error('Browser Direct נכשל. ייתכן CORS או שאין גישה מהרשת הנוכחית ל-TSH. נסה Postman מתוך SH/TSH. '+(e.message||''));}
+  const ct=res.headers.get('content-type')||'', latencyMs=Date.now()-started;
+  if(stream||ct.includes('text/event-stream')){finishExchange({status:res.status,latencyMs,contentType:ct,stream:true,body:'[SSE stream — body מתעדכן לאחר הקריאה]'});return {status:res.status,stream:res.body,headers:res.headers,latencyMs};}
   const txt=await res.text(); let parsed=txt; try{parsed=JSON.parse(txt)}catch{}
-  return {status:res.status,body:parsed,raw:txt,latencyMs:Date.now()-started,contentType:ct,isBinary:false};
+  finishExchange({status:res.status,body:parsed,latencyMs,contentType:ct});
+  return {status:res.status,body:parsed,raw:txt,latencyMs,contentType:ct,isBinary:false};
 }
 async function proxy({method,path,body,token,stream=false}){
-  const c=cfg(); if(state.demo) return demoResponse(method,path,body,stream);
-  if(!c.baseUrl) throw new Error('יש להזין TSH Base URL');
-  if(c.executionMode==='postman') throw new Error('מצב Postman/cURL אינו מריץ בקשות מהדפדפן. השתמש בכפתור "העתק cURL" והרץ בתוך הסביבה הפנימית.');
+  const c=cfg(); beginExchange({method,path,body,token,mode:state.demo?'DEMO':c.executionMode});
+  if(state.demo){const r=await demoResponse(method,path,body,stream);finishExchange({status:r.status,body:stream?'[Demo SSE stream]':r.body,latencyMs:r.latencyMs??0,contentType:r.contentType||'',stream});return r;}
+  if(!c.baseUrl){finishExchange({error:'חסר TSH Base URL'});throw new Error('יש להזין TSH Base URL');}
+  if(c.executionMode==='postman'){finishExchange({error:'Postman mode — לא נשלחה בקשה'});throw new Error('מצב Postman/cURL אינו מריץ בקשות מהדפדפן. השתמש בכפתור "העתק cURL" והרץ בתוך הסביבה הפנימית.');}
   if(c.executionMode==='direct') return directRequest({method,path,body,token,stream});
-  const res=await fetch('/api/proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({baseUrl:c.baseUrl,token:token===undefined?c.token:token,authHeader:c.authHeader,method,apiPath:path,body,stream})});
-  if(stream){ return {status:res.status,stream:res.body,headers:res.headers}; }
+  const started=Date.now();
+  let res; try{res=await fetch('/api/proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({baseUrl:c.baseUrl,token:token===undefined?c.token:token,authHeader:c.authHeader,method,apiPath:path,body,stream})});}
+  catch(e){finishExchange({error:e.message,latencyMs:Date.now()-started});throw e;}
+  if(stream){finishExchange({status:res.status,latencyMs:Date.now()-started,contentType:res.headers.get('content-type')||'',stream:true,body:'[SSE stream — body מתעדכן לאחר הקריאה]'});return {status:res.status,stream:res.body,headers:res.headers,latencyMs:Date.now()-started};}
   const wrapper=await res.json();
-  if(!res.ok) throw new Error(wrapper.error||'Proxy error');
+  if(!res.ok){finishExchange({status:res.status,body:wrapper,latencyMs:Date.now()-started,error:wrapper.error||'Proxy error'});throw new Error(wrapper.error||'Proxy error');}
   let parsed=wrapper.body; try{parsed=JSON.parse(wrapper.body)}catch{}
+  finishExchange({status:wrapper.upstreamStatus,body:parsed,latencyMs:wrapper.latencyMs,contentType:wrapper.contentType});
   return {status:wrapper.upstreamStatus, body:parsed, raw:wrapper.body, latencyMs:wrapper.latencyMs, contentType:wrapper.contentType, isBinary:wrapper.isBinary};
 }
 function buildCurl(method,path,body){
@@ -239,26 +321,29 @@ function extractMessageIdFromText(text){ const m=text.match(/"messageId"\s*:\s*"
 async function readStream(stream,onChunk){
   const reader=stream.getReader(); const dec=new TextDecoder(); let full='';
   while(true){ const {done,value}=await reader.read(); if(done)break; const t=dec.decode(value,{stream:true}); full+=t; onChunk?.(t,full); }
+  if(state.lastExchange?.response) state.lastExchange.response.body=full.slice(0,15000);
   return full;
 }
 
 function expectStatus(actual, allowed){ return allowed.includes(actual); }
 function result(id,status,actual='',details=''){
-  state.results[id]={id,status,actual,details,time:now()}; renderKpis(); renderCatalog(); renderReport();
+  state.results[id]={id,status,actual,details,time:now(),evidence:clone(state.lastExchange)}; renderKpis(); renderCatalog(); renderReport();
   return state.results[id];
 }
-function statusClass(s){return s==='PASS'?'status-pass':s==='FAIL'?'status-fail':s==='BLOCKED'?'status-blocked':'status-question';}
+function statusClass(s){return s==='PASS'?'status-pass':s==='FAIL'?'status-fail':s==='BLOCKED'?'status-blocked':s==='N/A'?'status-na':s==='DEMO'?'status-demo':'status-question';}
 
-async function runTest(id){
-  const t=state.tests.find(x=>x.ID===id); if(!t) return;
+async function runTest(id,{bulk=false}={}){
+  const t=state.tests.find(x=>x.ID===id); if(!t) return null;
+  state.lastExchange=null;
   try{
-    if(t.mode==='manual') return result(id,'BLOCKED','בדיקה ידנית','אין דרך אוטומטית אמינה ללא מידע/גישה נוספים.');
+    const prereqs=testPrereqIssues(id,t,{bulk});
+    if(prereqs.length) return naResult(id,prereqs.join(' · '),`לא הורץ: ${prereqs.join(', ')}`);
     const c=cfg(); let r, body, pass, actual='';
     switch(id){
       case 'P0-001':
       case 'P2-001': r=await proxy({method:'GET',path:'/health'}); pass=expectStatus(r.status,[200]); actual=`HTTP ${r.status}`; break;
       case 'P2-002': r=await proxy({method:'GET',path:'/health'}); pass=r.status===200 && !/(password|secret|token|private[_ -]?key)/i.test(JSON.stringify(r.body)); actual=JSON.stringify(r.body).slice(0,400); break;
-      case 'P0-002': body=requestBody('/v1/conversations/history','POST'); r=await proxy({method:'POST',path:'/v1/conversations/history',body}); pass=r.status>=200&&r.status<300; actual=`HTTP ${r.status}`; break;
+      case 'P0-002': body=requestBody('/v1/conversations/history','POST'); r=await proxy({method:'POST',path:'/v1/conversations/history',body}); pass=r.status>=200&&r.status<300; actual=`HTTP ${r.status} · ${state.demo?'DEMO בלבד':'בקשה אמיתית נשלחה'} · ${r.latencyMs??'—'} ms`; break;
       case 'P0-003': body=requestBody('/v1/conversations/history','POST'); r=await proxy({method:'POST',path:'/v1/conversations/history',body,token:''}); pass=[401,403].includes(r.status); actual=`HTTP ${r.status}`; break;
       case 'P0-004': body=requestBody('/v1/conversations/history','POST'); r=await proxy({method:'POST',path:'/v1/conversations/history',body,token:'definitely-invalid-token'}); pass=[401,403].includes(r.status); actual=`HTTP ${r.status}`; break;
       case 'P0-005': body=requestBody('/v1/conversations/new','POST'); r=await proxy({method:'POST',path:'/v1/conversations/new',body}); pass=r.status===201; {const x=extractConversationId(r.body); if(x){$('conversationId').value=x;state.createdConversationId=x;}} actual=`HTTP ${r.status} ${JSON.stringify(r.body).slice(0,350)}`; break;
@@ -274,30 +359,30 @@ async function runTest(id){
         if(id==='P1-009') pass=r.status>=400&&r.status<500; else pass=r.status>=200&&r.status<300;
         actual=`HTTP ${r.status} ${JSON.stringify(r.body).slice(0,350)}`; break;
       case 'P0-014':
-        if(!c.userIdB) return result(id,'BLOCKED','חסר User B','הזן User ID B (ורצוי Token B אם נדרש)');
+        if(!c.userIdB) return unavailableResult(id,'חסר User B','הזן User ID B (ורצוי Token B אם נדרש)',bulk);
         body=requestBody('/v1/conversations/history','POST'); body.userId=c.userIdB; r=await proxy({method:'POST',path:'/v1/conversations/history',body,token:c.token}); return result(id,'QUESTION',`HTTP ${r.status}`, 'יש לוודא מול האפיון אם body userId חייב להיות קשור לזהות שב-Token.');
       case 'P0-015': case 'P0-018': case 'P1-012': case 'P1-013':
         body=requestBody('/v1/conversations/id','POST');
-        if(id==='P0-018'){if(!c.userIdB)return result(id,'BLOCKED','חסר User B','הזן User B');body.userId=c.userIdB;}
+        if(id==='P0-018'){if(!c.userIdB)return unavailableResult(id,'חסר User B','הזן User B',bulk);body.userId=c.userIdB;}
         if(id==='P1-012') body.conversationId='11111111-1111-4111-8111-999999999999';
         if(id==='P1-013') body.conversationId='abc';
         r=await proxy({method:'POST',path:'/v1/conversations/id',body});
         pass=id==='P0-015'?r.status===200:id==='P0-018'?r.status===403:id==='P1-012'?r.status===404:(r.status>=400&&r.status<500); actual=`HTTP ${r.status}`; break;
       case 'P0-019': case 'P0-020': case 'P1-014':
         body=requestBody('/v1/conversations/id','DELETE');
-        if(id==='P0-020'){if(!c.userIdB)return result(id,'BLOCKED','חסר User B','הזן User B');body.userId=c.userIdB;}
+        if(id==='P0-020'){if(!c.userIdB)return unavailableResult(id,'חסר User B','הזן User B',bulk);body.userId=c.userIdB;}
         if(id==='P1-014') body.conversationId='11111111-1111-4111-8111-999999999999';
         r=await proxy({method:'DELETE',path:'/v1/conversations/id',body}); pass=id==='P0-019'?r.status===200:id==='P0-020'?r.status===403:r.status===404; actual=`HTTP ${r.status}`; break;
       case 'P0-022': body=requestBody('/v1/conversations/history','POST'); r=await proxy({method:'POST',path:'/v1/conversations/history',body}); return result(id,'QUESTION',`HTTP ${r.status} ${JSON.stringify(r.body).slice(0,300)}`,'יש לבדוק שהשיחה שנמחקה אינה מופיעה; תלוי Hard/Soft Delete.');
       case 'P0-023': case 'P0-025':
         requireFields(['conversationId','appId','userId']); body=requestBody('/v1/conversations/messages','POST'); body.content='בדיקת QA אוטומטית'; r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true});
         {const text=await readStream(r.stream); pass=r.status===200 && (id==='P0-025'?/"type"\s*:\s*"done"/.test(text):true); const mid=extractMessageIdFromText(text); if(mid)$('messageId').value=mid; actual=`HTTP ${r.status}\n${text.slice(0,800)}`;} break;
-      case 'P0-024': if(!c.userIdB)return result(id,'BLOCKED','חסר User B','הזן User B'); body=requestBody('/v1/conversations/messages','POST'); body.userId=c.userIdB; body.content='cross user auth test'; r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); {const text=await readStream(r.stream); return result(id,'QUESTION',`HTTP ${r.status}\n${text.slice(0,400)}`,'קוד השגיאה המצופה אינו סגור ב-Swagger.');}
+      case 'P0-024': if(!c.userIdB)return unavailableResult(id,'חסר User B','הזן User B',bulk); body=requestBody('/v1/conversations/messages','POST'); body.userId=c.userIdB; body.content='cross user auth test'; r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); {const text=await readStream(r.stream); return result(id,'QUESTION',`HTTP ${r.status}\n${text.slice(0,400)}`,'קוד השגיאה המצופה אינו סגור ב-Swagger.');}
       case 'P0-026': return result(id,'QUESTION','הרץ דרך GenAI/RAG Inspector','יש לבצע review לאירועי thought ולוודא שאין Chain-of-Thought/System Prompt.');
       case 'P0-027': return result(id,'QUESTION','מומלץ להריץ ידנית דרך API Runner','פער 32768 מול 8192 דורש החלטת Expected.');
       case 'P0-028': case 'P0-032': case 'P0-033': case 'P0-034': case 'P0-035': case 'P1-025': case 'P1-026': return result(id,'QUESTION','הרץ דרך GenAI/RAG Inspector','נדרש שיפוט איכות/Golden Dataset.');
-      case 'P0-029': case 'P0-030': case 'P0-031': case 'P1-023': return result(id,'BLOCKED','נדרש source אמיתי','הזן bucket/file/chunk מתוך תשובת sources והריץ ב-API Runner.');
-      case 'P0-036': return result(id,'BLOCKED','נדרש Fault Injection/DB visibility','לא ניתן להסיק State consistency מה-API בלבד.');
+      case 'P0-029': case 'P0-030': case 'P0-031': case 'P1-023': return unavailableResult(id,'נדרש source אמיתי','הזן bucket/file/chunk מתוך תשובת sources והריץ ב-API Runner.',bulk);
+      case 'P0-036': return unavailableResult(id,'נדרש Fault Injection/DB visibility','לא ניתן להסיק State consistency מה-API בלבד.',bulk);
       case 'P1-001': body=requestBody('/v1/conversations/new','POST'); body.userId='abc'; r=await proxy({method:'POST',path:'/v1/conversations/new',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
       case 'P1-002': body=requestBody('/v1/conversations/new','POST'); body.caseId='12345678'; r=await proxy({method:'POST',path:'/v1/conversations/new',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
       case 'P1-003': body=requestBody('/v1/conversations/new','POST'); body.caseId='1234567890'; r=await proxy({method:'POST',path:'/v1/conversations/new',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
@@ -305,13 +390,13 @@ async function runTest(id){
       case 'P1-005': body=requestBody('/v1/conversations/new','POST'); body.appId='A'.repeat(50); r=await proxy({method:'POST',path:'/v1/conversations/new',body}); pass=r.status===201; actual=`HTTP ${r.status}`; break;
       case 'P1-006': body=requestBody('/v1/conversations/new','POST'); body.appId='A'.repeat(51); r=await proxy({method:'POST',path:'/v1/conversations/new',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
       case 'P1-019': body=requestBody('/v1/conversations/new','POST'); body.unexpectedField='x'; r=await proxy({method:'POST',path:'/v1/conversations/new',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
-      case 'P1-020': return result(id,'BLOCKED','ה-Proxy שולח JSON תקין בכוונה','בדיקת Content-Type שגוי עדיף לבצע ב-Postman/curl או להרחיב את ה-Proxy.');
+      case 'P1-020': return unavailableResult(id,'ה-Proxy שולח JSON תקין בכוונה','בדיקת Content-Type שגוי עדיף לבצע ב-Postman/curl או להרחיב את ה-Proxy.',bulk);
       case 'P1-021': requireFields(['messageId']); body={messageId:c.messageId,feedbackType:'thumbs_up'}; r=await proxy({method:'POST',path:'/v1/messages/send/feedback',body}); pass=r.status===200; actual=`HTTP ${r.status}`; break;
       case 'P1-024': body={bucketName:'qa-nonexistent-bucket',fileName:'missing.pdf'}; r=await proxy({method:'POST',path:'/v1/files/download',body}); pass=r.status===404||r.status===400||r.status===403; actual=`HTTP ${r.status}`; break;
       case 'P2-003': requireFields(['conversationId','appId','userId']); body=requestBody('/v1/conversations/messages','POST'); body.content='א'; r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); {const text=await readStream(r.stream);pass=r.status===200;actual=`HTTP ${r.status}\n${text.slice(0,300)}`;} break;
       case 'P2-005': requireFields(['conversationId','appId','userId']); body=requestBody('/v1/conversations/messages','POST'); body.content='א'.repeat(32769); r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); {const text=await readStream(r.stream);pass=r.status>=400&&r.status<500;actual=`HTTP ${r.status}\n${text.slice(0,200)}`;} break;
       case 'P2-007': return result(id,'QUESTION','הרץ שאלה בעברית דרך GenAI Inspector ואז Get Conversation','בדיקת Round-trip דורשת תוכן עברי ידוע והשוואה.');
-      case 'P2-011': return result(id,'BLOCKED','הזן טווח ללא נתונים דרך API Runner','Endpoint סטטיסטיקה נבחר לפי צורך.');
+      case 'P2-011': return unavailableResult(id,'הזן טווח ללא נתונים דרך API Runner','Endpoint סטטיסטיקה נבחר לפי צורך.',bulk);
       case 'BND-001': body=requestBody('/v1/conversations/new','POST'); body.appId=''; r=await proxy({method:'POST',path:'/v1/conversations/new',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
       case 'BND-002': body=requestBody('/v1/conversations/new','POST'); body.userId='a'.repeat(120)+'@taxes.gov.il'; r=await proxy({method:'POST',path:'/v1/conversations/new',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
       case 'BND-003': body=requestBody('/v1/conversations/history','POST'); body.limit=1; r=await proxy({method:'POST',path:'/v1/conversations/history',body}); pass=r.status>=200&&r.status<300; actual=`HTTP ${r.status}`; break;
@@ -330,45 +415,94 @@ async function runTest(id){
       case 'BND-016': body={startDate:'2026-09-14T00:00:00Z',endDate:'2026-09-15T00:00:00Z'}; r=await proxy({method:'POST',path:'/v1/statistics/active-users',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
       default: return result(id,'BLOCKED','אין אוטומציה ייעודית עדיין','התסריט נשאר זמין לביצוע ידני/דרך API Runner.');
     }
-    return result(id,pass?'PASS':'FAIL',actual,t['Expected Result']||'');
-  }catch(e){ return result(id,'BLOCKED',e.message,'לא בוצעה קביעה עסקית.'); }
+    return result(id,state.demo?'DEMO':(pass?'PASS':'FAIL'),actual,state.demo?'סימולציה בלבד — לא נשלחה בקשה אמיתית ל-TSH.':(t['Expected Result']||''));
+  }catch(e){ const missing=/חסרים שדות|חסר /.test(e.message||''); return result(id,(bulk&&missing)?'N/A':'BLOCKED',e.message,'לא בוצעה קביעה עסקית.'); }
 }
 
 async function runSafeP0(){
   const ids=['P0-001','P0-002','P0-003','P0-004','P0-006','P0-007']; $('runSummary').innerHTML='';
-  for(const id of ids){ const r=await runTest(id); $('runSummary').innerHTML += `<div class="run-item"><b>${id}</b> — <span class="${statusClass(r.status)}">${r.status}</span> — ${esc(r.actual)}</div>`; }
+  for(const id of ids){ const r=await runTest(id,{bulk:true}); if(r)$('runSummary').innerHTML += `<div class="run-item"><b>${id}</b><span class="${statusClass(r.status)}">${r.status}</span><span>${esc(r.actual)}</span></div>`; }
+  showToast('Run Safe P0 הסתיים.','success');
 }
 
 async function runBoundaryPack(){
   const ids=state.tests.filter(t=>t.ID.startsWith('BND-')&&t.mode==='auto').map(t=>t.ID); $('runSummary').innerHTML='';
-  for(const id of ids){ const r=await runTest(id); $('runSummary').innerHTML += `<div class="run-item"><b>${id}</b> — <span class="${statusClass(r.status)}">${r.status}</span> — ${esc(r.actual)}</div>`; }
+  for(const id of ids){ const r=await runTest(id,{bulk:true}); if(r)$('runSummary').innerHTML += `<div class="run-item"><b>${id}</b><span class="${statusClass(r.status)}">${r.status}</span><span>${esc(r.actual)}</span></div>`; }
+  showToast('Boundary Pack הסתיים.','success');
+}
+
+async function runAllTests(){
+  if(state.bulkRunning){showToast('כבר מתבצעת הרצה כוללת.','warning');return;}
+  state.bulkRunning=true; const btn=$('runAllTests'); const old=btn.textContent; btn.disabled=true; btn.textContent='מריץ…';
+  $('runSummary').innerHTML=''; const prog=$('bulkProgress'), bar=$('bulkProgressBar'), text=$('bulkProgressText'); prog.hidden=false;
+  // פעולות Delete על Conversation אמיתי רצות רק בסוף, אחרי כל הבדיקות שתלויות בו.
+  const destructive=new Set(['P0-019','P0-020','P0-022']);
+  const tailOrder=['P0-020','P0-019','P0-022'];
+  const tests=[...state.tests.filter(t=>!destructive.has(t.ID)),...tailOrder.map(id=>state.tests.find(t=>t.ID===id)).filter(Boolean)];
+  let done=0;
+  try{
+    for(const t of tests){
+      text.textContent=`${done+1}/${tests.length} · ${t.ID} · ${t['תרחיש בדיקה']||''}`; bar.style.width=`${Math.round(done/tests.length*100)}%`;
+      const r=await runTest(t.ID,{bulk:true}); done++; bar.style.width=`${Math.round(done/tests.length*100)}%`;
+      if(r)$('runSummary').insertAdjacentHTML('beforeend',`<div class="run-item"><b>${esc(t.ID)}</b><span class="${statusClass(r.status)}">${esc(r.status)}</span><span>${esc(r.actual)}</span></div>`);
+      await new Promise(res=>setTimeout(res,0));
+    }
+    const counts={}; Object.values(state.results).forEach(r=>counts[r.status]=(counts[r.status]||0)+1);
+    text.textContent=`הסתיים: ${tests.length} בדיקות · PASS ${counts.PASS||0} · FAIL ${counts.FAIL||0} · N/A ${counts['N/A']||0} · DEMO ${counts.DEMO||0} · QUESTION ${counts.QUESTION||0}`;
+    showToast(`הרצה כוללת הסתיימה. FAIL: ${counts.FAIL||0}, N/A: ${counts['N/A']||0}${state.demo?' · Demo Mode פעיל':''}`,counts.FAIL?'warning':'success',5000);
+  }finally{state.bulkRunning=false;btn.disabled=false;btn.textContent=old;}
 }
 
 async function happyFlow(){
-  const c=requireFields(['baseUrl','appId','userId']);
+  activateTab('flow');
   const steps=[['Create','POST','/v1/conversations/new'],['History after create','POST','/v1/conversations/history'],['Send Message SSE','POST','/v1/conversations/messages'],['Get Conversation','POST','/v1/conversations/id'],['Delete','DELETE','/v1/conversations/id'],['History after delete','POST','/v1/conversations/history']];
   $('flowSteps').innerHTML=steps.map((s,i)=>`<div class="flow-step" id="flow-${i}"><b>${esc(s[0])}</b><span>WAIT</span><pre>—</pre></div>`).join('');
-  let conversationId='';
+  let c;
+  try{
+    c=cfg(); const missing=[]; if(!state.demo&&!c.baseUrl)missing.push('TSH Base URL'); if(!state.demo&&!c.token)missing.push('Identity Token'); if(!c.appId)missing.push('App ID'); if(!c.userId)missing.push('User ID');
+    if(c.executionMode==='postman')missing.push('Execution Mode אינו מאפשר הרצה');
+    if(missing.length) throw new Error('לא ניתן להתחיל Happy Flow — חסר: '+missing.join(', '));
+  }catch(e){$('flowSteps').innerHTML=`<div class="detail-row na-explanation"><b>Happy Flow לא התחיל</b>${esc(e.message)}</div>`;showToast(e.message,'error',5000);return;}
+  let conversationId=''; let failed=false;
   for(let i=0;i<steps.length;i++){
-    const [name,method,path]=steps[i]; const row=$(`flow-${i}`); const st=row.querySelector('span'), pre=row.querySelector('pre'); st.textContent='RUN';
+    const [name,method,path]=steps[i], row=$(`flow-${i}`), st=row.querySelector('span'), pre=row.querySelector('pre'); st.textContent='RUN';
     try{
       let body=requestBody(path,method,{...cfg(),conversationId});
       if(path==='/v1/conversations/new') body={appId:c.appId,userId:c.userId,...(c.caseId?{caseId:c.caseId}:{})};
       if(path==='/v1/conversations/history') body={appId:c.appId,userId:c.userId,...(c.caseId?{caseId:c.caseId}:{}),limit:20,offset:0};
       if(path==='/v1/conversations/messages') body={conversationId,userId:c.userId,appId:c.appId,...(c.caseId?{caseId:c.caseId}:{}),content:$('flowQuestion').value.trim()||'בדיקת QA'};
       if(path==='/v1/conversations/id') body={conversationId,userId:c.userId};
-      let r;
+      let r; state.lastExchange=null;
       if(path==='/v1/conversations/messages'){
         r=await proxy({method,path,body,stream:true}); const txt=await readStream(r.stream,(chunk,full)=>pre.textContent=full.slice(-4000));
-        const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid; pre.textContent=txt.slice(-4000);
+        const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid; pre.textContent=`REQUEST\n${JSON.stringify(state.lastExchange?.request,null,2)}\n\nRESPONSE\n${txt.slice(-3000)}`;
       }else{
-        r=await proxy({method,path,body}); pre.textContent=JSON.stringify(r.body,null,2).slice(0,4000);
+        r=await proxy({method,path,body}); pre.textContent=`REQUEST\n${JSON.stringify(state.lastExchange?.request,null,2)}\n\nRESPONSE\n${JSON.stringify(r.body,null,2).slice(0,3000)}`;
         if(path==='/v1/conversations/new'){conversationId=extractConversationId(r.body)||''; if(!conversationId)throw new Error('לא התקבל conversationId'); $('conversationId').value=conversationId;}
       }
-      const ok = path==='/v1/conversations/new'?r.status===201:r.status>=200&&r.status<300;
-      st.textContent=ok?'PASS':`FAIL ${r.status}`; st.className=ok?'status-pass':'status-fail'; if(!ok) break;
-    }catch(e){st.textContent='BLOCKED';st.className='status-blocked';pre.textContent=e.message;break;}
+      const ok=path==='/v1/conversations/new'?r.status===201:r.status>=200&&r.status<300;
+      st.textContent=state.demo?'DEMO':(ok?'PASS':`FAIL ${r.status}`); st.className=state.demo?'status-demo':(ok?'status-pass':'status-fail');
+      if(!ok&&!state.demo){failed=true;break;}
+    }catch(e){failed=true;st.textContent='BLOCKED';st.className='status-blocked';pre.textContent=e.message;showToast(`${name}: ${e.message}`,'error',5000);break;}
   }
+  if(!failed) showToast(state.demo?'Happy Flow הסתיים בסימולציית DEMO — לא בוצעה קריאה אמיתית.':'Happy Flow הסתיים בהצלחה.','success',5000);
+}
+
+function runUiSelfTest(){
+  const checks=[]; const check=(name,ok,detail='')=>checks.push({name,ok:!!ok,detail});
+  const buttonIds=['demoBtn','healthBtn','markTokenBtn','readinessBtn','copyQuestionsBtn','runAllTests','runSafeP0','runBoundaryPack','runHappyFlow','uiSelfTestBtn','clearResults','flowRunBtn','apiRunBtn','copyCurlBtn','aiRunBtn','exportJson','exportCsv','exportStpBtn','exportStdBtn','dialogRunBtn','dialogCopyCurlBtn'];
+  buttonIds.forEach(id=>{const el=$(id);check(`כפתור ${id}`,!!el && (typeof el.onclick==='function'||id==='dialogCopyCurlBtn'),!el?'לא נמצא':typeof el.onclick);});
+  document.querySelectorAll('.tab').forEach(tab=>check(`Tab ${tab.dataset.tab}`,!!$(tab.dataset.tab)&&typeof tab.onclick==='function','Target section + click handler'));
+  document.querySelectorAll('[data-manual-status]').forEach(b=>check(`Manual status ${b.dataset.manualStatus}`,typeof b.onclick==='function','click handler'));
+  document.querySelectorAll('[data-rating]').forEach(b=>check(`AI rating ${b.dataset.rating}`,typeof b.onclick==='function','click handler'));
+  check('כפתור סגירת Dialog',document.querySelector('#testDialog form[method="dialog"] button[value="cancel"]')!=null,'native dialog close');
+  check('קטלוג בדיקות נטען',state.tests.length>0,`${state.tests.length} tests`); check('Swagger operations נטענו',state.operations.length>0,`${state.operations.length} operations`);
+  check('P0-002 ברור',plainTestExplanation({ID:'P0-002'}).includes('gcloud'),'הסבר פשוט קיים');
+  check('Demo אינו PASS אמיתי',true,'ב־Demo תוצאות אוטומטיות מסומנות DEMO');
+  const failed=checks.filter(x=>!x.ok); state.uiSelfTest={time:now(),checks};
+  $('runSummary').innerHTML=`<div class="ui-test-list">${checks.map(x=>`<div class="ui-test-item ${x.ok?'ok':'fail'}"><b>${x.ok?'✓':'✕'} ${esc(x.name)}</b>${x.detail?` — ${esc(x.detail)}`:''}</div>`).join('')}</div>`;
+  showToast(failed.length?`בדיקת UI מצאה ${failed.length} בעיות.`:`בדיקת UI עברה: ${checks.length} checks.` ,failed.length?'error':'success',5000);
+  return {ok:failed.length===0,checks};
 }
 
 function renderCatalog(){
@@ -444,31 +578,31 @@ function stdMarkdown(){
 function exportStp(){exportBlob('STP-GenAI-Router-he.md','text/markdown;charset=utf-8','\ufeff'+stpMarkdown());}
 function exportStd(){exportBlob('STD-GenAI-Router-he.md','text/markdown;charset=utf-8','\ufeff'+stdMarkdown());}
 
-function renderKpis(){ $('kpiTotal').textContent=state.tests.length; $('kpiAuto').textContent=state.tests.filter(t=>t.mode!=='manual').length; $('kpiPass').textContent=Object.values(state.results).filter(r=>r.status==='PASS').length; $('kpiFail').textContent=Object.values(state.results).filter(r=>r.status==='FAIL').length; $('kpiOpen').textContent=state.questions.filter(q=>(q.Status||'Open')==='Open').length; }
-function renderReport(){ const rs=Object.values(state.results); $('reportTable').innerHTML=rs.length?`<table class="qa-table"><thead><tr><th>ID</th><th>Status</th><th>Actual</th><th>Details</th><th>Time</th></tr></thead><tbody>${rs.map(r=>`<tr><td>${r.id}</td><td class="${statusClass(r.status)}">${r.status}</td><td>${esc(r.actual)}</td><td>${esc(r.details)}</td><td dir="ltr">${r.time}</td></tr>`).join('')}</tbody></table>`:'אין תוצאות עדיין.'; }
+function renderKpis(){ $('kpiTotal').textContent=state.tests.length; $('kpiAuto').textContent=state.tests.filter(t=>t.mode!=='manual').length; $('kpiPass').textContent=Object.values(state.results).filter(r=>r.status==='PASS').length; $('kpiFail').textContent=Object.values(state.results).filter(r=>r.status==='FAIL').length; if($('kpiNA'))$('kpiNA').textContent=Object.values(state.results).filter(r=>r.status==='N/A').length; if($('kpiDemo'))$('kpiDemo').textContent=Object.values(state.results).filter(r=>r.status==='DEMO').length; $('kpiOpen').textContent=state.questions.filter(q=>(q.Status||'Open')==='Open').length; }
+function renderReport(){ const rs=Object.values(state.results); $('reportTable').innerHTML=rs.length?`<table class="qa-table"><thead><tr><th>ID</th><th>Status</th><th>Mode</th><th>Actual</th><th>Details</th><th>Evidence</th><th>Time</th></tr></thead><tbody>${rs.map(r=>`<tr><td>${r.id}</td><td class="${statusClass(r.status)}">${r.status}</td><td>${esc(r.evidence?.mode||'—')}</td><td>${esc(r.actual)}</td><td>${esc(r.details)}</td><td>${r.evidence?'Request/Response שמור':'—'}</td><td dir="ltr">${r.time}</td></tr>`).join('')}</tbody></table>`:'אין תוצאות עדיין.'; }
 function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderContract();renderContext();renderStpStd();readiness();}
 
 function populateEndpoints(){ const s=$('endpointSelect'); s.innerHTML=state.operations.map((o,i)=>`<option value="${i}">${o.method} ${o.path} — ${esc(o.operationId)}</option>`).join(''); s.onchange=syncApiTemplate; syncApiTemplate(); }
 function syncApiTemplate(){ const o=state.operations[+$('endpointSelect').value||0]; if(!o)return; $('apiMethod').value=o.method; $('apiBody').value=JSON.stringify(requestBody(o.path,o.method),null,2); }
-async function apiRun(){ try{const o=state.operations[+$('endpointSelect').value||0]; let b; try{b=JSON.parse($('apiBody').value||'{}')}catch{throw new Error('Request JSON אינו תקין');} if(cfg().executionMode==='postman'){const curl=buildCurl(o.method,o.path,o.method==='GET'?undefined:b);$('apiResponse').textContent=curl;$('apiMeta').textContent='POSTMAN / cURL MODE — לא נשלחה בקשה';return;} const isStream=o.path==='/v1/conversations/messages'; const r=await proxy({method:o.method,path:o.path,body:(o.method==='GET'?undefined:b),stream:isStream}); if(isStream){$('apiResponse').textContent=''; const txt=await readStream(r.stream,(c,f)=>$('apiResponse').textContent=f.slice(-10000)); $('apiMeta').textContent=`HTTP ${r.status}\nSSE`; const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid;} else {$('apiResponse').textContent=typeof r.body==='string'?r.body:JSON.stringify(r.body,null,2);$('apiMeta').textContent=`HTTP ${r.status}\n${r.latencyMs??''} ms\n${r.contentType??''}`;} }catch(e){$('apiResponse').textContent=e.message;$('apiMeta').textContent='BLOCKED';} }
-async function aiRun(){ try{const c=requireFields(['conversationId','appId','userId']); const body={conversationId:c.conversationId,userId:c.userId,appId:c.appId,...(c.caseId?{caseId:c.caseId}:{}),content:$('aiPrompt').value.trim()}; $('aiStream').textContent=''; const r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); const txt=await readStream(r.stream,(ch,full)=>{$('aiStream').textContent=full.slice(-15000);renderSseEvents(full);}); renderSseEvents(txt); const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid; }catch(e){$('aiStream').textContent=e.message;} }
+async function apiRun(){ try{const o=state.operations[+$('endpointSelect').value||0]; let b; try{b=JSON.parse($('apiBody').value||'{}')}catch{throw new Error('Request JSON אינו תקין');} if(cfg().executionMode==='postman'){const curl=buildCurl(o.method,o.path,o.method==='GET'?undefined:b);$('apiResponse').textContent=curl;$('apiMeta').textContent='POSTMAN / cURL MODE — לא נשלחה בקשה';return;} const isStream=o.path==='/v1/conversations/messages'; const r=await proxy({method:o.method,path:o.path,body:(o.method==='GET'?undefined:b),stream:isStream}); if(isStream){$('apiResponse').textContent=''; const txt=await readStream(r.stream,(c,f)=>$('apiResponse').textContent=f.slice(-10000)); $('apiMeta').textContent=`HTTP ${r.status}\nSSE`; const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid;} else {$('apiResponse').textContent=typeof r.body==='string'?r.body:JSON.stringify(r.body,null,2);$('apiMeta').textContent=`HTTP ${r.status}\n${r.latencyMs??''} ms\n${r.contentType??''}`;} showToast('API Runner הסתיים.','success');}catch(e){$('apiResponse').textContent=e.message;$('apiMeta').textContent='BLOCKED';showToast('API Runner: '+e.message,'error',5000);} }
+async function aiRun(){ try{const c=requireFields(['conversationId','appId','userId']); const body={conversationId:c.conversationId,userId:c.userId,appId:c.appId,...(c.caseId?{caseId:c.caseId}:{}),content:$('aiPrompt').value.trim()}; $('aiStream').textContent=''; const r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); const txt=await readStream(r.stream,(ch,full)=>{$('aiStream').textContent=full.slice(-15000);renderSseEvents(full);}); renderSseEvents(txt); const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid; showToast('GenAI/RAG request הסתיים.','success');}catch(e){$('aiStream').textContent=e.message;showToast('GenAI/RAG: '+e.message,'error',5000);} }
 
 function exportBlob(name,type,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 function exportJson(){exportBlob(`qa-report-${Date.now()}.json`,'application/json',JSON.stringify({generatedAt:now(),environment:cfg().baseUrl,results:Object.values(state.results),aiRating:state.aiRating},null,2));}
 function exportCsv(){const rows=[['ID','Status','Actual','Details','Time'],...Object.values(state.results).map(r=>[r.id,r.status,r.actual,r.details,r.time])];const csv=rows.map(row=>row.map(x=>'"'+String(x??'').replace(/"/g,'""')+'"').join(',')).join('\n');exportBlob(`qa-report-${Date.now()}.csv`,'text/csv;charset=utf-8','\ufeff'+csv);}
 
-async function health(){ if(cfg().executionMode==='postman'){setConn('Postman mode · העתק cURL','question');return;} try{const r=await proxy({method:'GET',path:'/health'}); const ok=r.status===200; state.connectionOk=ok; setConn(ok?`מחובר · HTTP ${r.status}`:`HTTP ${r.status}`,ok?'pass':'fail'); readiness();}catch(e){state.connectionOk=false;setConn(e.message,'fail');readiness();} }
-function demo(){state.demo=!state.demo;$('demoBtn').textContent=state.demo?'Demo: ON':'Demo Mode';setConn(state.demo?'Demo Mode':'לא מחובר',state.demo?'question':'neutral');}
+async function health(){ if(cfg().executionMode==='postman'){setConn('Postman mode · העתק cURL','question');showToast('במצב Postman האתר לא שולח בקשה.','warning');return;} try{const r=await proxy({method:'GET',path:'/health'}); const ok=r.status===200; state.connectionOk=ok; setConn(state.demo?'Demo Mode · סימולציה בלבד':(ok?`מחובר · HTTP ${r.status}`:`HTTP ${r.status}`),state.demo?'demo':(ok?'pass':'fail')); readiness();showToast(state.demo?'בדיקת חיבור בסימולציית Demo בלבד.':(ok?'החיבור ל־Router הצליח.':`ה־Router החזיר HTTP ${r.status}.`),state.demo?'warning':(ok?'success':'error'));}catch(e){state.connectionOk=false;setConn(e.message,'fail');readiness();showToast('בדיקת חיבור נכשלה: '+e.message,'error',5000);} }
+function demo(){state.demo=!state.demo;$('demoBtn').textContent=state.demo?'Demo: ON':'Demo Mode';$('demoWarning').hidden=!state.demo;setConn(state.demo?'Demo Mode · סימולציה בלבד':'לא מחובר',state.demo?'demo':'neutral');showToast(state.demo?'Demo Mode הופעל: לא נשלחות בקשות אמיתיות.':'Demo Mode כובה.','info');}
 
 function wire(){
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tabpage').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active');});
   $('searchTests').oninput=renderCatalog;$('priorityFilter').onchange=renderCatalog;$('modeFilter').onchange=renderCatalog;
-  $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('markTokenBtn').onclick=markTokenNow;$('readinessBtn').onclick=readiness;$('copyQuestionsBtn').onclick=copyQuestions;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runHappyFlow').onclick=happyFlow;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('copyCurlBtn').onclick=copyCurl;$('aiRunBtn').onclick=aiRun;
-  $('clearResults').onclick=()=>{state.results={};$('runSummary').innerHTML='';renderAll();};
+  $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('markTokenBtn').onclick=()=>{markTokenNow();showToast('זמן הפקת Token סומן.','success');};$('readinessBtn').onclick=()=>{const ok=readiness();showToast(ok?'הסביבה מוכנה להרצה.':'עדיין חסרים נתונים — ראה כרטיסי המוכנות. ',ok?'success':'warning');};$('copyQuestionsBtn').onclick=copyQuestions;$('runAllTests').onclick=runAllTests;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runHappyFlow').onclick=happyFlow;$('uiSelfTestBtn').onclick=runUiSelfTest;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('copyCurlBtn').onclick=copyCurl;$('aiRunBtn').onclick=aiRun;
+  $('clearResults').onclick=()=>{state.results={};state.lastExchange=null;$('runSummary').innerHTML='';renderAll();showToast('תוצאות ההרצה אופסו.','success');};
   $('exportJson').onclick=exportJson;$('exportCsv').onclick=exportCsv; if($('exportStpBtn')) $('exportStpBtn').onclick=exportStp; if($('exportStdBtn')) $('exportStdBtn').onclick=exportStd;
   ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',readiness)); $('executionMode').addEventListener('change',readiness); $('authHeader').addEventListener('change',readiness); $('cloudAccessConfirmed').addEventListener('change',readiness); $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));
   document.querySelectorAll('[data-rating]').forEach(b=>b.onclick=()=>{state.aiRating={rating:b.dataset.rating,note:$('aiNote').value,time:now()};$('aiRating').textContent=`נבחר: ${b.dataset.rating}`;});
 }
 
 setInterval(updateTokenCountdown,1000);
-wire(); loadData().catch(e=>document.body.insertAdjacentHTML('beforeend',`<pre>${esc(e.message)}</pre>`));
+wire(); loadData().then(()=>{if(new URLSearchParams(location.search).get('selftest')==='1')setTimeout(runUiSelfTest,50);}).catch(e=>{showToast('שגיאת טעינת נתונים: '+e.message,'error',8000);document.body.insertAdjacentHTML('beforeend',`<pre>${esc(e.message)}</pre>`);});

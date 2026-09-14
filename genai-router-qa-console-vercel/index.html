@@ -13,11 +13,13 @@
       <p>כלי QA ל־Router 1.0.6 — Swagger + TSH + ארכיטקטורה + Postman</p>
     </div>
     <div class="top-actions">
-      <span class="badge version">v1.4</span>
+      <span class="badge version">v1.5</span>
       <span id="connectionBadge" class="badge neutral">לא מחובר</span>
       <button id="demoBtn" class="btn ghost">Demo Mode</button>
     </div>
   </header>
+  <div id="demoWarning" class="demo-warning" hidden>⚠️ מצב הדגמה פעיל — שום בקשה לא נשלחת ל־TSH. תוצאות סימולציה יסומנו <b>DEMO</b> ולא PASS.</div>
+  <div id="toastHost" class="toast-host" aria-live="polite"></div>
 
   <main>
     <section class="card setup">
@@ -70,16 +72,21 @@
         <div class="kpi"><b id="kpiAuto">0</b><span>אוטומטיים/מסייעים</span></div>
         <div class="kpi"><b id="kpiPass">0</b><span>PASS</span></div>
         <div class="kpi"><b id="kpiFail">0</b><span>FAIL</span></div>
+        <div class="kpi"><b id="kpiNA">0</b><span>N/A</span></div>
+        <div class="kpi"><b id="kpiDemo">0</b><span>DEMO</span></div>
         <div class="kpi"><b id="kpiOpen">34</b><span>שאלות פתוחות</span></div>
       </div>
       <div class="card">
-        <div class="section-head"><div><h2>הרצה מהירה</h2><p>מתחילים ב־P0 שניתן להריץ בלי פעולות הרסניות, או ב־Flow מלא.</p></div></div>
+        <div class="section-head"><div><h2>הרצה מהירה</h2><p>אפשר להריץ את כל הבדיקות בלחיצה אחת. בדיקה שחסר לה קלט/הרשאה/מידע תסומן N/A במקום להציג FAIL מטעה.</p></div></div>
         <div class="actions-row">
-          <button id="runSafeP0" class="btn primary">▶ Run Safe P0</button>
+          <button id="runAllTests" class="btn primary">▶ הרץ את כל הטסטים</button>
+          <button id="runSafeP0" class="btn">▶ Run Safe P0</button>
           <button id="runBoundaryPack" class="btn">▶ Run Boundary Pack</button>
           <button id="runHappyFlow" class="btn">▶ Conversation Happy Flow</button>
+          <button id="uiSelfTestBtn" class="btn ghost">בדיקת UI</button>
           <button id="clearResults" class="btn ghost">איפוס תוצאות</button>
         </div>
+        <div id="bulkProgress" class="bulk-progress" hidden><div id="bulkProgressBar" class="bulk-progress-bar"></div><span id="bulkProgressText"></span></div>
         <div id="runSummary" class="run-summary"></div>
       </div>
       <div class="card">
@@ -248,17 +255,19 @@
     <form method="dialog" class="dialog-card">
       <div class="section-head"><div><h2 id="dialogTitle">Test</h2><p id="dialogSubtitle"></p></div><button class="btn ghost" value="cancel">✕</button></div>
       <div id="dialogBody" class="dialog-body"></div>
+      <div id="dialogEvidence" class="dialog-evidence"></div>
       <label>הערת QA<textarea id="manualNote" rows="4" placeholder="מה בדקת ומה בפועל קרה?"></textarea></label>
       <div class="actions-row dialog-actions">
         <button type="button" class="btn" data-manual-status="PASS">PASS</button>
         <button type="button" class="btn" data-manual-status="FAIL">FAIL</button>
         <button type="button" class="btn" data-manual-status="BLOCKED">BLOCKED</button>
         <button type="button" class="btn" data-manual-status="QUESTION">QUESTION</button>
+        <button id="dialogCopyCurlBtn" type="button" class="btn ghost" hidden>העתק cURL / Postman</button>
         <button id="dialogRunBtn" type="button" class="btn primary">Run</button>
       </div>
     </form>
   </dialog>
-  <footer>GenAI Router QA Console · Swagger 1.0.6 · UI v1.4</footer>
+  <footer>GenAI Router QA Console · Swagger 1.0.6 · UI v1.5</footer>
   <script src="/app.js" type="module"></script>
 </body>
 </html>
