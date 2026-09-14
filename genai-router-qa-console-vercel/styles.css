@@ -76,3 +76,15 @@
 
 /* v1.9 Golden release regression, review queue and bug evidence */
 .release-card{border-right:5px solid #7048e8}.compare-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.compare-controls select{min-width:190px}.review-card{border-right:5px solid #f79009}.golden-results-table small{color:var(--muted)}.review-table details summary{cursor:pointer;font-weight:700}.review-table pre{max-width:520px;max-height:300px;min-height:0}.bug-classifier{margin-top:12px;align-items:end}.bug-type-help{display:flex;align-items:center;min-height:44px}.failure-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.failure-card{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fafcff}.failure-card h3{margin:0 0 8px}.failure-card p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}.failure-card.retrieval{border-top:4px solid #175cd3}.failure-card.generation{border-top:4px solid #7048e8}.failure-card.grounding{border-top:4px solid #dc6803}.failure-card.security{border-top:4px solid #d92d20}.golden-results-table td:nth-child(7){min-width:300px}.golden-results-table td:nth-child(9){min-width:190px}.release-card .span-2{grid-column:span 2}@media(max-width:1000px){.failure-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.failure-grid{grid-template-columns:1fr}.release-card .span-2{grid-column:auto}.compare-controls{align-items:stretch}.compare-controls>*{width:100%}}
+
+/* v2.0 collapsible AI glossary */
+.glossary-card{padding:0;overflow:hidden}
+.glossary-card summary{list-style:none;cursor:pointer;padding:16px 18px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;user-select:none}
+.glossary-card summary::-webkit-details-marker{display:none}
+.glossary-title{font-weight:800;font-size:1.04rem}
+.glossary-card .glossary-alias{grid-column:1;font-size:.8rem;color:var(--muted,#64748b);direction:ltr;text-align:right}
+.glossary-chevron{grid-column:2;grid-row:1 / span 2;font-size:1.3rem;transition:transform .2s ease;color:var(--muted,#64748b)}
+.glossary-card[open] .glossary-chevron{transform:rotate(180deg)}
+.glossary-body{padding:0 18px 17px;border-top:1px solid var(--border,#dce3ee)}
+.glossary-body p{margin:13px 0 0;line-height:1.8}
+.glossary-card summary:focus-visible{outline:3px solid #f4c95d;outline-offset:-3px}

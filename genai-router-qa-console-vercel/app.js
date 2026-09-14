@@ -175,7 +175,28 @@ const AI_GLOSSARY = [
   {term:'Bug Evidence',aliases:['Evidence Bundle'],desc:'חבילת מידע שנועדה לאפשר למפתח לשחזר באג: Test/Golden ID, שאלה, Expected, Actual, Sources, Chunks, HTTP/Request/Response, Run Metadata, conversationId, זמני הרצה וסיווג הכשל — ללא Token.'},
   {term:'Regression Diff',aliases:['Release Comparison'],desc:'השוואה בין שתי ריצות של אותו Golden Dataset כדי לזהות שאלות שהשתפרו, הורעו, נשארו יציבות או החליפו Source. חשוב להשוות Runs עם Metadata ברור.'},
   {term:'Human-in-the-loop',aliases:['Human Review'],desc:'תהליך שבו אוטומציה מדרגת/מסננת, אבל אדם מאשר תוצאות עמומות או קריטיות. במערכות מס ורגולציה זו שכבה חשובה במיוחד עד שה־Evaluator האוטומטי כויל היטב.'},
-  {term:'SME',aliases:['Subject Matter Expert','מומחה תוכן'],desc:'מומחה בתחום העסקי שמאשר מהי תשובה נכונה כאשר QA אינו יכול להכריע רק מהמסמך. Golden Dataset איכותי רצוי שיאושר על ידי SME בנושאים רגישים.'}
+  {term:'SME',aliases:['Subject Matter Expert','מומחה תוכן'],desc:'מומחה בתחום העסקי שמאשר מהי תשובה נכונה כאשר QA אינו יכול להכריע רק מהמסמך. Golden Dataset איכותי רצוי שיאושר על ידי SME בנושאים רגישים.'},
+  {term:'Heuristic',aliases:['יוריסטי','Heuristic Score'],desc:'הערכה שימושית המבוססת על כללים או קירובים, אך אינה הוכחה לנכונות. למשל, חפיפת מילים בין Actual ל־Golden יכולה להיות Signal טוב, אבל תשובה עם מספר שגוי עדיין עלולה לקבל Similarity גבוה. באתר Heuristic מיועד לסינון ול־Review — לא ל־PASS/FAIL עסקי לבדו.'},
+  {term:'Signal',aliases:['Quality Signal','סיגנל'],desc:'אינדיקציה שעוזרת להחליט אם תוצאה נראית תקינה או דורשת Review: למשל Similarity, Source Match, Grounding score או HTTP status. Signal אינו אמת מוחלטת; משלבים כמה Signals עם Expected וראיות.'},
+  {term:'Non-determinism',aliases:['אי־דטרמיניזם','Nondeterminism'],desc:'אותה שאלה לאותו מודל יכולה להחזיר ניסוח ולעיתים גם תוכן מעט שונה בין הרצות. לכן בדיקות AI לא תמיד מתאימות להשוואת String מדויקת, ובתרחישים קריטיים כדאי לבדוק יציבות במספר הרצות.'},
+  {term:'Flaky AI Test',aliases:['Flakiness','בדיקה לא יציבה'],desc:'בדיקה שעוברת ונכשלת לסירוגין בלי שינוי ברור במערכת. ב־AI זה יכול לנבוע מאי־דטרמיניזם, Retrieval משתנה, עומס או תלות חיצונית. מודדים שיעור הצלחה וחוקרים את התנודתיות במקום להתעלם מהכשל.'},
+  {term:'Threshold',aliases:['סף'],desc:'ערך שמעליו או מתחתיו מתקבלת החלטה אוטומטית, למשל לשלוח ל־Review אם Grounding נמוך מסף מסוים. סף צריך להיות מכויל מול Dataset אמיתי; מספר שרירותי עלול ליצור False Positives או לפספס כשלים.'},
+  {term:'False Positive / False Negative',aliases:['FP','FN'],desc:'False Positive: המנגנון מסמן בעיה למרות שהתוצאה תקינה. False Negative: המנגנון לא מסמן תוצאה שגויה. בכיול Evaluator או Guardrail בודקים את שני הכיוונים.'},
+  {term:'Evaluator',aliases:['AI Evaluator','מעריך'],desc:'מנגנון שנותן ציון או החלטה לתוצאת AI לפי Correctness, Grounding, Source Match וכדומה. Evaluator יכול להיות Rule/Heuristic, מודל נוסף או אדם. חשוב לדעת מי המעריך ומה מגבלותיו.'},
+  {term:'Corpus',aliases:['קורפוס','Knowledge Corpus'],desc:'אוסף המסמכים שעליהם מערכת ה־RAG רשאית לחפש. הוספה, הסרה או גרסה חדשה של מסמך יכולה לשנות תשובות גם בלי שינוי בקוד, ולכן כדאי לתעד Corpus/Index version.'},
+  {term:'Index',aliases:['אינדקס','Vector Index'],desc:'מבנה הנתונים שמאפשר ל־Retrieval למצוא במהירות Chunks רלוונטיים, לרוב לפי Embeddings. אינדקס לא מעודכן או שנבנה עם Config שונה עלול לגרום ל־Retrieval Regression.'},
+  {term:'Metadata',aliases:['מטא־דאטה'],desc:'מידע שמתאר מסמך/Chunk: documentId, category, version, case, timestamps ועוד. Metadata משמש לסינון, הרשאות, Traceability ו־Debugging ולכן גם הוא חלק מהבדיקות.'},
+  {term:'Provenance',aliases:['Source Provenance','שרשרת מקור'],desc:'היכולת לעקוב מאיפה בדיוק הגיעה טענה: תשובה → Source → Chunk → מסמך וגרסה. Provenance טוב מאפשר ל־QA להוכיח שהתשובה נשענה על מקור מורשה ונכון.'},
+  {term:'RBAC',aliases:['Role-Based Access Control'],desc:'הרשאות לפי תפקיד או קבוצה. ב־RAG הן צריכות למנוע ממסמך אסור להיכנס ל־Context. בדיקת QA חשובה: משתמש מקבוצה אחרת לא מקבל Source/Chunk שאינו מורשה.'},
+  {term:'IDOR',aliases:['Insecure Direct Object Reference'],desc:'חולשת הרשאה שבה שינוי מזהה ישיר — conversationId, bucket/file או chunkId — מאפשר לקרוא אובייקט של משתמש/Case אחר. העובדה שמזהה קיים אינה הרשאה; השרת חייב לבדוק Ownership/Authorization.'},
+  {term:'PII Leakage',aliases:['Data Leakage','דליפת מידע אישי'],desc:'חשיפה לא מורשית של מידע אישי או נתונים של משתמש/Case אחר דרך תשובה, Source, Chunk, History, Logs או Tool events. ב־GenAI בודקים גם דליפה עקיפה דרך Context וזיכרון.'},
+  {term:'Chain-of-Thought',aliases:['CoT','שרשרת חשיבה'],desc:'Reasoning פנימי של מודל. QA אינו צריך לקבל או לאמת reasoning פנימי מפורט; אירועי thought/progress חיצוניים צריכים להיות מידע בטוח ומוגדר בלי System Prompt, Secrets, Credentials או reasoning פנימי רגיש.'},
+  {term:'Direct Prompt Injection',aliases:['Prompt Injection ישיר'],desc:'המשתמש עצמו כותב הוראה שמנסה לעקוף את כללי המערכת, למשל להתעלם מההוראות או לחשוף מידע פנימי. בודקים שהמערכת שומרת על הרשאות וכללי System Prompt.'},
+  {term:'Indirect Prompt Injection',aliases:['Prompt Injection עקיף'],desc:'הוראה זדונית נמצאת בתוך מסמך או תוכן שה־RAG מאחזר, ולא בשאלת המשתמש. המודל צריך להתייחס אליה כתוכן מקור ולא כפקודת מערכת.'},
+  {term:'Idempotency',aliases:['אידמפוטנטיות'],desc:'היכולת לחזור על אותה פעולה בלי ליצור תוצאה כפולה לא רצויה. Retry אחרי Timeout של Send Message עלול ליצור שתי הודעות אם אין מנגנון Idempotency.'},
+  {term:'Correlation ID',aliases:['Trace ID'],desc:'מזהה שמאפשר לקשור Request אחד בין Router, Retrieval, LLM, Tools ולוגים. הוא מקצר Debugging כי אפשר למצוא את כל האירועים של אותה הרצה.'},
+  {term:'Latency / TTFT',aliases:['Time To First Token','זמן תגובה'],desc:'Latency הוא זמן התגובה; ב־Streaming חשוב במיוחד TTFT — הזמן עד ה־event/token הראשון — בנוסף לזמן הכולל עד done. את שניהם כדאי למדוד מול SLA מוגדר.'},
+  {term:'Clarification',aliases:['Clarification Policy','שאלת הבהרה'],desc:'התנהגות שבה המערכת מבקשת מידע נוסף כשהשאלה עמומה במקום לנחש. QA בודק מתי מצופה Clarification, שהשאלה באמת מועילה ושלא נוצר Hallucination במקום הבהרה.'}
 ];
 
 const ENDPOINT_GUIDE = {
@@ -213,7 +234,7 @@ function renderGlossary(filter=''){
   const host=$('glossaryGrid'); if(!host)return;
   const q=String(filter||'').trim().toLowerCase();
   const items=AI_GLOSSARY.filter(x=>!q || [x.term,...(x.aliases||[]),x.desc].join(' ').toLowerCase().includes(q));
-  host.innerHTML=items.map(x=>`<article class="glossary-card" id="glossary-${encodeURIComponent(x.term)}" data-term="${esc(x.term)}"><h3>${esc(x.term)}</h3>${x.aliases?.length?`<div class="glossary-alias">${esc(x.aliases.join(' · '))}</div>`:''}<p>${esc(x.desc)}</p></article>`).join('') || '<div class="empty-state">לא נמצאו מושגים.</div>';
+  host.innerHTML=items.map(x=>`<details class="glossary-card" id="glossary-${encodeURIComponent(x.term)}" data-term="${esc(x.term)}"><summary><span class="glossary-title">${esc(x.term)}</span>${x.aliases?.length?`<span class="glossary-alias">${esc(x.aliases.join(' · '))}</span>`:''}<span class="glossary-chevron">⌄</span></summary><div class="glossary-body"><p>${esc(x.desc)}</p></div></details>`).join('') || '<div class="empty-state">לא נמצאו מושגים.</div>';
 }
 function openGlossary(term=''){
   activateTab('guide');
@@ -224,7 +245,7 @@ function openGlossary(term=''){
   requestAnimationFrame(()=>{
     const el=[...document.querySelectorAll('.glossary-card')].find(x=>x.dataset.term===term);
     (el||$('glossaryGrid'))?.scrollIntoView({behavior:'smooth',block:'start'});
-    if(el){el.classList.add('glossary-highlight');setTimeout(()=>el.classList.remove('glossary-highlight'),1800);}
+    if(el){el.open=true;el.classList.add('glossary-highlight');setTimeout(()=>el.classList.remove('glossary-highlight'),1800);}
   });
 }
 function wireGlossaryLinks(){document.querySelectorAll('[data-glossary]').forEach(el=>el.onclick=()=>openGlossary(el.dataset.glossary));}
