@@ -1,42 +1,19 @@
-# GenAI Router QA Console v1.7
+# GenAI Router QA Console v1.8
 
-Update highlights:
-- Default QA user: `aviorha@taxes.gov.il`
-- Google Identity Token flow documented: `gcloud auth print-identity-token`
-- Default auth header: `X-Serverless-Authorization: Bearer <TOKEN>`
-- Optional `gcloud init` / `gcloud init --no-launch-browser` guidance
-- Added 16 systematic boundary tests (total 94 scenarios) and a Run Boundary Pack button
-- Token stays session-only and is not exported to reports
+QA console for the GenAI Router / RAG project.
 
-Still required before real execution: exact TSH Base URL and confirmation that the cloud user is authorized to invoke the Router.
+## v1.8
 
+- Added **Golden Sanity / Regression** under GenAI / RAG.
+- Local Golden Dataset editor: question, golden answer, must-include facts, expected source, tags and notes.
+- One-click Golden run with optional isolated conversation per question and cleanup after each run.
+- Captures answer similarity, must-include coverage, source match, run/version label and manual PASS/FAIL review.
+- Golden Dataset import/export as JSON. Data is stored locally in the browser; credentials are never persisted.
+- Added **AI for QA** guide with practical testing principles: retrieval vs generation, no-answer tests, nondeterminism, version traceability, security and human review.
+- Added a full **AI QA Glossary** with 30+ terms such as RAG, Golden Dataset, Chunk, Embedding, Top-K, Grounding, Hallucination, Context Precision/Recall, LLM-as-a-Judge and Prompt Injection.
+- Added inline glossary links from relevant concepts in the UI.
+- Golden auto scores are explicitly advisory; final quality PASS remains a QA/SME decision until an agreed evaluator is defined.
 
-## v1.5
-נוספו STP ו-STD בעברית בתוך האתר, כולל תכנית בדיקות, תנאי כניסה/יציאה, אסטרטגיית בדיקות, Traceability וייצוא Markdown.
+## Important
 
-
-## v1.5
-- Demo results are marked DEMO, never PASS.
-- Added Request/Response evidence with redacted token and cURL copy.
-- Added Run All Tests; missing prerequisites become N/A.
-- Happy Flow now reports visible errors and switches to its results tab.
-- Added UI Self Test and button feedback toasts.
-- Fixed topbar contrast.
-
-
-## v1.7
-- Collapsible TSH / Google CLI safety guidance.
-- Added RAG Generic Spec tab, explicitly marked as Target Design.
-- Added 14 assisted RAG spec test cases (authorization, filtered retrieval, ingestion state, re-ingestion, versioning, config, audit, Top-K quality).
-- Added RAG Spec Pack; unavailable/instrumentation-dependent tests become N/A in bulk runs.
-- Added SQL/observability tables and RAG quality flow from the supplied specification.
-- API section from the source is explicitly marked incomplete because the source itself ends it with 'להשלים!!'.
-
-
-## v1.7 UX
-- Reduced top-level navigation to 8 tabs.
-- Unified Contract gaps + open questions under System Guide.
-- Unified STP + STD under QA Documents.
-- Added general usage guide, core flows, result-status guide and a Hebrew guide for all 23 Swagger endpoints.
-- Simplified environment setup; advanced fields are collapsed.
-- Removed the Copy Questions button.
+Use TSH/QA credentials only. Do not commit or persist Identity Tokens. The public Vercel UI may not be able to reach an internal TSH endpoint; Browser Direct or Postman may be required from the approved network.

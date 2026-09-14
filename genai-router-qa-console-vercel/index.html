@@ -14,7 +14,7 @@
 <p>כלי QA ל־Router 1.0.6 — Swagger + TSH + ארכיטקטורה + Postman</p>
 </div>
 <div class="top-actions">
-<span class="badge version">v1.7</span>
+<span class="badge version">v1.8</span>
 <span class="badge neutral" id="connectionBadge">לא מחובר</span>
 <button class="btn ghost" id="demoBtn">Demo Mode</button>
 </div>
@@ -136,6 +136,8 @@
 <div class="subtabs" role="tablist">
 <button class="subtab active" data-subtab="guideStart">איך משתמשים</button>
 <button class="subtab" data-subtab="guideEndpoints">Endpoints</button>
+<button class="subtab" data-subtab="guideAiQa">AI ל־QA</button>
+<button class="subtab" data-subtab="guideGlossary">מילון AI</button>
 <button class="subtab" data-subtab="guideArchitecture">RAG / ארכיטקטורה</button>
 <button class="subtab" data-subtab="guideGaps">פערים ושאלות</button>
 </div>
@@ -178,6 +180,19 @@
 <div class="card">
 <div class="section-head"><div><h2>מדריך Endpoints</h2><p>הסבר פשוט: מה כל Endpoint עושה, מה מצופה בהצלחה, ומה ה־QA צריך לבדוק. הפרטים הטכניים המדויקים עדיין מגיעים מה־Swagger.</p></div><span class="badge neutral">23 operations</span></div>
 <div class="endpoint-guide" id="endpointGuide"></div>
+</div>
+</div>
+<div class="subpage" data-subpage="guideAiQa">
+<div class="card">
+<div class="section-head"><div><h2>AI ל־QA — מה משתנה לעומת מערכת רגילה?</h2><p>המטרה היא לא להפוך אותך ל־Data Scientist, אלא לתת לך את עקרונות הבדיקה שחוזרים כמעט בכל מערכת GenAI/RAG.</p></div><span class="badge neutral">QA Primer</span></div>
+<div class="context-grid" id="aiQaLessons"></div>
+</div>
+<div class="card"><h2>איך בודקים תשובת RAG בפועל?</h2><div class="pipeline-steps"><div class="pipeline-step"><span>1</span>שואלים שאלה שה־Expected שלה ידוע מראש</div><div class="pipeline-step"><span>2</span>בודקים את תשובת ה־AI מול תשובת הזהב — לא לפי ניסוח זהה אלא לפי העובדות</div><div class="pipeline-step"><span>3</span>בודקים את <button class="term-link" data-glossary="Source">Source</button> וה־<button class="term-link" data-glossary="Chunk">Chunk</button> שעליהם התשובה מבוססת</div><div class="pipeline-step"><span>4</span>בודקים שאין עובדות שלא נתמכות במקור — <button class="term-link" data-glossary="Hallucination">Hallucination</button></div><div class="pipeline-step"><span>5</span>שומרים תוצאה מול אותה גרסת Model / Prompt / Index כדי שאפשר יהיה להשוות רגרסיה</div></div></div>
+</div>
+<div class="subpage" data-subpage="guideGlossary">
+<div class="card">
+<div class="section-head"><div><h2>מילון AI ל־QA</h2><p>מושגים שמופיעים באתר ובבדיקות. לחץ על מונח מקושר מכל מקום באתר כדי לקפוץ להסבר שלו.</p></div><input id="glossarySearch" placeholder="חיפוש מושג..."/></div>
+<div class="glossary-grid" id="glossaryGrid"></div>
 </div>
 </div>
 <div class="subpage" data-subpage="guideArchitecture">
@@ -226,7 +241,15 @@
 </section>
 <section class="tabpage" id="ai">
 <div class="card">
-<div class="section-head"><div><h2>GenAI / RAG Inspector</h2><p>הרץ שאלה, ראה את אירועי ה־SSE וסמן איכות ידנית.</p></div><button class="btn primary" id="aiRunBtn">▶ שאל</button></div>
+<div class="section-head"><div><h2>GenAI / RAG</h2><p>בדיקה ידנית של תשובה בודדת או Sanity/Regression מול <button class="term-link" data-glossary="Golden Dataset">Golden Dataset</button>.</p></div></div>
+<div class="subtabs" role="tablist">
+<button class="subtab active" data-subtab="aiInspector">Inspector</button>
+<button class="subtab" data-subtab="aiGolden">Golden Sanity</button>
+</div>
+</div>
+<div class="subpage active" data-subpage="aiInspector">
+<div class="card">
+<div class="section-head"><div><h2>GenAI / RAG Inspector</h2><p>הרץ שאלה, ראה את אירועי ה־SSE, בדוק Sources/Chunks וסמן איכות ידנית.</p></div><button class="btn primary" id="aiRunBtn">▶ שאל</button></div>
 <label>Prompt<textarea id="aiPrompt" rows="4">ענה על סמך מסמכי המקור בלבד. אם אין מספיק מידע, אמור שאין מספיק מידע.</textarea></label>
 <div class="result-grid">
 <div><h3>Streaming / Answer</h3><pre id="aiStream">—</pre><h3>אירועי SSE שזוהו</h3><div class="event-list" id="aiEvents">—</div></div>
@@ -242,6 +265,30 @@
 <div class="notice" id="aiRating">טרם דורג</div>
 </div>
 </div>
+</div>
+</div>
+<div class="subpage" data-subpage="aiGolden">
+<div class="card golden-intro">
+<div class="section-head"><div><h2>Golden Sanity / Regression</h2><p>סט קבוע של שאלות עם תשובת זהב ומקור צפוי. מריצים אחרי שינוי Model / Prompt / RAG / Index ומשווים לגרסה הקודמת.</p></div><div class="actions-row"><button class="btn primary" id="goldenRunAllBtn">▶ הרץ את כל שאלות הזהב</button><button class="btn ghost" id="goldenExportBtn">ייצוא JSON</button><button class="btn ghost" id="goldenImportBtn">ייבוא JSON</button></div></div>
+<div class="notice info"><b>חשוב:</b> האתר מחשב Similarity וכיסוי מילות חובה כעזר בלבד. AI יכול לנסח אותה עובדה אחרת, ולכן ציון אוטומטי אינו מחליף בדיקת מקור/Chunk או אישור SME. <button class="term-link" data-glossary="Golden Dataset">מה זה Golden Dataset?</button></div>
+<details class="guide-details"><summary>הגדרות הרצת Golden</summary><div class="grid cols-3"><label>Run / Version Label<input id="goldenRunLabel" placeholder="למשל build-1.4 / prompt-v3"/></label><label class="checkbox-label"><input id="goldenIsolate" type="checkbox" checked/> כל שאלה בשיחה חדשה</label><label class="checkbox-label"><input id="goldenCleanup" type="checkbox" checked/> למחוק שיחת בדיקה אחרי ההרצה</label></div><p class="muted">בידוד שיחות מומלץ כדי ששאלה קודמת לא תשפיע על הבאה. שמור Run Label כדי לדעת מול איזו גרסה הורצה הרגרסיה.</p></details>
+<input id="goldenImportFile" type="file" accept="application/json,.json" hidden/>
+</div>
+<div class="card">
+<h2>הוספת / עריכת שאלת זהב</h2>
+<div class="grid cols-2 golden-form">
+<label>ID<input id="goldenId" placeholder="GOLD-001"/></label>
+<label>תגיות<input id="goldenTags" placeholder="tax, no-answer, security"/></label>
+<label class="span-2">שאלה<textarea id="goldenQuestion" rows="3" placeholder="השאלה שתישלח ל־AI"></textarea></label>
+<label class="span-2">תשובת זהב<textarea id="goldenExpected" rows="4" placeholder="העובדות שחייבות להיות בתשובה. אין צורך לניסוח זהה."></textarea></label>
+<label>מילות/ביטויי חובה<input id="goldenMustInclude" placeholder="הפרד בפסיקים"/></label>
+<label>מקור צפוי<input id="goldenExpectedSource" placeholder="שם קובץ / document id / chunk ידוע (אופציונלי)"/></label>
+<label class="span-2">הערות<textarea id="goldenNotes" rows="2" placeholder="למשל: שאלה שאושרה ע״י מומחה תוכן"></textarea></label>
+</div>
+<div class="actions-row"><button class="btn primary" id="goldenSaveBtn">שמור שאלה</button><button class="btn ghost" id="goldenResetBtn">נקה טופס</button><button class="btn danger" id="goldenClearBtn">מחק Dataset מקומי</button></div>
+</div>
+<div class="card"><div class="section-head"><div><h2>שאלות זהב</h2><p>נשמרות מקומית בדפדפן בלבד. ה־Token אינו נשמר.</p></div><span class="badge neutral" id="goldenCount">0 שאלות</span></div><div class="table-wrap" id="goldenTable"></div></div>
+<div class="card"><div class="section-head"><div><h2>תוצאות Sanity</h2><p>Answer Similarity ו־Must Include הם Signals; Source Match הוא חזק יותר. החלטת PASS סופית נשארת ידנית עד שנגדיר evaluator מוסכם.</p></div></div><div class="table-wrap" id="goldenResults"></div></div>
 </div>
 </section><section class="tabpage" id="qaDocs">
 <div class="card">
@@ -329,7 +376,7 @@
 </div>
 </form>
 </dialog>
-<footer>GenAI Router QA Console · Swagger 1.0.6 · UI v1.7</footer>
+<footer>GenAI Router QA Console · Swagger 1.0.6 · UI v1.8</footer>
 <script src="/app.js" type="module"></script>
 </body>
 </html>

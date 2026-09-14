@@ -52,3 +52,23 @@
 .endpoint-guide{display:grid;gap:12px}.endpoint-group{border:1px solid var(--line);border-radius:12px;background:#fafcff;overflow:hidden}.endpoint-group>summary{cursor:pointer;padding:13px 15px;font-weight:900;list-style:none;display:flex;justify-content:space-between}.endpoint-group>summary::-webkit-details-marker{display:none}.endpoint-group>summary span{color:var(--muted);font-size:12px}.endpoint-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:0 12px 12px}.endpoint-card{background:#fff;border:1px solid #e3e8ef;border-radius:10px;padding:12px}.endpoint-title{display:flex;gap:8px;align-items:center;direction:ltr;justify-content:flex-start}.endpoint-title code{font-size:12px;overflow-wrap:anywhere}.endpoint-card h3{font-size:14px;margin:10px 0 6px}.endpoint-card p{font-size:13px;line-height:1.45;margin:5px 0;color:#344054}.endpoint-card small{display:block;margin-top:8px;color:var(--muted);direction:ltr;text-align:left}.method{font-size:10px;font-weight:900;border-radius:6px;padding:4px 6px;color:#fff}.method.get{background:#1570ef}.method.post{background:#039855}.method.delete{background:#d92d20}.method.put,.method.patch{background:#dc6803}
 @media(max-width:1000px){.guide-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.endpoint-list{grid-template-columns:1fr}}
 @media(max-width:650px){.guide-grid,.status-guide{grid-template-columns:1fr}.setup-essential{grid-template-columns:1fr}.subtabs{margin-inline:-4px}.endpoint-group>summary{padding:12px}}
+
+/* v1.8 AI QA guide, glossary and Golden Sanity */
+.term-link{appearance:none;border:0;background:transparent;color:#175a8b;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;font:inherit;font-weight:700;cursor:pointer;padding:0}
+.term-link:hover{color:#0c3f64}
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.glossary-card{background:#fff;border:1px solid var(--border,#dce3ee);border-radius:16px;padding:18px;scroll-margin-top:100px;transition:.25s ease}
+.glossary-card h3{margin:0 0 5px;font-size:1.05rem}
+.glossary-card p{margin:8px 0 0;line-height:1.7;color:var(--text,#1e293b)}
+.glossary-alias{font-size:.8rem;color:var(--muted,#64748b);direction:ltr;text-align:right}
+.glossary-highlight{outline:3px solid #f4c95d;box-shadow:0 0 0 7px rgba(244,201,93,.18)}
+.golden-intro .notice{margin-top:12px}
+.golden-form .span-2{grid-column:1/-1}
+.golden-table td:nth-child(2),.golden-table td:nth-child(3){min-width:240px}
+.golden-actual{max-width:420px;white-space:normal;line-height:1.55}
+.empty-state{padding:24px;text-align:center;color:var(--muted,#64748b);background:#f8fafc;border:1px dashed var(--border,#dce3ee);border-radius:14px}
+.mini-btn{border:1px solid var(--border,#cbd5e1);background:#fff;border-radius:8px;padding:6px 9px;cursor:pointer;font:inherit;font-size:.82rem}
+.mini-btn.danger{color:#a51d2d;border-color:#efc1c7}
+.notice.info{background:#eef7ff;border-color:#c8e3fb;color:#174a70}
+.subtabs{overflow-x:auto;scrollbar-width:thin}
+@media(max-width:720px){.glossary-grid{grid-template-columns:1fr}.golden-form .span-2{grid-column:auto}.golden-table td:nth-child(2),.golden-table td:nth-child(3){min-width:200px}}

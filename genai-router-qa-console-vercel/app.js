@@ -2,7 +2,8 @@ const state = {
   tests: [], questions: [], operations: [], results: {}, lastStream: '', aiRating: null,
   demo: false, createdConversationId: null, selectedTestId: null,
   context: null, tokenMarkedAt: null, connectionOk: false,
-  lastExchange: null, bulkRunning: false, uiSelfTest: null
+  lastExchange: null, bulkRunning: false, uiSelfTest: null,
+  goldenDataset: [], goldenResults: {}, goldenEditingId: null
 };
 
 const $ = (id) => document.getElementById(id);
@@ -88,6 +89,58 @@ const CONTRACT_GAPS = [
 ];
 
 
+
+const AI_QA_LESSONS = [
+  {title:'1. AI הוא לא פונקציה דטרמיניסטית',body:'אותה שאלה יכולה לקבל ניסוח מעט שונה בין הרצות. לכן בדרך כלל לא משווים תשובה כמחרוזת מדויקת. בודקים עובדות, מקור, כיסוי של נקודות חובה והתנהגות עקבית.'},
+  {title:'2. מפרידים Retrieval מ־Generation',body:'ב־RAG יש שתי שאלות שונות: האם המערכת מצאה את המידע הנכון, והאם ה־LLM ניסח ממנו תשובה נכונה. אם ה־Chunk שגוי זו בעיית Retrieval; אם ה־Chunk נכון אבל התשובה שגויה זו בעיית Generation.'},
+  {title:'3. Source/Chunk הם ה־Evidence שלך',body:'אל תסתפק ב״התשובה נשמעת הגיונית״. עבור שאלה חשובה, בדוק שה־Source נכון, שה־Chunk מכיל את העובדה, ושהתשובה לא מוסיפה עובדות שלא מופיעות במקור.'},
+  {title:'4. Golden Dataset הוא Regression Suite',body:'בונים סט קבוע של שאלות שאושרו מראש עם תשובת זהב ומקור צפוי. אחרי שינוי Model, Prompt, Chunking, Index או Config מריצים שוב ומשווים כדי לזהות רגרסיה.'},
+  {title:'5. צריך גם שאלות שאין להן תשובה',body:'Golden טוב כולל No-Answer: שאלות שהמידע אינו קיים בקורפוס. Expected תקין הוא שהמערכת תודה שאין בסיס מספיק, ולא תמציא תשובה.'},
+  {title:'6. מודדים כמה ממדים, לא ציון אחד',body:'מומלץ להפריד Correctness, Groundedness/Faithfulness, Source correctness, Retrieval quality, No-answer behavior, Security, Latency ולעיתים Cost/Tokens. HTTP 200 לא אומר שהתשובה איכותית.'},
+  {title:'7. גרסה היא חלק מהתוצאה',body:'כשמשווים רגרסיה צריך לדעת מול איזו גרסת Model, Prompt, Index/Corpus, Embedding/Chunking ו־Config הורצה הבדיקה. אחרת קשה להסביר למה תוצאה השתנתה.'},
+  {title:'8. אוטומציה עוזרת — אבל לא כל Judge הוא אמת',body:'Similarity או LLM-as-a-Judge יכולים לסנן תוצאות ולהאיץ עבודה, אבל חייבים לכייל אותם מול Human/SME. במיוחד במיסוי, תשובה שנשמעת דומה יכולה להיות שגויה בפרט קטן.'},
+  {title:'9. בדיקות חוזרות חושפות חוסר יציבות',body:'לתסריטים קריטיים כדאי לעיתים להריץ אותה שאלה כמה פעמים. אם פעם אחת היא נכונה ופעמיים שגויה, הממוצע חשוב יותר מהרצה מוצלחת בודדת.'},
+  {title:'10. אבטחה והרשאות הן חלק מאיכות AI',body:'RAG איכותי לא רק עונה נכון; הוא גם לא מחזיר מסמך, Chunk או מידע מקטגוריה שהמשתמש אינו מורשה לראות, ולא נופל ל־Prompt Injection.'}
+];
+
+const AI_GLOSSARY = [
+  {term:'RAG',aliases:['Retrieval Augmented Generation'],desc:'שיטה שבה המערכת לא מסתמכת רק על הידע של מודל השפה. לפני יצירת התשובה היא מאחזרת מידע ממאגר מסמכים, בונה ממנו Context, ורק אז מבקשת מה־LLM לענות. מבחינת QA צריך לבדוק גם את שלב האחזור וגם את התשובה.'},
+  {term:'Golden Dataset',aliases:['Golden Set','שאלות זהב'],desc:'סט בדיקות קבוע שאושר מראש: שאלה, תשובת זהב ולעיתים גם Source/Chunk צפוי. הוא משמש כ־Regression Suite ל־AI אחרי שינוי Model, Prompt, Index, Chunking או Config. תשובת הזהב מתארת את העובדות הנכונות — לא בהכרח ניסוח שחייב להיות זהה.'},
+  {term:'Golden Answer',aliases:['תשובת זהב'],desc:'התשובה או קבוצת העובדות שאנו יודעים מראש שהן נכונות לשאלת זהב. עדיף לנסח אותה קצר וברור, לציין תנאים וסייגים חשובים, ולקשור אותה למקור מאושר.'},
+  {term:'Chunk',aliases:['מקטע'],desc:'קטע טקסט שנחתך מתוך מסמך כדי שאפשר יהיה לחפש ולהעביר למודל רק מידע רלוונטי. Chunk קטן מדי עלול לאבד הקשר; גדול מדי עלול להכניס רעש. בבדיקות חשוב לוודא שה־Chunk המצוטט באמת מכיל את העובדה שעליה מבוססת התשובה.'},
+  {term:'Agentic Chunking',aliases:[],desc:'חלוקת מסמך ל־Chunks באמצעות מודל/Agent שמנסה להבין מבנה ומשמעות, ולא רק לחתוך כל N תווים. זה עשוי לשמור הקשר טוב יותר, אבל מוסיף אי־דטרמיניזם ועלות ולכן דורש בדיקות איכות.'},
+  {term:'Embedding',aliases:[],desc:'ייצוג מספרי של טקסט שמטרתו ללכוד משמעות סמנטית. טקסטים בעלי משמעות דומה אמורים להיות קרובים במרחב הווקטורי. הוא מאפשר Semantic Search גם כשהשאלה והמסמך משתמשים במילים שונות.'},
+  {term:'Vector Search',aliases:['Semantic Search'],desc:'חיפוש לפי קרבה בין Embeddings ולא רק לפי התאמת מילות מפתח. ב־QA בודקים האם החיפוש מביא את המסמכים/Chunks הנכונים, במיוחד כשיש ניסוחים שונים לאותו רעיון.'},
+  {term:'Top-K',aliases:[],desc:'מספר התוצאות המובילות שה־Retrieval מחזיר. Top-5 פירושו חמשת ה־Chunks המדורגים ראשונים. מדד בדיקה נפוץ הוא האם ה־Chunk הנכון מופיע ב־Top-3 או Top-5.'},
+  {term:'Context',aliases:[],desc:'המידע שהמערכת מעבירה ל־LLM יחד עם השאלה — למשל ה־Chunks שנמצאו והמטא־דאטה שלהם. אם ה־Context חסר או שגוי, גם מודל חזק יכול לתת תשובה שגויה.'},
+  {term:'Grounding',aliases:['Groundedness'],desc:'מידת ההתבססות של התשובה על המקורות שסופקו. תשובה Grounded לא מוסיפה טענות מהותיות שאין להן תמיכה ב־Context/Source.'},
+  {term:'Faithfulness',aliases:[],desc:'מושג קרוב ל־Groundedness: האם התשובה נאמנה למידע שניתן לה ולא מעוותת אותו. למשל שינוי מ־״30 ימים״ ל־״30 ימי עסקים״ הוא כשל Faithfulness גם אם התשובה נשמעת סבירה.'},
+  {term:'Hallucination',aliases:['הזיה'],desc:'מצב שבו המודל מייצר עובדה, מקור, מספר, חוק או פרט שלא נתמך במידע הזמין. ב־QA צריך לזהות גם Hallucination חלקי — משפט אחד שגוי בתוך תשובה שרובה נכונה.'},
+  {term:'Source',aliases:['Citation','מקור'],desc:'המסמך או הרשומה שממנה הגיע המידע. Source correctness בודק שהמערכת מפנה למקור המתאים ולא למסמך דומה. אצלנו Source עשוי להוביל ל־chunkId שאפשר לשלוף ולבדוק.'},
+  {term:'Retrieval',aliases:['אחזור'],desc:'השלב שבו המערכת מחפשת מידע רלוונטי לפני יצירת התשובה. בעיית Retrieval פירושה שהמסמך/Chunk הנכון לא נמצא, דורג נמוך מדי או סונן בטעות.'},
+  {term:'Ingestion',aliases:['קליטה'],desc:'התהליך שמכניס מסמך למאגר RAG: חילוץ טקסט, ניקוי, Chunking, יצירת Metadata/Embeddings ואינדוקס. מסמך שעבר Ingestion טכני לא בהכרח עבר Ingestion איכותי.'},
+  {term:'Re-Ingestion',aliases:[],desc:'עיבוד מחדש של מסמך קיים בעקבות שינוי אסטרטגיה, Chunking, Embedding או גרסה. לפי האפיון שלנו, רצוי שהגרסה הפעילה הישנה תישאר זמינה עד שהחדשה הושלמה בהצלחה.'},
+  {term:'LLM',aliases:['Large Language Model'],desc:'מודל שפה גדול שמייצר טקסט על בסיס Prompt ו־Context. הוא אינו Database ואינו מבטיח אמת; הוא מנבא תשובה סבירה ולכן נדרשים Grounding, Guardrails ובדיקות.'},
+  {term:'Prompt',aliases:[],desc:'הקלט הטקסטואלי שנשלח למודל. הוא יכול לכלול את שאלת המשתמש, הוראות מערכת, Context ודוגמאות. שינוי קטן ב־Prompt יכול לשנות התנהגות ולכן Prompt version צריך להיחשב חלק מגרסת המערכת.'},
+  {term:'System Prompt',aliases:[],desc:'הוראות מערכת פנימיות שמכוונות את המודל, למשל לענות רק ממקורות מאושרים. משתמש רגיל לא אמור לראות או לעקוף אותן.'},
+  {term:'Prompt Injection',aliases:[],desc:'קלט שמנסה לגרום למודל להתעלם מההוראות שלו, לחשוף סודות או לבצע פעולה אסורה. הוא יכול להגיע מהמשתמש וגם מתוך מסמך שנכנס ל־RAG.'},
+  {term:'Guardrails',aliases:['Model Armor'],desc:'שכבות הגנה לפני/אחרי המודל שמנסות לחסום קלט/פלט מסוכן, Prompt Injection, Secrets ותוכן לא מורשה. QA צריך לבדוק גם חסימות נכונות וגם False Positives.'},
+  {term:'Confidence',aliases:[],desc:'ציון שמייצג עד כמה רכיב מסוים בטוח בהחלטה, למשל בחירת קטגוריה. חשוב: Confidence אינו הסתברות מובטחת לאמת, ולכן צריך לכייל ספים על נתונים אמיתיים.'},
+  {term:'Fallback',aliases:[],desc:'התנהגות חלופית כאשר המערכת לא בטוחה או רכיב נכשל. לדוגמה: אם לא נמצאה קטגוריה בביטחון מספיק, לחפש בכל הקטגוריות שהמשתמש מורשה אליהן — אך לעולם לא להרחיב מעבר להרשאה.'},
+  {term:'No-Answer',aliases:['Abstention'],desc:'התנהגות שבה המערכת מסרבת לנחש כאשר אין מידע מספיק. זה תרחיש חיובי חשוב ב־Golden Dataset: לפעמים התשובה הנכונה היא ״אין מספיק מידע במקורות״.'},
+  {term:'Answer Similarity',aliases:['Semantic Similarity'],desc:'מדד עזר לכמה התשובה בפועל דומה לתשובת הזהב. הוא שימושי לסינון מהיר, אבל אינו מספיק לקביעת נכונות: שתי תשובות יכולות להיות דומות מילולית ועדיין להבדיל בפרט קריטי.'},
+  {term:'Context Precision',aliases:[],desc:'כמה מה־Chunks שהוחזרו באמת רלוונטיים לשאלה. Precision נמוך אומר שה־Context מכיל הרבה רעש.'},
+  {term:'Context Recall',aliases:[],desc:'האם ה־Retrieval הצליח להביא את כל המידע הדרוש כדי לענות. Recall נמוך אומר שחלק מהמידע הקריטי נשאר מחוץ ל־Context.'},
+  {term:'LLM-as-a-Judge',aliases:[],desc:'שימוש במודל נוסף כדי לדרג תשובת AI מול תשובת זהב/קריטריונים. זה יכול לאפשר אוטומציה רחבה, אך צריך לכייל את ה־Judge מול בני אדם ולשמור על מודל/Prompt קבועים כדי שהמדד עצמו לא יזוז.'},
+  {term:'Regression',aliases:['AI Regression'],desc:'ירידה באיכות לאחר שינוי. בעולם AI היא יכולה לקרות גם בלי שינוי API: החלפת Model, Prompt, Index, Corpus, Embedding או Chunking עלולה לשפר חלק מהשאלות ולהרע אחרות.'},
+  {term:'SSE',aliases:['Server-Sent Events'],desc:'Streaming חד־כיווני מהשרת לדפדפן. במקום Response אחד בסוף, מתקבלים events כמו content, sources, error ו־done. בבדיקות צריך לבדוק סדר, סיום, כפילויות וניתוק באמצע.'},
+  {term:'Observability',aliases:[],desc:'היכולת להבין מה קרה בתוך הזרימה: איזה Tool הופעל, אילו Sources/Chunks נבחרו, latency, errors, category/filtering ועוד. בלי Observability קשה מאוד להסביר כשל AI.'},
+  {term:'Audit',aliases:[],desc:'תיעוד של מי שינה מה ומתי. במערכת AI חשוב במיוחד לשינויים ב־Prompt, Config, Categories, Ingestion Strategy וגרסאות, כי שינוי כזה יכול להסביר שינוי באיכות.'},
+  {term:'Router',aliases:[],desc:'השירות שמקבל בקשה ומנתב אותה ליכולת המתאימה, למשל RAG או Text2SQL. מבחינת QA צריך לבדוק גם ניתוב נכון וגם שמירת Context/הרשאות לאורך המעבר בין רכיבים.'},
+  {term:'Text2SQL',aliases:[],desc:'רכיב שמתרגם שאלה בשפה טבעית לשאילתת SQL. איכות נמדדת לא רק אם נוצר SQL תקין אלא אם הוא מחזיר את הנתונים הנכונים, בטוח ואינו מאפשר גישה שלא הותרה.'},
+  {term:'Model Version',aliases:[],desc:'הגרסה המדויקת של המודל ששימש בהרצה. שינוי Model יכול לשנות איכות, latency ועלות גם אם הקוד לא השתנה, ולכן כדאי לשמור אותו בדוח Sanity.'}
+];
+
 const ENDPOINT_GUIDE = {
   'GET /health': ['בדיקת בריאות השירות','HTTP 200 כשה־Router חי ונגיש','להבדיל בין בעיית רשת/סביבה לבין כשל עסקי.'],
   'POST /v1/files/download': ['הורדת קובץ ממאגר האחסון','הקובץ המבוקש מוחזר רק למשתמש מורשה','בדיקות file/bucket שגויים, הרשאות ו־IDOR.'],
@@ -113,6 +166,91 @@ const ENDPOINT_GUIDE = {
   'POST /v1/statistics/tokens/by-user': ['צריכת Tokens לפי משתמש','פירוט צריכה למשתמשים מורשים בלבד','RBAC/PII ודיוק סכומים.'],
   'POST /v1/statistics/feedback/thumbs-comparison': ['השוואת 👍/👎','ספירה/יחס עקביים עם המשובים שנשמרו','טווח זמן, no feedback ודיוק אגרגציה.']
 };
+
+
+function renderAiQaLessons(){
+  const host=$('aiQaLessons'); if(!host)return;
+  host.innerHTML=AI_QA_LESSONS.map(x=>`<div class="context-card"><h3>${esc(x.title)}</h3><p>${esc(x.body)}</p></div>`).join('');
+}
+function renderGlossary(filter=''){
+  const host=$('glossaryGrid'); if(!host)return;
+  const q=String(filter||'').trim().toLowerCase();
+  const items=AI_GLOSSARY.filter(x=>!q || [x.term,...(x.aliases||[]),x.desc].join(' ').toLowerCase().includes(q));
+  host.innerHTML=items.map(x=>`<article class="glossary-card" id="glossary-${encodeURIComponent(x.term)}" data-term="${esc(x.term)}"><h3>${esc(x.term)}</h3>${x.aliases?.length?`<div class="glossary-alias">${esc(x.aliases.join(' · '))}</div>`:''}<p>${esc(x.desc)}</p></article>`).join('') || '<div class="empty-state">לא נמצאו מושגים.</div>';
+}
+function openGlossary(term=''){
+  activateTab('guide');
+  const root=$('guide'); if(!root)return;
+  root.querySelectorAll('.subtab').forEach(x=>x.classList.toggle('active',x.dataset.subtab==='guideGlossary'));
+  root.querySelectorAll('.subpage').forEach(x=>x.classList.toggle('active',x.dataset.subpage==='guideGlossary'));
+  if($('glossarySearch')){$('glossarySearch').value='';renderGlossary();}
+  requestAnimationFrame(()=>{
+    const el=[...document.querySelectorAll('.glossary-card')].find(x=>x.dataset.term===term);
+    (el||$('glossaryGrid'))?.scrollIntoView({behavior:'smooth',block:'start'});
+    if(el){el.classList.add('glossary-highlight');setTimeout(()=>el.classList.remove('glossary-highlight'),1800);}
+  });
+}
+function wireGlossaryLinks(){document.querySelectorAll('[data-glossary]').forEach(el=>el.onclick=()=>openGlossary(el.dataset.glossary));}
+
+function loadGoldenDataset(){
+  try{state.goldenDataset=JSON.parse(localStorage.getItem('genaiQaGoldenDataset')||'[]')||[];}catch{state.goldenDataset=[];}
+  try{state.goldenResults=JSON.parse(localStorage.getItem('genaiQaGoldenResults')||'{}')||{};}catch{state.goldenResults={};}
+}
+function saveGoldenDataset(){localStorage.setItem('genaiQaGoldenDataset',JSON.stringify(state.goldenDataset));localStorage.setItem('genaiQaGoldenResults',JSON.stringify(state.goldenResults));}
+function normalizeForSimilarity(text=''){return String(text).toLowerCase().replace(/[\u0591-\u05C7]/g,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).filter(x=>x.length>1);}
+function answerSimilarity(a,b){
+  const A=new Set(normalizeForSimilarity(a)),B=new Set(normalizeForSimilarity(b)); if(!A.size||!B.size)return 0;
+  let common=0; A.forEach(x=>{if(B.has(x))common++}); const p=common/A.size,r=common/B.size; return p+r?Math.round((2*p*r/(p+r))*100):0;
+}
+function extractSseAnswer(events=[]){return events.filter(e=>String(e.type||'').toLowerCase()==='content').map(e=>e.content??e.text??e.delta??'').join('').trim();}
+function extractSseSources(events=[]){return events.filter(e=>String(e.type||'').toLowerCase()==='sources').map(e=>JSON.stringify(e)).join(' ');}
+function goldenFormReset(){state.goldenEditingId=null;['goldenId','goldenTags','goldenQuestion','goldenExpected','goldenMustInclude','goldenExpectedSource','goldenNotes'].forEach(id=>{if($(id))$(id).value='';});}
+function goldenEdit(id){const g=state.goldenDataset.find(x=>x.id===id);if(!g)return;state.goldenEditingId=id;$('goldenId').value=g.id;$('goldenTags').value=g.tags||'';$('goldenQuestion').value=g.question||'';$('goldenExpected').value=g.expected||'';$('goldenMustInclude').value=g.mustInclude||'';$('goldenExpectedSource').value=g.expectedSource||'';$('goldenNotes').value=g.notes||'';$('goldenId').scrollIntoView({behavior:'smooth',block:'center'});}
+function goldenDelete(id){if(!confirm(`למחוק את ${id}?`))return;state.goldenDataset=state.goldenDataset.filter(x=>x.id!==id);delete state.goldenResults[id];saveGoldenDataset();renderGolden();}
+function goldenSave(){
+  const g={id:$('goldenId').value.trim()||`GOLD-${String(state.goldenDataset.length+1).padStart(3,'0')}`,tags:$('goldenTags').value.trim(),question:$('goldenQuestion').value.trim(),expected:$('goldenExpected').value.trim(),mustInclude:$('goldenMustInclude').value.trim(),expectedSource:$('goldenExpectedSource').value.trim(),notes:$('goldenNotes').value.trim()};
+  if(!g.question||!g.expected){showToast('יש להזין שאלה ותשובת זהב.','warning');return;}
+  const duplicate=state.goldenDataset.find(x=>x.id===g.id && x.id!==state.goldenEditingId); if(duplicate){showToast('כבר קיימת שאלת זהב עם ID זה.','error');return;}
+  if(state.goldenEditingId){state.goldenDataset=state.goldenDataset.map(x=>x.id===state.goldenEditingId?g:x);} else state.goldenDataset.push(g);
+  saveGoldenDataset();goldenFormReset();renderGolden();showToast('שאלת הזהב נשמרה מקומית.','success');
+}
+function goldenVerdict(id,status){const r=state.goldenResults[id];if(!r)return;r.status=status;r.reviewedAt=now();saveGoldenDataset();renderGolden();}
+function renderGolden(){
+  if(!$('goldenTable'))return; $('goldenCount').textContent=`${state.goldenDataset.length} שאלות`;
+  $('goldenTable').innerHTML=state.goldenDataset.length?`<table class="qa-table golden-table"><thead><tr><th>ID</th><th>שאלה</th><th>Expected</th><th>מקור צפוי</th><th>תגיות</th><th>פעולות</th></tr></thead><tbody>${state.goldenDataset.map(g=>`<tr><td>${esc(g.id)}</td><td>${esc(g.question)}</td><td>${esc(g.expected)}</td><td>${esc(g.expectedSource||'—')}</td><td>${esc(g.tags||'—')}</td><td><button class="mini-btn" data-golden-edit="${esc(g.id)}">עריכה</button> <button class="mini-btn danger" data-golden-delete="${esc(g.id)}">מחיקה</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty-state">עדיין אין שאלות זהב. הוסף שאלה, תשובת זהב ומקור צפוי אם ידוע.</div>';
+  const rows=state.goldenDataset.map(g=>({g,r:state.goldenResults[g.id]})).filter(x=>x.r);
+  $('goldenResults').innerHTML=rows.length?`<table class="qa-table"><thead><tr><th>ID</th><th>מצב</th><th>Similarity</th><th>Must Include</th><th>Source</th><th>תשובה בפועל</th><th>Run</th><th>סקירה</th></tr></thead><tbody>${rows.map(({g,r})=>`<tr><td>${esc(g.id)}</td><td><span class="status-chip ${r.status==='REVIEW'?'status-question':r.status==='N/A'?'status-na':r.status==='FAIL'?'status-fail':'status-pass'}">${esc(r.status)}</span></td><td>${r.similarity}%</td><td>${esc(r.mustScore)}</td><td>${esc(r.sourceMatch)}</td><td class="golden-actual">${esc(r.answer||'—')}</td><td>${esc(r.runLabel||'—')}<br><small dir="ltr">${esc(r.time||'')}</small></td><td><button class="mini-btn" data-golden-pass="${esc(g.id)}">PASS</button> <button class="mini-btn danger" data-golden-fail="${esc(g.id)}">FAIL</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty-state">טרם הורץ Golden Sanity.</div>';
+  document.querySelectorAll('[data-golden-edit]').forEach(b=>b.onclick=()=>goldenEdit(b.dataset.goldenEdit));document.querySelectorAll('[data-golden-delete]').forEach(b=>b.onclick=()=>goldenDelete(b.dataset.goldenDelete));document.querySelectorAll('[data-golden-pass]').forEach(b=>b.onclick=()=>goldenVerdict(b.dataset.goldenPass,'PASS'));document.querySelectorAll('[data-golden-fail]').forEach(b=>b.onclick=()=>goldenVerdict(b.dataset.goldenFail,'FAIL'));
+}
+async function runGoldenOne(g){
+  const c=cfg(),runLabel=$('goldenRunLabel')?.value.trim()||'unlabeled';
+  if(state.demo){return {status:'N/A',answer:'Demo Mode אינו נחשב הרצת Golden אמיתית',similarity:0,mustScore:'—',sourceMatch:'—',runLabel,time:now()};}
+  if(!c.baseUrl||!c.token||!c.userId||!c.appId){return {status:'N/A',answer:'חסר Base URL / Token / User / App ID',similarity:0,mustScore:'—',sourceMatch:'—',runLabel,time:now()};}
+  let conversationId=c.conversationId,createdForTest=false;
+  try{
+    if($('goldenIsolate')?.checked){
+      const cb={appId:c.appId,userId:c.userId,...(c.caseId?{caseId:c.caseId}:{})}; const cr=await proxy({method:'POST',path:'/v1/conversations/new',body:cb});
+      conversationId=extractConversationId(cr.body); if(!(cr.status>=200&&cr.status<300)||!conversationId) throw new Error(`Create Conversation נכשל (HTTP ${cr.status})`); createdForTest=true;
+    }
+    if(!conversationId) return {status:'N/A',answer:'חסר Conversation ID או הפעל בידוד שיחות',similarity:0,mustScore:'—',sourceMatch:'—',runLabel,time:now()};
+    const body={conversationId,userId:c.userId,appId:c.appId,...(c.caseId?{caseId:c.caseId}:{}),content:g.question};
+    const r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); const txt=await readStream(r.stream); const events=parseSse(txt); const answer=extractSseAnswer(events)||txt.slice(-4000); const sources=extractSseSources(events); const similarity=answerSimilarity(answer,g.expected);
+    const must=(g.mustInclude||'').split(',').map(x=>x.trim()).filter(Boolean); const found=must.filter(x=>answer.toLowerCase().includes(x.toLowerCase())).length; const mustScore=must.length?`${found}/${must.length}`:'—';
+    const sourceMatch=g.expectedSource?(sources.toLowerCase().includes(g.expectedSource.toLowerCase())?'MATCH':'NO MATCH'):'—';
+    return {status:'REVIEW',answer,similarity,mustScore,sourceMatch,http:r.status,time:now(),runLabel,conversationId,sources:sources.slice(0,3000)};
+  }catch(e){return {status:'REVIEW',answer:`ERROR: ${e.message}`,similarity:0,mustScore:'—',sourceMatch:'—',runLabel,time:now()};}
+  finally{
+    if(createdForTest && conversationId && $('goldenCleanup')?.checked){try{await proxy({method:'DELETE',path:'/v1/conversations/id',body:{conversationId,userId:c.userId}});}catch{} }
+  }
+}
+async function runGoldenAll(){
+  if(!state.goldenDataset.length){showToast('אין שאלות זהב להרצה.','warning');return;}
+  const btn=$('goldenRunAllBtn');const old=btn.textContent;btn.disabled=true;btn.textContent='מריץ…';
+  for(const g of state.goldenDataset){state.goldenResults[g.id]=await runGoldenOne(g);saveGoldenDataset();renderGolden();}
+  btn.disabled=false;btn.textContent=old;showToast('Golden Sanity הסתיים. התוצאות מסומנות REVIEW עד בדיקת QA/SME.','success',5500);
+}
+function exportGolden(){exportBlob(`golden-dataset-${Date.now()}.json`,'application/json',JSON.stringify({version:1,exportedAt:now(),dataset:state.goldenDataset,results:state.goldenResults},null,2));}
+async function importGoldenFile(file){try{const obj=JSON.parse(await file.text());const ds=Array.isArray(obj)?obj:obj.dataset;if(!Array.isArray(ds))throw new Error('JSON אינו מכיל dataset תקין');state.goldenDataset=ds.map((x,i)=>({id:String(x.id||`GOLD-${i+1}`),question:String(x.question||''),expected:String(x.expected||x.expectedAnswer||''),expectedSource:String(x.expectedSource||''),mustInclude:String(x.mustInclude||''),tags:String(x.tags||''),notes:String(x.notes||'')})).filter(x=>x.question&&x.expected);state.goldenResults={};saveGoldenDataset();renderGolden();showToast(`${state.goldenDataset.length} שאלות זהב יובאו.`, 'success');}catch(e){showToast('ייבוא Golden נכשל: '+e.message,'error',5000);}}
 
 function renderEndpointGuide(){
   const host=$('endpointGuide'); if(!host) return;
@@ -564,7 +702,7 @@ async function happyFlow(){
 
 function runUiSelfTest(){
   const checks=[]; const check=(name,ok,detail='')=>checks.push({name,ok:!!ok,detail});
-  const buttonIds=['demoBtn','healthBtn','markTokenBtn','readinessBtn','runAllTests','runSafeP0','runBoundaryPack','runRagSpecPack','runHappyFlow','uiSelfTestBtn','clearResults','flowRunBtn','apiRunBtn','copyCurlBtn','aiRunBtn','exportJson','exportCsv','exportStpBtn','exportStdBtn','dialogRunBtn','dialogCopyCurlBtn'];
+  const buttonIds=['demoBtn','healthBtn','markTokenBtn','readinessBtn','runAllTests','runSafeP0','runBoundaryPack','runRagSpecPack','runHappyFlow','uiSelfTestBtn','clearResults','flowRunBtn','apiRunBtn','copyCurlBtn','aiRunBtn','goldenRunAllBtn','goldenSaveBtn','goldenResetBtn','goldenExportBtn','goldenImportBtn','goldenClearBtn','exportJson','exportCsv','exportStpBtn','exportStdBtn','dialogRunBtn','dialogCopyCurlBtn'];
   buttonIds.forEach(id=>{const el=$(id);check(`כפתור ${id}`,!!el && (typeof el.onclick==='function'||id==='dialogCopyCurlBtn'),!el?'לא נמצא':typeof el.onclick);});
   document.querySelectorAll('.tab').forEach(tab=>check(`Tab ${tab.dataset.tab}`,!!$(tab.dataset.tab)&&typeof tab.onclick==='function','Target section + click handler'));
   document.querySelectorAll('[data-manual-status]').forEach(b=>check(`Manual status ${b.dataset.manualStatus}`,typeof b.onclick==='function','click handler'));
@@ -573,7 +711,7 @@ function runUiSelfTest(){
   check('קטלוג בדיקות נטען',state.tests.length>0,`${state.tests.length} tests`); check('Swagger operations נטענו',state.operations.length>0,`${state.operations.length} operations`);
   check('P0-002 ברור',plainTestExplanation({ID:'P0-002'}).includes('gcloud'),'הסבר פשוט קיים');
   check('הנחיות Setup מקופלות',document.querySelector('details.setup-help')!=null,'native details/summary');
-  check('מדריך מערכת נטען',!!$('guide') && !!$('endpointGuide'),'Guide + endpoint guide'); check('RAG Spec נטען בתוך המדריך',!!state.context?.ragSpec && state.tests.some(t=>t.ID==='RAG-001'),'Spec cards + RAG test pack'); document.querySelectorAll('.subtab').forEach(tab=>check(`Subtab ${tab.dataset.subtab}`,!!tab.closest('.tabpage')?.querySelector(`[data-subpage=\"${tab.dataset.subtab}\"]`) && typeof tab.onclick==='function','Target subpage + click handler')); 
+  check('מדריך מערכת נטען',!!$('guide') && !!$('endpointGuide'),'Guide + endpoint guide'); check('RAG Spec נטען בתוך המדריך',!!state.context?.ragSpec && state.tests.some(t=>t.ID==='RAG-001'),'Spec cards + RAG test pack'); check('מילון AI נטען',AI_GLOSSARY.length>=25 && !!$('glossaryGrid'),`${AI_GLOSSARY.length} terms`); check('Golden Sanity נטען',!!$('goldenTable') && !!$('goldenResults'),'Dataset + results'); document.querySelectorAll('.subtab').forEach(tab=>check(`Subtab ${tab.dataset.subtab}`,!!tab.closest('.tabpage')?.querySelector(`[data-subpage=\"${tab.dataset.subtab}\"]`) && typeof tab.onclick==='function','Target subpage + click handler')); 
   check('Demo אינו PASS אמיתי',true,'ב־Demo תוצאות אוטומטיות מסומנות DEMO');
   const failed=checks.filter(x=>!x.ok); state.uiSelfTest={time:now(),checks};
   $('runSummary').innerHTML=`<div class="ui-test-list">${checks.map(x=>`<div class="ui-test-item ${x.ok?'ok':'fail'}"><b>${x.ok?'✓':'✕'} ${esc(x.name)}</b>${x.detail?` — ${esc(x.detail)}`:''}</div>`).join('')}</div>`;
@@ -668,7 +806,7 @@ function exportStd(){exportBlob('STD-GenAI-Router-he.md','text/markdown;charset=
 
 function renderKpis(){ $('kpiTotal').textContent=state.tests.length; $('kpiAuto').textContent=state.tests.filter(t=>t.mode!=='manual').length; $('kpiPass').textContent=Object.values(state.results).filter(r=>r.status==='PASS').length; $('kpiFail').textContent=Object.values(state.results).filter(r=>r.status==='FAIL').length; if($('kpiNA'))$('kpiNA').textContent=Object.values(state.results).filter(r=>r.status==='N/A').length; if($('kpiDemo'))$('kpiDemo').textContent=Object.values(state.results).filter(r=>r.status==='DEMO').length; $('kpiOpen').textContent=state.questions.filter(q=>(q.Status||'Open')==='Open').length; }
 function renderReport(){ const rs=Object.values(state.results); $('reportTable').innerHTML=rs.length?`<table class="qa-table"><thead><tr><th>ID</th><th>Status</th><th>Mode</th><th>Actual</th><th>Details</th><th>Evidence</th><th>Time</th></tr></thead><tbody>${rs.map(r=>`<tr><td>${r.id}</td><td class="${statusClass(r.status)}">${r.status}</td><td>${esc(r.evidence?.mode||'—')}</td><td>${esc(r.actual)}</td><td>${esc(r.details)}</td><td>${r.evidence?'Request/Response שמור':'—'}</td><td dir="ltr">${r.time}</td></tr>`).join('')}</tbody></table>`:'אין תוצאות עדיין.'; }
-function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderContract();renderContext();renderRagSpec();renderStpStd();renderEndpointGuide();readiness();}
+function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderContract();renderContext();renderRagSpec();renderStpStd();renderEndpointGuide();renderAiQaLessons();renderGlossary($('glossarySearch')?.value||'');renderGolden();wireGlossaryLinks();readiness();}
 
 function populateEndpoints(){ const s=$('endpointSelect'); s.innerHTML=state.operations.map((o,i)=>`<option value="${i}">${o.method} ${o.path} — ${esc(o.operationId)}</option>`).join(''); s.onchange=syncApiTemplate; syncApiTemplate(); }
 function syncApiTemplate(){ const o=state.operations[+$('endpointSelect').value||0]; if(!o)return; $('apiMethod').value=o.method; $('apiBody').value=JSON.stringify(requestBody(o.path,o.method),null,2); }
@@ -686,6 +824,7 @@ function wire(){
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tabpage').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active');}); document.querySelectorAll('.subtab').forEach(b=>b.onclick=()=>{const root=b.closest('.tabpage'); if(!root)return; root.querySelectorAll('.subtab').forEach(x=>x.classList.remove('active')); root.querySelectorAll('.subpage').forEach(x=>x.classList.remove('active')); b.classList.add('active'); const page=root.querySelector(`[data-subpage=\"${b.dataset.subtab}\"]`); if(page)page.classList.add('active');});
   $('searchTests').oninput=renderCatalog;$('priorityFilter').onchange=renderCatalog;$('modeFilter').onchange=renderCatalog;
   $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('markTokenBtn').onclick=()=>{markTokenNow();showToast('זמן הפקת Token סומן.','success');};$('readinessBtn').onclick=()=>{const ok=readiness();showToast(ok?'הסביבה מוכנה להרצה.':'עדיין חסרים נתונים — ראה כרטיסי המוכנות. ',ok?'success':'warning');};$('runAllTests').onclick=runAllTests;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runRagSpecPack').onclick=runRagSpecPack;$('runHappyFlow').onclick=happyFlow;$('uiSelfTestBtn').onclick=runUiSelfTest;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('copyCurlBtn').onclick=copyCurl;$('aiRunBtn').onclick=aiRun;
+  if($('goldenSaveBtn'))$('goldenSaveBtn').onclick=goldenSave;if($('goldenResetBtn'))$('goldenResetBtn').onclick=goldenFormReset;if($('goldenRunAllBtn'))$('goldenRunAllBtn').onclick=runGoldenAll;if($('goldenExportBtn'))$('goldenExportBtn').onclick=exportGolden;if($('goldenImportBtn'))$('goldenImportBtn').onclick=()=>$('goldenImportFile').click();if($('goldenImportFile'))$('goldenImportFile').onchange=e=>{const f=e.target.files?.[0];if(f)importGoldenFile(f);e.target.value='';};if($('goldenClearBtn'))$('goldenClearBtn').onclick=()=>{if(confirm('למחוק את כל שאלות הזהב והתוצאות המקומיות?')){state.goldenDataset=[];state.goldenResults={};saveGoldenDataset();goldenFormReset();renderGolden();}};if($('glossarySearch'))$('glossarySearch').oninput=e=>renderGlossary(e.target.value);wireGlossaryLinks();
   $('clearResults').onclick=()=>{state.results={};state.lastExchange=null;$('runSummary').innerHTML='';renderAll();showToast('תוצאות ההרצה אופסו.','success');};
   $('exportJson').onclick=exportJson;$('exportCsv').onclick=exportCsv; if($('exportStpBtn')) $('exportStpBtn').onclick=exportStp; if($('exportStdBtn')) $('exportStdBtn').onclick=exportStd;
   ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',readiness)); $('executionMode').addEventListener('change',readiness); $('authHeader').addEventListener('change',readiness); $('cloudAccessConfirmed').addEventListener('change',readiness); $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));
@@ -693,4 +832,5 @@ function wire(){
 }
 
 setInterval(updateTokenCountdown,1000);
+loadGoldenDataset();
 wire(); loadData().then(()=>{if(new URLSearchParams(location.search).get('selftest')==='1')setTimeout(runUiSelfTest,50);}).catch(e=>{showToast('שגיאת טעינת נתונים: '+e.message,'error',8000);document.body.insertAdjacentHTML('beforeend',`<pre>${esc(e.message)}</pre>`);});
