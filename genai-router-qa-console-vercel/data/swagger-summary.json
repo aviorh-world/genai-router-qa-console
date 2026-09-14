@@ -1,0 +1,297 @@
+{
+  "title": "Chat API",
+  "version": "1.0.6",
+  "servers": [
+    {
+      "url": "https://virtserver.swaggerhub.com/ofir-kpmg/Router/1.0.6",
+      "description": "SwaggerHub API Auto Mocking"
+    }
+  ],
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "operationId": "getHealth",
+      "summary": "Check service health",
+      "description": "",
+      "responses": [
+        "200"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/files/download",
+      "operationId": "downloadFile",
+      "summary": "Download a file from storage",
+      "description": "",
+      "responses": [
+        "200",
+        "400",
+        "403",
+        "404",
+        "422",
+        "500",
+        "502",
+        "503"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conversations/new",
+      "operationId": "createConversation",
+      "summary": "Create new conversation",
+      "description": "",
+      "responses": [
+        "201",
+        "400",
+        "5XX"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conversations/history",
+      "operationId": "getConversationHistory",
+      "summary": "Get conversations history by user (can be granular by case)",
+      "description": "",
+      "responses": [
+        "200",
+        "400",
+        "5XX"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conversations/id",
+      "operationId": "getConversation",
+      "summary": "Get single conversation with messages",
+      "description": "",
+      "responses": [
+        "200",
+        "400",
+        "404",
+        "403",
+        "5XX"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/conversations/id",
+      "operationId": "deleteConversation",
+      "summary": "delete single conversation",
+      "description": "",
+      "responses": [
+        "200",
+        "400",
+        "404",
+        "403",
+        "5XX"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conversations/messages",
+      "operationId": "sendMessageStreaming",
+      "summary": "Send message and stream assistant response",
+      "description": "",
+      "responses": [
+        "200",
+        "400",
+        "404",
+        "5XX"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conversations/fetch/chunks/text",
+      "operationId": "fetchChunksText",
+      "summary": "Fetch text for document chunks",
+      "description": "",
+      "responses": [
+        "200",
+        "400",
+        "5XX"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/messages/send/feedback",
+      "operationId": "sendFeedback",
+      "summary": "Send feedback for assistant message",
+      "description": "",
+      "responses": [
+        "200",
+        "400",
+        "404",
+        "5XX"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/statistics/active-users",
+      "operationId": "getActiveUsers",
+      "summary": "Get active users",
+      "description": "",
+      "responses": [
+        "200",
+        "422",
+        "500"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/statistics/conversations/count",
+      "operationId": "getStatisticsConversationCount",
+      "summary": "Get conversation count",
+      "description": "",
+      "responses": [
+        "200",
+        "422",
+        "500"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/statistics/conversations/count-by-user",
+      "operationId": "getConversationCountsByUser",
+      "summary": "Get conversation counts by user",
+      "description": "",
+      "responses": [
+        "200",
+        "422",
+        "500"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/statistics/messages/user/count",
+      "operationId": "getUserMessageCount",
+      "summary": "Get user message count",
+      "description": "",
+      "responses": [
+        "200",
+        "422",
+        "500"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/statistics/conversations/average-user-messages",
+      "operationId": "getAverageUserMessagesPerConversation",
+      "summary": "Get average user messages per conversation",
+      "description": "",
+      "responses": [
+        "200",
+        "422",
+        "500"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/statistics/conversations/user-message-buckets",
+      "operationId": "getUserMessageConversationBuckets",
+      "summary": "Get conversations grouped by user message count",
+      "description": "",
+      "responses": [
+        "200",
+        "422",
+        "500"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/statistics/messages/average-duration",
+      "operationId": "getAverageMessageDuration",
+      "summary": "Get average message duration",
+      "description": "",
+      "responses": [
+        "200",
+        "422",
+        "500"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/statistics/tools/count",
+      "operationId": "getToolCallCount",
+      "summary": "Get tool call count",
+      "description": "",
+      "responses": [
+        "200",
+        "422",
+        "500"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/statistics/tools/average-duration",
+      "operationId": "getToolAverageDurations",
+      "summary": "Get average duration by tool",
+      "description": "",
+      "responses": [
+        "200",
+        "422",
+        "500"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/statistics/tools/success-rate",
+      "operationId": "getToolSuccessRates",
+      "summary": "Get success rate by tool",
+      "description": "",
+      "responses": [
+        "200",
+        "422",
+        "500"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/statistics/tokens/total",
+      "operationId": "getTotalTokenConsumption",
+      "summary": "Get total token consumption",
+      "description": "",
+      "responses": [
+        "200",
+        "422",
+        "500"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/statistics/tokens/average-per-conversation",
+      "operationId": "getAverageTokenConsumptionPerConversation",
+      "summary": "Get average token consumption per conversation",
+      "description": "",
+      "responses": [
+        "200",
+        "422",
+        "500"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/statistics/tokens/by-user",
+      "operationId": "getTokenConsumptionByUser",
+      "summary": "Get token consumption by user",
+      "description": "",
+      "responses": [
+        "200",
+        "422",
+        "500"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/statistics/feedback/thumbs-comparison",
+      "operationId": "getFeedbackThumbsComparison",
+      "summary": "Compare thumbs-up and thumbs-down feedback",
+      "description": "",
+      "responses": [
+        "200",
+        "422",
+        "500"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1514 @@
+openapi: 3.0.3
+info:
+  title: Chat API
+  version: 1.0.6
+servers:
+- url: https://virtserver.swaggerhub.com/ofir-kpmg/Router/1.0.6
+  description: SwaggerHub API Auto Mocking
+tags:
+- name: Health
+- name: Conversations
+- name: Messages
+- name: Feedback
+- name: Statistics
+- name: Files
+paths:
+  /health:
+    get:
+      tags:
+      - Health
+      summary: Check service health
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /v1/files/download:
+    post:
+      tags:
+      - Files
+      summary: Download a file from storage
+      operationId: downloadFile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileDownloadRequest"
+        required: true
+      responses:
+        "200":
+          description: File content streamed as an attachment
+          headers:
+            Content-Disposition:
+              description: Attachment disposition with ASCII and UTF-8 file names
+              schema:
+                type: string
+            Content-Length:
+              description: "File size in bytes, when known"
+              schema:
+                minimum: 0
+                type: integer
+                format: int64
+            Content-Encoding:
+              description: "Storage content encoding, when present and safe to forward"
+              schema:
+                type: string
+            Cache-Control:
+              description: Cache policy for the downloaded file
+              schema:
+                type: string
+                example: "private, no-store"
+            X-Content-Type-Options:
+              description: Prevents MIME type sniffing
+              schema:
+                type: string
+                enum:
+                - nosniff
+            X-Accel-Buffering:
+              description: Disables proxy response buffering
+              schema:
+                type: string
+                enum:
+                - "no"
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Invalid bucket or file name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: File download is not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: File was not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          $ref: "#/components/responses/RequestValidationError"
+        "500":
+          description: Failed to prepare the file download
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Failed to communicate with file storage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: File downloads are not configured or file storage is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/conversations/new:
+    post:
+      tags:
+      - Conversations
+      summary: Create new conversation
+      operationId: createConversation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - appId
+              - userId
+              type: object
+              properties:
+                appId:
+                  maxLength: 50
+                  minLength: 1
+                  pattern: "^[^{}\\\\]*$"
+                  type: string
+                  description: Which App initiate call to the Router API
+                  example: Desktop
+                userId:
+                  maxLength: 128
+                  minLength: 1
+                  type: string
+                  description: Which user initiated the request
+                  format: email
+                  example: user@example.com
+                caseId:
+                  maxLength: 9
+                  minLength: 9
+                  pattern: "^\\d{9}$"
+                  type: string
+                  description: case Id relevant for the context of the conversation
+                  nullable: true
+                  example: "123456789"
+              additionalProperties: false
+        required: true
+      responses:
+        "201":
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                required:
+                - appId
+                - caseId
+                - conversationId
+                - userId
+                type: object
+                properties:
+                  conversationId:
+                    maxLength: 36
+                    minLength: 36
+                    type: string
+                    format: uuid
+                  appId:
+                    maxLength: 50
+                    minLength: 1
+                    pattern: "^[^{}\\\\]*$"
+                    type: string
+                    description: Which App initiate call to the Router API
+                    example: Desktop
+                  userId:
+                    maxLength: 128
+                    minLength: 1
+                    type: string
+                    description: Which user initiated the request
+                    format: email
+                    example: user@example.com
+                  caseId:
+                    maxLength: 9
+                    minLength: 9
+                    pattern: "^\\d{9}$"
+                    type: string
+                    description: case Id relevant for the context of the conversation
+                    nullable: true
+                    example: "123456789"
+                additionalProperties: false
+        "400":
+          description: Bad Request - Missing or Bad parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "5XX":
+          description: Unexpected Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/conversations/history:
+    post:
+      tags:
+      - Conversations
+      summary: Get conversations history by user (can be granular by case)
+      operationId: getConversationHistory
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - appId
+              - userId
+              type: object
+              properties:
+                appId:
+                  maxLength: 50
+                  minLength: 1
+                  pattern: "^[^{}\\\\]*$"
+                  type: string
+                  description: Which App initiate call to the Router API
+                  example: Desktop
+                userId:
+                  maxLength: 128
+                  minLength: 1
+                  type: string
+                  description: Which user initiated the request
+                  format: email
+                  example: user@example.com
+                caseId:
+                  maxLength: 9
+                  minLength: 9
+                  pattern: "^\\d{9}$"
+                  type: string
+                  description: case Id relevant for the context of the conversation. If null gets all history of user
+                  nullable: true
+                  example: "123456789"
+                limit:
+                  maximum: 100
+                  minimum: 1
+                  type: integer
+                  description: How many results to return
+                  example: 20
+                  default: 20
+                offset:
+                  maximum: 100
+                  minimum: 0
+                  type: integer
+                  description: From which result start fetching history
+                  example: 0
+                  default: 0
+              additionalProperties: false
+        required: true
+      responses:
+        "200":
+          description: Conversation history
+          content:
+            application/json:
+              schema:
+                required:
+                - conversations
+                type: object
+                properties:
+                  conversations:
+                    maxItems: 100
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ConversationHistoryItem"
+                additionalProperties: false
+        "400":
+          description: Bad Request - Missing or Bad parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "5XX":
+          description: Unexpected Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/conversations/id:
+    post:
+      tags:
+      - Conversations
+      summary: Get single conversation with messages
+      operationId: getConversation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - conversationId
+              - userId
+              type: object
+              properties:
+                conversationId:
+                  maxLength: 36
+                  minLength: 36
+                  type: string
+                  description: unique identifier of a conversation"
+                  format: uuid
+                userId:
+                  maxLength: 128
+                  minLength: 1
+                  type: string
+                  description: Which user initiated the request
+                  format: email
+                  example: user@example.com
+              additionalProperties: false
+        required: true
+      responses:
+        "200":
+          description: Full conversation
+          content:
+            application/json:
+              schema:
+                required:
+                - conversation
+                - messages
+                type: object
+                properties:
+                  conversation:
+                    $ref: "#/components/schemas/Conversation"
+                  messages:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Message"
+                additionalProperties: false
+        "400":
+          description: Bad Request - Missing or Bad parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: User sent is different than user conversation is associated with
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "5XX":
+          description: Unexpected Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags:
+      - Conversations
+      summary: delete single conversation
+      operationId: deleteConversation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - conversationId
+              - userId
+              type: object
+              properties:
+                conversationId:
+                  maxLength: 36
+                  minLength: 36
+                  type: string
+                  description: unique identifier of a conversation"
+                  format: uuid
+                userId:
+                  maxLength: 128
+                  minLength: 1
+                  type: string
+                  description: Which user initiated the request
+                  format: email
+                  example: user@example.com
+              additionalProperties: false
+        required: true
+      responses:
+        "200":
+          description: deletion successful
+          content:
+            application/json:
+              schema:
+                required:
+                - conversationId
+                type: object
+                properties:
+                  conversationId:
+                    maxLength: 36
+                    minLength: 36
+                    type: string
+                    format: uuid
+                additionalProperties: false
+        "400":
+          description: Bad Request - Missing or Bad parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: User sent is different than user conversation is associated with
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "5XX":
+          description: Unexpected Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/conversations/messages:
+    post:
+      tags:
+      - Messages
+      summary: Send message and stream assistant response
+      operationId: sendMessageStreaming
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - appId
+              - content
+              - conversationId
+              - userId
+              type: object
+              properties:
+                conversationId:
+                  maxLength: 36
+                  minLength: 36
+                  type: string
+                  description: unique identifier of a conversation"
+                  format: uuid
+                userId:
+                  maxLength: 128
+                  minLength: 1
+                  type: string
+                  description: Which user initiated the request
+                  format: email
+                  example: user@example.com
+                appId:
+                  maxLength: 50
+                  minLength: 1
+                  pattern: "^[^{}\\\\]*$"
+                  type: string
+                  description: Which App initiate call to the Router API
+                  example: Desktop
+                caseId:
+                  maxLength: 9
+                  minLength: 9
+                  pattern: "^\\d{9}$"
+                  type: string
+                  description: case Id relevant for the context of the conversation. If null gets all history of user
+                  nullable: true
+                  example: "123456789"
+                content:
+                  maxLength: 32768
+                  minLength: 1
+                  pattern: "^[^{}\\\\]*$"
+                  type: string
+                  example: What is decision 2233 about?
+              additionalProperties: false
+        required: true
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                example: |
+                  data: {"type": "messageId", "id": "uuid"}
+
+                  data: {"type": "content", "text":"response from LLM"}
+
+                  data: {  "type": "artifact",  "presentation": { "format": "table" },  "data": { "headers": [ "SHM_TIK","SHM_COD_190_191","SHM_SHNAT_MAS","SHM_MAS_MEGIA"],"rows": [ [272798059,190, 2024,154749912],[875472326,191,2024,48414419],[87901948,190,2024,29309975]]}}
+
+                  data: {"type": "tool", "text": "Using Q&A"}
+
+                  data: {"type": "thought", "text":" trying to compare documents.."}
+
+                  data: { "type": "sources", "content": [
+                          {
+                              "bucket": "tax_document_execution_insructions_dev",
+                              "fileName": "112-ח.מ 17.2018- החוק לצמצום השימוש במזומן.pdf",
+                              "title": "חוזר רשות המסים 17/2018 : בנושא החוק לצמצום השימוש במזומן",
+                              "chunks": [
+                                  11
+                              ],
+                              "date": "03/12/2018"
+                          }
+                      ]
+                    }
+
+                  data: {"type": "error", "text":"error"}
+
+                  data: {"type": "done"}
+        "400":
+          description: Bad Request - Missing or Bad parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "5XX":
+          description: Unexpected Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/conversations/fetch/chunks/text:
+    post:
+      tags:
+      - Conversations
+      summary: Fetch text for document chunks
+      operationId: fetchChunksText
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FetchChunksTextRequest"
+        required: true
+      responses:
+        "200":
+          description: Chunk texts
+          content:
+            application/json:
+              schema:
+                maxItems: 100
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChunkText"
+        "400":
+          description: Bad Request - Missing or Bad parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "5XX":
+          description: Unexpected Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/messages/send/feedback:
+    post:
+      tags:
+      - Feedback
+      summary: Send feedback for assistant message
+      operationId: sendFeedback
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - feedbackType
+              - messageId
+              type: object
+              properties:
+                messageId:
+                  maxLength: 36
+                  minLength: 36
+                  type: string
+                  format: uuid
+                feedbackType:
+                  maxLength: 11
+                  minLength: 4
+                  type: string
+                  enum:
+                  - thumbs_up
+                  - thumbs_down
+                  - text
+                feedbackText:
+                  maxLength: 4000
+                  minLength: 1
+                  pattern: "^[^{}\\\\]*$"
+                  type: string
+                  nullable: true
+                  example: The answer was inaccurate
+              additionalProperties: false
+              oneOf:
+              - required:
+                - feedbackText
+                properties:
+                  feedbackType:
+                    type: string
+                    enum:
+                    - text
+                  feedbackText:
+                    maxLength: 4000
+                    minLength: 1
+                    pattern: "^[^{}\\\\]*$"
+                    type: string
+              - properties:
+                  feedbackType:
+                    type: string
+                    enum:
+                    - thumbs_up
+                    - thumbs_down
+        required: true
+      responses:
+        "200":
+          description: Feedback stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageFeedback"
+        "400":
+          description: Bad Request - Missing or Bad parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Message not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "5XX":
+          description: Unexpected Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/statistics/active-users:
+    post:
+      tags:
+      - Statistics
+      summary: Get active users
+      operationId: getActiveUsers
+      requestBody:
+        $ref: "#/components/requestBodies/StatisticsDateRange"
+      responses:
+        "200":
+          description: Active users in the requested date range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActiveUsersResponse"
+        "422":
+          $ref: "#/components/responses/StatisticsValidationError"
+        "500":
+          $ref: "#/components/responses/StatisticsInternalError"
+  /v1/statistics/conversations/count:
+    post:
+      tags:
+      - Statistics
+      summary: Get conversation count
+      operationId: getStatisticsConversationCount
+      requestBody:
+        $ref: "#/components/requestBodies/StatisticsDateRange"
+      responses:
+        "200":
+          description: Conversation count in the requested date range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatisticsCountResponse"
+        "422":
+          $ref: "#/components/responses/StatisticsValidationError"
+        "500":
+          $ref: "#/components/responses/StatisticsInternalError"
+  /v1/statistics/conversations/count-by-user:
+    post:
+      tags:
+      - Statistics
+      summary: Get conversation counts by user
+      operationId: getConversationCountsByUser
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatisticsDateRangeWithOptionalUser"
+        required: true
+      responses:
+        "200":
+          description: Conversation counts grouped by user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationCountByUserResponse"
+        "422":
+          $ref: "#/components/responses/StatisticsValidationError"
+        "500":
+          $ref: "#/components/responses/StatisticsInternalError"
+  /v1/statistics/messages/user/count:
+    post:
+      tags:
+      - Statistics
+      summary: Get user message count
+      operationId: getUserMessageCount
+      requestBody:
+        $ref: "#/components/requestBodies/StatisticsDateRange"
+      responses:
+        "200":
+          description: User message count in the requested date range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatisticsCountResponse"
+        "422":
+          $ref: "#/components/responses/StatisticsValidationError"
+        "500":
+          $ref: "#/components/responses/StatisticsInternalError"
+  /v1/statistics/conversations/average-user-messages:
+    post:
+      tags:
+      - Statistics
+      summary: Get average user messages per conversation
+      operationId: getAverageUserMessagesPerConversation
+      requestBody:
+        $ref: "#/components/requestBodies/StatisticsDateRange"
+      responses:
+        "200":
+          description: Average user messages per conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AverageUserMessagesResponse"
+        "422":
+          $ref: "#/components/responses/StatisticsValidationError"
+        "500":
+          $ref: "#/components/responses/StatisticsInternalError"
+  /v1/statistics/conversations/user-message-buckets:
+    post:
+      tags:
+      - Statistics
+      summary: Get conversations grouped by user message count
+      operationId: getUserMessageConversationBuckets
+      requestBody:
+        $ref: "#/components/requestBodies/StatisticsDateRange"
+      responses:
+        "200":
+          description: Conversation counts grouped into user-message buckets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserMessageBucketsResponse"
+        "422":
+          $ref: "#/components/responses/StatisticsValidationError"
+        "500":
+          $ref: "#/components/responses/StatisticsInternalError"
+  /v1/statistics/messages/average-duration:
+    post:
+      tags:
+      - Statistics
+      summary: Get average message duration
+      operationId: getAverageMessageDuration
+      requestBody:
+        $ref: "#/components/requestBodies/StatisticsDateRange"
+      responses:
+        "200":
+          description: Average message duration in milliseconds
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AverageMessageDurationResponse"
+        "422":
+          $ref: "#/components/responses/StatisticsValidationError"
+        "500":
+          $ref: "#/components/responses/StatisticsInternalError"
+  /v1/statistics/tools/count:
+    post:
+      tags:
+      - Statistics
+      summary: Get tool call count
+      operationId: getToolCallCount
+      requestBody:
+        $ref: "#/components/requestBodies/StatisticsDateRange"
+      responses:
+        "200":
+          description: Tool call count in the requested date range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatisticsCountResponse"
+        "422":
+          $ref: "#/components/responses/StatisticsValidationError"
+        "500":
+          $ref: "#/components/responses/StatisticsInternalError"
+  /v1/statistics/tools/average-duration:
+    post:
+      tags:
+      - Statistics
+      summary: Get average duration by tool
+      operationId: getToolAverageDurations
+      requestBody:
+        $ref: "#/components/requestBodies/StatisticsDateRange"
+      responses:
+        "200":
+          description: Average execution duration grouped by tool
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ToolAverageDurationResponse"
+        "422":
+          $ref: "#/components/responses/StatisticsValidationError"
+        "500":
+          $ref: "#/components/responses/StatisticsInternalError"
+  /v1/statistics/tools/success-rate:
+    post:
+      tags:
+      - Statistics
+      summary: Get success rate by tool
+      operationId: getToolSuccessRates
+      requestBody:
+        $ref: "#/components/requestBodies/StatisticsDateRange"
+      responses:
+        "200":
+          description: Success rate grouped by tool
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ToolSuccessRateResponse"
+        "422":
+          $ref: "#/components/responses/StatisticsValidationError"
+        "500":
+          $ref: "#/components/responses/StatisticsInternalError"
+  /v1/statistics/tokens/total:
+    post:
+      tags:
+      - Statistics
+      summary: Get total token consumption
+      operationId: getTotalTokenConsumption
+      requestBody:
+        $ref: "#/components/requestBodies/StatisticsDateRange"
+      responses:
+        "200":
+          description: Total token consumption in the requested date range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TotalTokenConsumptionResponse"
+        "422":
+          $ref: "#/components/responses/StatisticsValidationError"
+        "500":
+          $ref: "#/components/responses/StatisticsInternalError"
+  /v1/statistics/tokens/average-per-conversation:
+    post:
+      tags:
+      - Statistics
+      summary: Get average token consumption per conversation
+      operationId: getAverageTokenConsumptionPerConversation
+      requestBody:
+        $ref: "#/components/requestBodies/StatisticsDateRange"
+      responses:
+        "200":
+          description: Average token consumption per conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AverageTokenConsumptionResponse"
+        "422":
+          $ref: "#/components/responses/StatisticsValidationError"
+        "500":
+          $ref: "#/components/responses/StatisticsInternalError"
+  /v1/statistics/tokens/by-user:
+    post:
+      tags:
+      - Statistics
+      summary: Get token consumption by user
+      operationId: getTokenConsumptionByUser
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatisticsDateRangeWithOptionalUser"
+        required: true
+      responses:
+        "200":
+          description: Token consumption grouped by user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenConsumptionByUserResponse"
+        "422":
+          $ref: "#/components/responses/StatisticsValidationError"
+        "500":
+          $ref: "#/components/responses/StatisticsInternalError"
+  /v1/statistics/feedback/thumbs-comparison:
+    post:
+      tags:
+      - Statistics
+      summary: Compare thumbs-up and thumbs-down feedback
+      operationId: getFeedbackThumbsComparison
+      requestBody:
+        $ref: "#/components/requestBodies/StatisticsDateRange"
+      responses:
+        "200":
+          description: Thumbs-up and thumbs-down feedback counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackThumbsComparisonResponse"
+        "422":
+          $ref: "#/components/responses/StatisticsValidationError"
+        "500":
+          $ref: "#/components/responses/StatisticsInternalError"
+components:
+  schemas:
+    HealthResponse:
+      required:
+      - message
+      type: object
+      properties:
+        message:
+          type: string
+          description: Health status including the current environment name
+          example: "Chat Router: development is alive"
+      additionalProperties: false
+    FileDownloadRequest:
+      required:
+      - bucketName
+      - fileName
+      type: object
+      properties:
+        bucketName:
+          maxLength: 222
+          minLength: 1
+          type: string
+          description: GCS bucket name
+          example: documents-bucket
+        fileName:
+          maxLength: 1024
+          minLength: 1
+          type: string
+          description: "Full GCS object name, including any folder prefix"
+          example: reports/annual-report.pdf
+      additionalProperties: false
+    StatisticsDateRangeRequest:
+      required:
+      - endDate
+      - startDate
+      type: object
+      properties:
+        startDate:
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+          type: string
+          description: Inclusive range start as a UTC timestamp with exactly three fractional digits. Must be earlier than endDate.
+          format: date-time
+          example: 2026-08-23T00:00:00Z
+        endDate:
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+          type: string
+          description: Exclusive range end as a UTC timestamp with exactly three fractional digits. Must be later than startDate.
+          format: date-time
+          example: 2026-08-24T00:00:00Z
+    StatisticsDateRangeWithOptionalUser:
+      allOf:
+      - $ref: "#/components/schemas/StatisticsDateRangeRequest"
+      - type: object
+        properties:
+          userId:
+            minLength: 1
+            type: string
+            description: "Optional user ID filter. When omitted or null, results include all users."
+            format: email
+            nullable: true
+            example: user@example.com
+    StatisticsCountResponse:
+      required:
+      - count
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 42
+    ActiveUsersResponse:
+      required:
+      - count
+      - userIds
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 2
+        userIds:
+          type: array
+          example:
+          - first.user@example.com
+          - second.user@example.com
+          items:
+            type: string
+    AverageUserMessagesResponse:
+      required:
+      - average
+      type: object
+      properties:
+        average:
+          type: number
+          format: double
+          example: 4.25
+    UserMessageBucket:
+      required:
+      - count
+      - range
+      type: object
+      properties:
+        range:
+          type: string
+          enum:
+          - 0-2
+          - 3-5
+          - 6-8
+          - 9+
+        count:
+          type: integer
+          example: 12
+    UserMessageBucketsResponse:
+      required:
+      - buckets
+      type: object
+      properties:
+        buckets:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserMessageBucket"
+    AverageMessageDurationResponse:
+      required:
+      - averageDurationMs
+      type: object
+      properties:
+        averageDurationMs:
+          type: number
+          format: double
+          example: 1250.5
+    ToolAverageDuration:
+      required:
+      - averageDurationMs
+      - callCount
+      - toolId
+      type: object
+      properties:
+        toolId:
+          type: string
+          example: text2sql
+        averageDurationMs:
+          type: number
+          format: double
+          example: 845.4
+        callCount:
+          type: integer
+          example: 17
+    ToolAverageDurationResponse:
+      required:
+      - tools
+      type: object
+      properties:
+        tools:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolAverageDuration"
+    ToolSuccessRate:
+      required:
+      - successRatePercent
+      - successfulCalls
+      - toolId
+      - totalCalls
+      type: object
+      properties:
+        toolId:
+          type: string
+          example: text2sql
+        successRatePercent:
+          type: number
+          format: double
+          example: 94.12
+        successfulCalls:
+          type: integer
+          example: 16
+        totalCalls:
+          type: integer
+          example: 17
+    ToolSuccessRateResponse:
+      required:
+      - tools
+      type: object
+      properties:
+        tools:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolSuccessRate"
+    TotalTokenConsumptionResponse:
+      required:
+      - completionTokens
+      - inputTokens
+      - reasoningTokens
+      type: object
+      properties:
+        inputTokens:
+          type: integer
+          example: 120000
+        completionTokens:
+          type: integer
+          example: 45000
+        reasoningTokens:
+          type: integer
+          example: 8000
+    AverageTokenConsumptionResponse:
+      required:
+      - averageCompletionTokens
+      - averageInputTokens
+      - averageReasoningTokens
+      type: object
+      properties:
+        averageInputTokens:
+          type: number
+          format: double
+          example: 1200.5
+        averageCompletionTokens:
+          type: number
+          format: double
+          example: 450.25
+        averageReasoningTokens:
+          type: number
+          format: double
+          example: 80.75
+    UserTokenConsumption:
+      required:
+      - completionTokens
+      - inputTokens
+      - reasoningTokens
+      - userId
+      type: object
+      properties:
+        userId:
+          type: string
+          format: email
+          example: user@example.com
+        inputTokens:
+          type: integer
+          example: 12000
+        completionTokens:
+          type: integer
+          example: 4500
+        reasoningTokens:
+          type: integer
+          example: 800
+    TokenConsumptionByUserResponse:
+      required:
+      - users
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserTokenConsumption"
+    FeedbackThumbsComparisonResponse:
+      required:
+      - thumbsDownCount
+      - thumbsUpCount
+      type: object
+      properties:
+        thumbsUpCount:
+          type: integer
+          example: 38
+        thumbsDownCount:
+          type: integer
+          example: 7
+    UserConversationCount:
+      required:
+      - conversationCount
+      - userId
+      type: object
+      properties:
+        userId:
+          type: string
+          format: email
+          example: user@example.com
+        conversationCount:
+          type: integer
+          example: 9
+    ConversationCountByUserResponse:
+      required:
+      - users
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserConversationCount"
+    HTTPValidationError:
+      type: object
+      properties:
+        detail:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationError"
+    ValidationError:
+      required:
+      - loc
+      - msg
+      - type
+      type: object
+      properties:
+        loc:
+          type: array
+          items:
+            oneOf:
+            - type: string
+            - type: integer
+        msg:
+          type: string
+        type:
+          type: string
+    Conversation:
+      required:
+      - appId
+      - caseId
+      - conversationId
+      - createdAt
+      - updatedAt
+      - userId
+      type: object
+      properties:
+        conversationId:
+          maxLength: 36
+          minLength: 36
+          type: string
+          format: uuid
+        createdAt:
+          maxLength: 64
+          minLength: 20
+          type: string
+          format: date-time
+        updatedAt:
+          maxLength: 64
+          minLength: 20
+          type: string
+          format: date-time
+        userId:
+          maxLength: 128
+          minLength: 1
+          type: string
+          format: email
+        appId:
+          maxLength: 50
+          minLength: 1
+          pattern: "^[^{}\\\\]*$"
+          type: string
+        caseId:
+          maxLength: 9
+          minLength: 9
+          pattern: "^\\d{9}$"
+          type: string
+          nullable: true
+      additionalProperties: false
+    ConversationHistoryItem:
+      required:
+      - appId
+      - caseId
+      - conversationId
+      - createdAt
+      - title
+      - updatedAt
+      - userId
+      type: object
+      properties:
+        conversationId:
+          maxLength: 36
+          minLength: 36
+          type: string
+          format: uuid
+        title:
+          maxLength: 256
+          minLength: 1
+          type: string
+          nullable: true
+        updatedAt:
+          maxLength: 64
+          minLength: 20
+          type: string
+          format: date-time
+        createdAt:
+          maxLength: 64
+          minLength: 20
+          type: string
+          format: date-time
+        userId:
+          maxLength: 128
+          minLength: 1
+          type: string
+          format: email
+        appId:
+          maxLength: 50
+          minLength: 1
+          pattern: "^[^{}\\\\]*$"
+          type: string
+        caseId:
+          maxLength: 9
+          minLength: 9
+          pattern: "^\\d{9}$"
+          type: string
+          nullable: true
+      additionalProperties: false
+    Error:
+      required:
+      - code
+      - description
+      - status
+      type: object
+      properties:
+        code:
+          maximum: 599
+          minimum: 100
+          type: integer
+        status:
+          maxLength: 64
+          minLength: 3
+          pattern: "^[A-Z][A-Z0-9_]*$"
+          type: string
+        description:
+          maxLength: 2048
+          minLength: 1
+          type: string
+      additionalProperties: false
+    MessageFeedback:
+      required:
+      - feedbackText
+      - feedbackType
+      - messageId
+      type: object
+      properties:
+        messageId:
+          maxLength: 36
+          minLength: 36
+          type: string
+          format: uuid
+        feedbackType:
+          maxLength: 11
+          minLength: 4
+          type: string
+          enum:
+          - thumbs_up
+          - thumbs_down
+          - text
+        feedbackText:
+          maxLength: 4000
+          minLength: 1
+          pattern: "^[^{}\\\\]*$"
+          type: string
+          nullable: true
+      additionalProperties: false
+    FetchChunksTextRequest:
+      required:
+      - chunks
+      type: object
+      properties:
+        chunks:
+          maxItems: 100
+          minItems: 1
+          type: array
+          items:
+            $ref: "#/components/schemas/FetchChunkTextRequestItem"
+      additionalProperties: false
+    FetchChunkTextRequestItem:
+      required:
+      - chunkId
+      - documentBucket
+      - documentFileName
+      type: object
+      properties:
+        documentBucket:
+          maxLength: 255
+          minLength: 1
+          type: string
+          description: Document bucket name
+          example: bucketName
+        documentFileName:
+          maxLength: 1024
+          minLength: 1
+          type: string
+          description: Document file name
+          example: fileName.pdf
+        chunkId:
+          maximum: 10000
+          minimum: 0
+          type: integer
+          description: Chunk id to fetch
+          example: 1
+      additionalProperties: false
+    ChunkText:
+      required:
+      - chunkIndex
+      - chunkText
+      - documentId
+      - found
+      type: object
+      properties:
+        documentId:
+          maxLength: 1280
+          minLength: 1
+          type: string
+          description: Full document identifier built as documentBucket/documentFileName
+          example: bucketName/fileName.pdf
+        chunkIndex:
+          maximum: 10000
+          minimum: 0
+          type: integer
+          description: Chunk index returned by the Q&A service
+          example: 1
+        chunkText:
+          maxLength: 8192
+          minLength: 0
+          type: string
+          description: Text content of the chunk
+          example: Chunk text
+        found:
+          type: boolean
+          description: Whether the requested chunk was found
+          example: true
+      additionalProperties: false
+    Message:
+      required:
+      - content
+      - createdAt
+      - messageId
+      - messageIndex
+      - role
+      - type
+      type: object
+      properties:
+        messageId:
+          maxLength: 36
+          minLength: 36
+          type: string
+          format: uuid
+        messageIndex:
+          maximum: 1000
+          minimum: 0
+          type: integer
+        role:
+          maxLength: 9
+          minLength: 4
+          type: string
+          enum:
+          - user
+          - assistant
+          - tool
+        type:
+          maxLength: 8
+          minLength: 4
+          type: string
+          description: the type of content
+          enum:
+          - text
+          - artifact
+          - sources
+        content:
+          maxLength: 8192
+          minLength: 0
+          pattern: "^[^{}\\\\]*$"
+          type: string
+          description: string representation of the data sent by user or assistant
+        createdAt:
+          maxLength: 64
+          minLength: 20
+          type: string
+          format: date-time
+      additionalProperties: false
+  responses:
+    RequestValidationError:
+      description: Request body validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HTTPValidationError"
+    StatisticsValidationError:
+      description: Request body validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HTTPValidationError"
+    StatisticsInternalError:
+      description: Failed to retrieve statistics
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  requestBodies:
+    StatisticsDateRange:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/StatisticsDateRangeRequest"
+      required: true

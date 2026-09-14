@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GenAI Router QA Console</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>GenAI Router QA Console</h1>
+      <p>כלי בדיקות ל־Swagger של Router 1.0.6 — ידני + אוטומטי</p>
+    </div>
+    <div class="top-actions">
+      <span id="connectionBadge" class="badge neutral">לא מחובר</span>
+      <button id="demoBtn" class="btn ghost">Demo Mode</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="card setup">
+      <div class="section-head">
+        <div><h2>1. הגדרת סביבת בדיקה</h2><p>ה־Token נשמר בזיכרון הדפדפן בלבד ואינו נשמר בדוחות או ב־localStorage.</p></div>
+        <button id="healthBtn" class="btn">בדיקת חיבור</button>
+      </div>
+      <div class="grid cols-3">
+        <label>TSH Base URL<input id="baseUrl" placeholder="https://..." autocomplete="off"></label>
+        <label>Bearer Token<input id="token" type="password" placeholder="Token של Text-to-SQL" autocomplete="off"></label>
+        <label>App ID<input id="appId" placeholder="appId"></label>
+        <label>User ID A<input id="userId" placeholder="qa.user@..." inputmode="email"></label>
+        <label>Case ID<input id="caseId" placeholder="9 ספרות"></label>
+        <label>User ID B (אופציונלי)<input id="userIdB" placeholder="לבדיקות הרשאה"></label>
+        <label>Token B (אופציונלי)<input id="tokenB" type="password" placeholder="Token של משתמש B" autocomplete="off"></label>
+        <label>Conversation ID<input id="conversationId" placeholder="מתמלא אוטומטית"></label>
+        <label>Message ID<input id="messageId" placeholder="מתמלא אוטומטית"></label>
+      </div>
+      <div class="notice">⚠️ השתמש רק ב־credentials של TSH/QA. לא ב־Production.</div>
+    </section>
+
+    <nav class="tabs">
+      <button data-tab="dashboard" class="tab active">Dashboard</button>
+      <button data-tab="catalog" class="tab">78 תסריטים</button>
+      <button data-tab="flow" class="tab">Auto Flow</button>
+      <button data-tab="api" class="tab">API Runner</button>
+      <button data-tab="ai" class="tab">GenAI / RAG</button>
+      <button data-tab="questions" class="tab">שאלות פתוחות</button>
+      <button data-tab="report" class="tab">דוח</button>
+    </nav>
+
+    <section id="dashboard" class="tabpage active">
+      <div class="kpis">
+        <div class="kpi"><b id="kpiTotal">78</b><span>תסריטים</span></div>
+        <div class="kpi"><b id="kpiAuto">0</b><span>אוטומטיים/מסייעים</span></div>
+        <div class="kpi"><b id="kpiPass">0</b><span>PASS</span></div>
+        <div class="kpi"><b id="kpiFail">0</b><span>FAIL</span></div>
+        <div class="kpi"><b id="kpiOpen">34</b><span>שאלות פתוחות</span></div>
+      </div>
+      <div class="card">
+        <div class="section-head"><div><h2>הרצה מהירה</h2><p>מתחילים ב־P0 שניתן להריץ בלי פעולות הרסניות, או ב־Flow מלא.</p></div></div>
+        <div class="actions-row">
+          <button id="runSafeP0" class="btn primary">▶ Run Safe P0</button>
+          <button id="runHappyFlow" class="btn">▶ Conversation Happy Flow</button>
+          <button id="clearResults" class="btn ghost">איפוס תוצאות</button>
+        </div>
+        <div id="runSummary" class="run-summary"></div>
+      </div>
+      <div class="card">
+        <h2>מה האתר לא יכול לקבוע לבד</h2>
+        <ul>
+          <li>DB / State Management בלי גישה לטבלאות ולוגיקה מוסכמת.</li>
+          <li>איכות GenAI בלי Golden Dataset או אישור SME.</li>
+          <li>Cross-user / Cross-case בלי משתמשי בדיקה/Token נוספים.</li>
+          <li>Performance בלי SLA מוסכם ו־Observability בלי גישה ללוגים.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="catalog" class="tabpage">
+      <div class="card">
+        <div class="filters">
+          <input id="searchTests" placeholder="חיפוש לפי ID / Endpoint / תרחיש">
+          <select id="priorityFilter"><option value="">כל הרמות</option><option>P0</option><option>P1</option><option>P2</option></select>
+          <select id="modeFilter"><option value="">כל המצבים</option><option value="auto">אוטומטי</option><option value="assisted">מסייע</option><option value="manual">ידני</option></select>
+        </div>
+        <div id="testsTableWrap" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <section id="flow" class="tabpage">
+      <div class="card">
+        <div class="section-head"><div><h2>Conversation Happy Flow</h2><p>Create → History → Send Message (SSE) → Get Conversation → Delete → Verify deletion.</p></div><button id="flowRunBtn" class="btn primary">▶ הרץ Flow</button></div>
+        <label>שאלה ל־AI<textarea id="flowQuestion" rows="3">מה אפשר להסיק מהמסמכים הרלוונטיים לשאלה זו?</textarea></label>
+        <div id="flowSteps" class="flow-steps"></div>
+      </div>
+    </section>
+
+    <section id="api" class="tabpage">
+      <div class="card">
+        <div class="section-head"><div><h2>API Runner</h2><p>הרצה חופשית של כל Endpoint מה־Swagger.</p></div><button id="apiRunBtn" class="btn primary">Run</button></div>
+        <div class="grid cols-2">
+          <label>Endpoint<select id="endpointSelect"></select></label>
+          <label>Method<input id="apiMethod" readonly></label>
+        </div>
+        <label>Request JSON<textarea id="apiBody" rows="10" spellcheck="false">{}</textarea></label>
+        <div class="result-grid">
+          <div><h3>Response</h3><pre id="apiResponse">—</pre></div>
+          <div><h3>Meta</h3><pre id="apiMeta">—</pre></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="ai" class="tabpage">
+      <div class="card">
+        <div class="section-head"><div><h2>GenAI / RAG Inspector</h2><p>הרץ שאלה, ראה את אירועי ה־SSE וסמן איכות ידנית.</p></div><button id="aiRunBtn" class="btn primary">▶ שאל</button></div>
+        <label>Prompt<textarea id="aiPrompt" rows="4">ענה על סמך מסמכי המקור בלבד. אם אין מספיק מידע, אמור שאין מספיק מידע.</textarea></label>
+        <div class="result-grid">
+          <div><h3>Streaming / Answer</h3><pre id="aiStream">—</pre></div>
+          <div><h3>הערכת QA</h3>
+            <div class="rating-buttons">
+              <button data-rating="Correct" class="btn ghost">Correct</button>
+              <button data-rating="Partially Correct" class="btn ghost">Partially Correct</button>
+              <button data-rating="Wrong" class="btn ghost">Wrong</button>
+              <button data-rating="Hallucination" class="btn ghost">Hallucination</button>
+              <button data-rating="Wrong Source" class="btn ghost">Wrong Source</button>
+            </div>
+            <label>הערה<textarea id="aiNote" rows="6"></textarea></label>
+            <div id="aiRating" class="notice">טרם דורג</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="questions" class="tabpage"><div class="card"><h2>שאלות פתוחות</h2><div id="questionsTable" class="table-wrap"></div></div></section>
+
+    <section id="report" class="tabpage">
+      <div class="card">
+        <div class="section-head"><div><h2>Test Run Report</h2><p>ה־Token לעולם לא נכנס לדוח.</p></div><div><button id="exportJson" class="btn">Export JSON</button> <button id="exportCsv" class="btn ghost">Export CSV</button></div></div>
+        <div id="reportTable" class="table-wrap"></div>
+      </div>
+    </section>
+  </main>
+  <footer>GenAI Router QA Console · Swagger 1.0.6</footer>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
