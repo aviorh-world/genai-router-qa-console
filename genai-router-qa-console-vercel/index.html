@@ -14,7 +14,7 @@
 <p>כלי QA ל־Router 1.0.6 — Swagger + TSH + ארכיטקטורה + Postman</p>
 </div>
 <div class="top-actions">
-<span class="badge version">v1.8</span>
+<span class="badge version">v1.9</span>
 <span class="badge neutral" id="connectionBadge">לא מחובר</span>
 <button class="btn ghost" id="demoBtn">Demo Mode</button>
 </div>
@@ -188,6 +188,8 @@
 <div class="context-grid" id="aiQaLessons"></div>
 </div>
 <div class="card"><h2>איך בודקים תשובת RAG בפועל?</h2><div class="pipeline-steps"><div class="pipeline-step"><span>1</span>שואלים שאלה שה־Expected שלה ידוע מראש</div><div class="pipeline-step"><span>2</span>בודקים את תשובת ה־AI מול תשובת הזהב — לא לפי ניסוח זהה אלא לפי העובדות</div><div class="pipeline-step"><span>3</span>בודקים את <button class="term-link" data-glossary="Source">Source</button> וה־<button class="term-link" data-glossary="Chunk">Chunk</button> שעליהם התשובה מבוססת</div><div class="pipeline-step"><span>4</span>בודקים שאין עובדות שלא נתמכות במקור — <button class="term-link" data-glossary="Hallucination">Hallucination</button></div><div class="pipeline-step"><span>5</span>שומרים תוצאה מול אותה גרסת Model / Prompt / Index כדי שאפשר יהיה להשוות רגרסיה</div></div></div>
+<div class="card"><h2>איך מסווגים כשל AI?</h2><div class="failure-grid"><div class="failure-card retrieval"><h3><button class="term-link" data-glossary="Retrieval Failure">Retrieval Failure</button></h3><p>המידע הנכון לא נמצא, Source/Chunk שגוי או רלוונטי דורג נמוך מדי.</p></div><div class="failure-card generation"><h3><button class="term-link" data-glossary="Generation Failure">Generation Failure</button></h3><p>ה־Chunk נכון, אבל ה־LLM ניסח תשובה שגויה/חסרה.</p></div><div class="failure-card grounding"><h3><button class="term-link" data-glossary="Grounding Failure">Grounding Failure</button></h3><p>התשובה מוסיפה או משנה טענה שאינה נתמכת ב־Context.</p></div><div class="failure-card security"><h3><button class="term-link" data-glossary="Authorization/Security Failure">Authorization/Security Failure</button></h3><p>המערכת חשפה מידע/Source/Chunk שאסור למשתמש לראות או עקפה Guardrail.</p></div></div></div>
+<div class="card"><h2>Release Sanity מומלץ</h2><div class="pipeline-steps"><div class="pipeline-step"><span>1</span>מייבאים <button class="term-link" data-glossary="Golden Dataset">Golden Dataset</button> מאושר</div><div class="pipeline-step"><span>2</span>מתעדים Build + Model + Prompt + Index + Config</div><div class="pipeline-step"><span>3</span>מריצים את כל השאלות ומושכים Sources/Chunks</div><div class="pipeline-step"><span>4</span>עוברים רק על <button class="term-link" data-glossary="Review Queue">Review Queue</button></div><div class="pipeline-step"><span>5</span>משווים ל־<button class="term-link" data-glossary="Baseline">Baseline</button> ומפיקים Evidence לבאגים</div></div></div>
 </div>
 <div class="subpage" data-subpage="guideGlossary">
 <div class="card">
@@ -269,13 +271,29 @@
 </div>
 <div class="subpage" data-subpage="aiGolden">
 <div class="card golden-intro">
-<div class="section-head"><div><h2>Golden Sanity / Regression</h2><p>סט קבוע של שאלות עם תשובת זהב ומקור צפוי. מריצים אחרי שינוי Model / Prompt / RAG / Index ומשווים לגרסה הקודמת.</p></div><div class="actions-row"><button class="btn primary" id="goldenRunAllBtn">▶ הרץ את כל שאלות הזהב</button><button class="btn ghost" id="goldenExportBtn">ייצוא JSON</button><button class="btn ghost" id="goldenImportBtn">ייבוא JSON</button></div></div>
-<div class="notice info"><b>חשוב:</b> האתר מחשב Similarity וכיסוי מילות חובה כעזר בלבד. AI יכול לנסח אותה עובדה אחרת, ולכן ציון אוטומטי אינו מחליף בדיקת מקור/Chunk או אישור SME. <button class="term-link" data-glossary="Golden Dataset">מה זה Golden Dataset?</button></div>
-<details class="guide-details"><summary>הגדרות הרצת Golden</summary><div class="grid cols-3"><label>Run / Version Label<input id="goldenRunLabel" placeholder="למשל build-1.4 / prompt-v3"/></label><label class="checkbox-label"><input id="goldenIsolate" type="checkbox" checked/> כל שאלה בשיחה חדשה</label><label class="checkbox-label"><input id="goldenCleanup" type="checkbox" checked/> למחוק שיחת בדיקה אחרי ההרצה</label></div><p class="muted">בידוד שיחות מומלץ כדי ששאלה קודמת לא תשפיע על הבאה. שמור Run Label כדי לדעת מול איזו גרסה הורצה הרגרסיה.</p></details>
+<div class="section-head"><div><h2>Golden Release Sanity / Regression</h2><p>מריצים את <button class="term-link" data-glossary="Golden Dataset">שאלות הזהב</button> מול גרסה חדשה, שומרים Metadata, בודקים Source/Chunk, ומשווים לריצה קודמת.</p></div><div class="actions-row"><button class="btn primary" id="goldenRunAllBtn">▶ הרץ Release Sanity</button><button class="btn ghost" id="goldenExportBtn">ייצוא Dataset + Runs</button><button class="btn ghost" id="goldenImportBtn">ייבוא JSON</button></div></div>
+<div class="notice info"><b>חשוב:</b> Similarity והציונים האוטומטיים הם Signals בלבד. PASS עסקי דורש בדיקה שהעובדות נכונות ושה־Source/Chunk באמת תומכים בתשובה. <button class="term-link" data-glossary="Review Queue">מה נכנס ל־Review Queue?</button></div>
 <input id="goldenImportFile" type="file" accept="application/json,.json" hidden/>
 </div>
+
+<div class="card release-card">
+<div class="section-head"><div><h2>1. פרטי גרסה / Run Metadata</h2><p>המידע הזה נשמר עם התוצאות כדי שנדע מה השתנה בין גרסאות.</p></div><span class="badge neutral">Release Context</span></div>
+<div class="grid cols-3">
+<label>Run / Release Label<input id="goldenRunLabel" placeholder="למשל build-1.4.2 / release-2026-09-15"/></label>
+<label>Environment<input id="goldenEnvironment" value="TSH" placeholder="TSH / QA"/></label>
+<label>Build / Commit<input id="goldenBuild" placeholder="build number / commit SHA"/></label>
+<label>Model Version<input id="goldenModel" placeholder="למשל Gemini ..."/></label>
+<label>Prompt Version<input id="goldenPromptVersion" placeholder="prompt-v3"/></label>
+<label>Index / Corpus Version<input id="goldenIndexVersion" placeholder="index-v12 / corpus date"/></label>
+<label>RAG / Config Version<input id="goldenConfigVersion" placeholder="config-v5 / ingestion strategy"/></label>
+<label>Tester<input id="goldenTester" placeholder="שם הבודק — לא נשמר בשרת"/></label>
+<label class="span-2">הערות לגרסה<input id="goldenRunNotes" placeholder="מה השתנה בגרסה הזו?"/></label>
+</div>
+<details class="guide-details"><summary>הגדרות הרצה מתקדמות</summary><div class="grid cols-3"><label class="checkbox-label"><input id="goldenIsolate" type="checkbox" checked/> כל שאלה בשיחה חדשה</label><label class="checkbox-label"><input id="goldenCleanup" type="checkbox" checked/> למחוק שיחת בדיקה אחרי ההרצה</label><label class="checkbox-label"><input id="goldenFetchChunks" type="checkbox" checked/> לשלוף אוטומטית את ה־Chunks מה־Sources</label></div><p class="muted">בידוד שיחות מונע זליגת Context. שליפת Chunks מאפשרת להפריד בין <button class="term-link" data-glossary="Retrieval Failure">Retrieval Failure</button> לבין <button class="term-link" data-glossary="Generation Failure">Generation Failure</button>.</p></details>
+</div>
+
 <div class="card">
-<h2>הוספת / עריכת שאלת זהב</h2>
+<h2>2. Dataset — הוספת / עריכת שאלת זהב</h2>
 <div class="grid cols-2 golden-form">
 <label>ID<input id="goldenId" placeholder="GOLD-001"/></label>
 <label>תגיות<input id="goldenTags" placeholder="tax, no-answer, security"/></label>
@@ -288,7 +306,24 @@
 <div class="actions-row"><button class="btn primary" id="goldenSaveBtn">שמור שאלה</button><button class="btn ghost" id="goldenResetBtn">נקה טופס</button><button class="btn danger" id="goldenClearBtn">מחק Dataset מקומי</button></div>
 </div>
 <div class="card"><div class="section-head"><div><h2>שאלות זהב</h2><p>נשמרות מקומית בדפדפן בלבד. ה־Token אינו נשמר.</p></div><span class="badge neutral" id="goldenCount">0 שאלות</span></div><div class="table-wrap" id="goldenTable"></div></div>
-<div class="card"><div class="section-head"><div><h2>תוצאות Sanity</h2><p>Answer Similarity ו־Must Include הם Signals; Source Match הוא חזק יותר. החלטת PASS סופית נשארת ידנית עד שנגדיר evaluator מוסכם.</p></div></div><div class="table-wrap" id="goldenResults"></div></div>
+
+<div class="card">
+<div class="section-head"><div><h2>3. תוצאות Release Sanity</h2><p>המערכת מפרידה בין <button class="term-link" data-glossary="Retrieval Quality">Retrieval</button>, <button class="term-link" data-glossary="Answer Correctness">Answer</button> ו־<button class="term-link" data-glossary="Grounding">Grounding</button>. הציונים הם Heuristic בלבד.</p></div><span class="badge neutral" id="goldenRunBadge">אין Run שמור</span></div>
+<div class="kpis" id="goldenRunSummary"></div>
+<div class="table-wrap" id="goldenResults"></div>
+</div>
+
+<div class="card review-card">
+<div class="section-head"><div><h2>4. Review Queue</h2><p>כאן מופיעים רק מקרים שדורשים עין אנושית: Source לא צפוי, Chunk חסר, Answer/Grounding חלשים, שגיאה או FAIL.</p></div><span class="badge question" id="goldenReviewCount">0 לבדיקה</span></div>
+<div class="table-wrap" id="goldenReviewQueue"></div>
+</div>
+
+<div class="card">
+<div class="section-head"><div><h2>5. השוואת Releases</h2><p>בחר שתי ריצות כדי לראות שיפור/רגרסיה, שינוי במקור ושינוי בציוני האיכות.</p></div><div class="compare-controls"><select id="goldenCompareBase"></select><span>מול</span><select id="goldenCompareCurrent"></select><button class="btn ghost" id="goldenCompareBtn">השווה</button></div></div>
+<div class="kpis" id="goldenCompareSummary"></div>
+<div class="table-wrap" id="goldenCompareTable"></div>
+<details class="guide-details"><summary>היסטוריית ריצות שמורות</summary><div class="table-wrap" id="goldenRunsTable"></div></details>
+</div>
 </div>
 </section><section class="tabpage" id="qaDocs">
 <div class="card">
@@ -366,17 +401,19 @@
 <div class="dialog-body" id="dialogBody"></div>
 <div class="dialog-evidence" id="dialogEvidence"></div>
 <label>הערת QA<textarea id="manualNote" placeholder="מה בדקת ומה בפועל קרה?" rows="4"></textarea></label>
+<div class="grid cols-2 bug-classifier"><label>סיווג כשל<select id="manualBugCategory"><option value="">לא סווג</option><option>Retrieval Failure</option><option>Generation Failure</option><option>Grounding Failure</option><option>Authorization/Security Failure</option></select><span class="field-help">רלוונטי בעיקר ל־FAIL. הסבר במילון AI.</span></label><div class="bug-type-help"><button class="term-link" type="button" data-glossary="Failure Taxonomy">מה ההבדל בין 4 הסוגים?</button></div></div>
 <div class="actions-row dialog-actions">
 <button class="btn" data-manual-status="PASS" type="button">PASS</button>
 <button class="btn" data-manual-status="FAIL" type="button">FAIL</button>
 <button class="btn" data-manual-status="BLOCKED" type="button">BLOCKED</button>
 <button class="btn" data-manual-status="QUESTION" type="button">QUESTION</button>
 <button class="btn ghost" hidden="" id="dialogCopyCurlBtn" type="button">העתק cURL / Postman</button>
+<button class="btn ghost" id="dialogBugEvidenceBtn" type="button">צור Bug Evidence</button>
 <button class="btn primary" id="dialogRunBtn" type="button">Run</button>
 </div>
 </form>
 </dialog>
-<footer>GenAI Router QA Console · Swagger 1.0.6 · UI v1.8</footer>
+<footer>GenAI Router QA Console · Swagger 1.0.6 · UI v1.9</footer>
 <script src="/app.js" type="module"></script>
 </body>
 </html>

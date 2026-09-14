@@ -1,18 +1,18 @@
-# GenAI Router QA Console v1.8
+# GenAI Router QA Console v1.9
 
 QA console for the GenAI Router / RAG project.
 
-## v1.8
+## v1.9
 
-- Added **Golden Sanity / Regression** under GenAI / RAG.
-- Local Golden Dataset editor: question, golden answer, must-include facts, expected source, tags and notes.
-- One-click Golden run with optional isolated conversation per question and cleanup after each run.
-- Captures answer similarity, must-include coverage, source match, run/version label and manual PASS/FAIL review.
-- Golden Dataset import/export as JSON. Data is stored locally in the browser; credentials are never persisted.
-- Added **AI for QA** guide with practical testing principles: retrieval vs generation, no-answer tests, nondeterminism, version traceability, security and human review.
-- Added a full **AI QA Glossary** with 30+ terms such as RAG, Golden Dataset, Chunk, Embedding, Top-K, Grounding, Hallucination, Context Precision/Recall, LLM-as-a-Judge and Prompt Injection.
-- Added inline glossary links from relevant concepts in the UI.
-- Golden auto scores are explicitly advisory; final quality PASS remains a QA/SME decision until an agreed evaluator is defined.
+- Golden Release Sanity with local Run history and Release Metadata.
+- Automatic Source → Chunk evidence collection through `/v1/conversations/fetch/chunks/text`.
+- Separate Retrieval / Answer / Grounding signals.
+- Human Review Queue for ambiguous, weak or failed results.
+- Release-to-release comparison with improved / regressed / source-changed indicators.
+- Failure taxonomy for bugs: Retrieval, Generation, Grounding, Authorization/Security.
+- Exportable Bug Evidence bundles with redacted Request/Response, Sources and Chunks.
+- Expanded AI-for-QA guide and 50+ glossary concepts with inline links.
+- Golden Dataset editor/import/export remains local to the browser; credentials are not persisted.
 
 ## Important
 
