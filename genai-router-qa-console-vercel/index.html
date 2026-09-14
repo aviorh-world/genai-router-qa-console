@@ -13,7 +13,7 @@
       <p>כלי QA ל־Router 1.0.6 — Swagger + TSH + ארכיטקטורה + Postman</p>
     </div>
     <div class="top-actions">
-      <span class="badge version">v1.2</span>
+      <span class="badge version">v1.3</span>
       <span id="connectionBadge" class="badge neutral">לא מחובר</span>
       <button id="demoBtn" class="btn ghost">Demo Mode</button>
     </div>
@@ -22,22 +22,22 @@
   <main>
     <section class="card setup">
       <div class="section-head">
-        <div><h2>1. הגדרת סביבת בדיקה</h2><p>ה־Token נשמר בזיכרון הדפדפן בלבד. לפי הצוות הוא מופק ב־Google CLI, תקף כשעה ומחייב משתמש ענן מורשה.</p></div>
+        <div><h2>1. הגדרת סביבת בדיקה</h2><p>ה־Identity Token נשמר בזיכרון הדפדפן בלבד. לפי ההנחיה: gcloud auth print-identity-token → X-Serverless-Authorization: Bearer &lt;TOKEN&gt;. תוקף משוער: שעה.</p></div>
         <div class="actions-row"><button id="healthBtn" class="btn">בדיקת חיבור</button><button id="markTokenBtn" class="btn ghost">Token הופק עכשיו</button></div>
       </div>
       <div class="grid cols-3">
         <label>TSH Base URL<input id="baseUrl" placeholder="מחכה ל־Base URL מאנדריי" autocomplete="off"></label>
-        <label>Bearer Token<input id="token" type="password" placeholder="Google CLI token · תוקף ~שעה" autocomplete="off"><small id="tokenExpiry" class="field-help">לא סומן זמן הפקה</small></label>
-        <label>Execution Mode<select id="executionMode"><option value="direct">Browser Direct → Router (מומלץ בתוך SH/TSH)</option><option value="proxy">Vercel Proxy (רק אם היעד ציבורי)</option><option value="postman">Postman / cURL generator בלבד</option></select></label>
+        <label>Identity Token<input id="token" type="password" placeholder="gcloud auth print-identity-token · תוקף ~שעה" autocomplete="off"><small id="tokenExpiry" class="field-help">לא סומן זמן הפקה</small></label>
+        <label>Auth Header<select id="authHeader"><option value="X-Serverless-Authorization">X-Serverless-Authorization (לפי המדריך)</option><option value="Authorization">Authorization (fallback בלבד)</option></select></label><label>Execution Mode<select id="executionMode"><option value="direct">Browser Direct → Router (מומלץ בתוך SH/TSH)</option><option value="proxy">Vercel Proxy (רק אם היעד ציבורי)</option><option value="postman">Postman / cURL generator בלבד</option></select></label>
         <label>App ID<input id="appId" value="Desktop" placeholder="Desktop"></label>
-        <label>User ID A<input id="userId" placeholder="האימייל השע״מי שלך …@taxes" inputmode="email"></label>
+        <label>User ID A<input id="userId" value="aviorha@taxes.gov.il" placeholder="האימייל השע״מי שלך" inputmode="email"></label>
         <label>Case ID<input id="caseId" value="123456789" placeholder="9 ספרות"></label>
         <label>User ID B (אופציונלי)<input id="userIdB" placeholder="לבדיקות הרשאה"></label>
         <label>Token B (אופציונלי)<input id="tokenB" type="password" placeholder="Token של משתמש B" autocomplete="off"></label>
         <label>Conversation ID<input id="conversationId" placeholder="מתמלא אוטומטית"></label>
         <label>Message ID<input id="messageId" placeholder="מתמלא אוטומטית"></label>
       </div>
-      <div class="notice">⚠️ השתמש רק ב־credentials של TSH/QA. לא ב־Production. אם ה־TSH פנימי, Vercel לא בהכרח יוכל להגיע אליו — השתמש ב־Browser Direct או העתק בקשה ל־Postman.</div>
+      <div class="notice">⚠️ השתמש רק ב־credentials של TSH/QA. לא ב־Production. אם ה־TSH פנימי, Vercel לא בהכרח יוכל להגיע אליו — השתמש ב־Browser Direct או העתק בקשה ל־Postman.</div><div class="notice"><b>Google CLI:</b> אם צריך התחברות לחשבון: <code>gcloud init</code> או <code>gcloud init --no-launch-browser</code>. להפקת Identity Token: <code>gcloud auth print-identity-token</code>. לפי המדריך יש לשלוח: <code>X-Serverless-Authorization: Bearer &lt;TOKEN&gt;</code>.</div>
       <label class="checkline"><input id="cloudAccessConfirmed" type="checkbox"> <span>וידאתי שיש לי משתמש ענן והרשאה להפעיל את שירות ה־Router</span></label>
       <div class="readiness-head">
         <div><b>מוכנות להרצה אמיתית</b><span>האתר בודק מה חסר לפני שמתחילים.</span></div>
@@ -48,7 +48,7 @@
 
     <nav class="tabs">
       <button data-tab="dashboard" class="tab active">Dashboard</button>
-      <button data-tab="catalog" class="tab">78 תסריטים</button>
+      <button data-tab="catalog" class="tab">תסריטים + Boundaries</button>
       <button data-tab="flow" class="tab">Auto Flow</button>
       <button data-tab="api" class="tab">API Runner</button>
       <button data-tab="ai" class="tab">GenAI / RAG</button>
@@ -64,7 +64,7 @@
         <div id="blockingSummary" class="blocking-summary"></div>
       </div>
       <div class="kpis">
-        <div class="kpi"><b id="kpiTotal">78</b><span>תסריטים</span></div>
+        <div class="kpi"><b id="kpiTotal">94</b><span>תסריטים</span></div>
         <div class="kpi"><b id="kpiAuto">0</b><span>אוטומטיים/מסייעים</span></div>
         <div class="kpi"><b id="kpiPass">0</b><span>PASS</span></div>
         <div class="kpi"><b id="kpiFail">0</b><span>FAIL</span></div>
@@ -74,6 +74,7 @@
         <div class="section-head"><div><h2>הרצה מהירה</h2><p>מתחילים ב־P0 שניתן להריץ בלי פעולות הרסניות, או ב־Flow מלא.</p></div></div>
         <div class="actions-row">
           <button id="runSafeP0" class="btn primary">▶ Run Safe P0</button>
+          <button id="runBoundaryPack" class="btn">▶ Run Boundary Pack</button>
           <button id="runHappyFlow" class="btn">▶ Conversation Happy Flow</button>
           <button id="clearResults" class="btn ghost">איפוס תוצאות</button>
         </div>
@@ -202,7 +203,7 @@
       </div>
     </form>
   </dialog>
-  <footer>GenAI Router QA Console · Swagger 1.0.6 · UI v1.2</footer>
+  <footer>GenAI Router QA Console · Swagger 1.0.6 · UI v1.3</footer>
   <script src="/app.js" type="module"></script>
 </body>
 </html>

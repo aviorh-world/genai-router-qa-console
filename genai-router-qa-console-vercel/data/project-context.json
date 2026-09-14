@@ -1,5 +1,5 @@
 {
-  "version": "2026-09-14",
+  "version": "2026-09-14-v1.3",
   "knownFacts": [
     {
       "title": "יעד הבדיקות",
@@ -8,8 +8,13 @@
     },
     {
       "title": "Bearer Token",
-      "value": "מופק ע\"י הבודק דרך Google CLI",
-      "detail": "ה-Token מיוצר מחוץ לסביבה, מועבר פנימה, תקף כשעה ודורש משתמש ענן + הרשאה לשירות."
+      "value": "Google Identity Token דרך gcloud CLI",
+      "detail": "ייתכן שצריך gcloud init / gcloud init --no-launch-browser. הפקת token: gcloud auth print-identity-token. לפי ההנחיה שהתקבלה: לשלוח X-Serverless-Authorization: Bearer <TOKEN>. תוקף משוער: שעה."
+    },
+    {
+      "title": "Auth Header",
+      "value": "X-Serverless-Authorization",
+      "detail": "לפי ההנחיה המצולמת: VALUE הוא Bearer + ה-Identity Token שמתקבל מ-gcloud auth print-identity-token."
     },
     {
       "title": "App ID",
@@ -18,8 +23,8 @@
     },
     {
       "title": "User ID",
-      "value": "האימייל השע\"מי של הבודק",
-      "detail": "לפי ההנחיה בצוות, יש להשתמש בכתובת האימייל הפנימית שמסתיימת ב-@taxes."
+      "value": "aviorha@taxes.gov.il",
+      "detail": "זהו User ID A שנמסר לצורך סביבת הבדיקות."
     },
     {
       "title": "Case ID",
@@ -41,12 +46,7 @@
     {
       "priority": "BLOCKER",
       "title": "אימות הרשאת משתמש הענן",
-      "detail": "צריך לוודא שהמשתמש הענני שלך אכן מורשה להפעיל את השירות, ולא רק קיים ללא הרשאות."
-    },
-    {
-      "priority": "HIGH",
-      "title": "פקודת Google CLI המדויקת",
-      "detail": "ידוע שה-Token מופק ב-Google CLI ותקף שעה, אך הפקודה/ה-audience המדויקים אמורים להגיע במדריך של דן."
+      "detail": "הפקת ה-Identity Token כבר ברורה; עדיין צריך לוודא שהמשתמש הענני מורשה להפעיל את שירות ה-Router."
     },
     {
       "priority": "HIGH",
@@ -137,15 +137,49 @@
       "priority": "P1",
       "scenario": "משתמש רגיל פונה ל-statistics",
       "expected": "גישה בהתאם ל-RBAC בלבד וללא זליגת user/email/token usage"
+    },
+    {
+      "risk": "Schema boundary validation",
+      "priority": "P1",
+      "scenario": "בדיקות min/max לערכי limit/offset, userId, feedback, chunks ותאריכים",
+      "expected": "הגבול התקין מתקבל; ערך אחד מחוץ לגבול נדחה בצורה עקבית ללא 5xx או state חלקי"
     }
   ],
   "references": [
-    {"label": "Notebook / Project reference 1", "url": "https://notebooklm.link.google/tSENWSkwPxRx", "type": "Notebook"},
-    {"label": "Notebook / Project reference 2", "url": "https://notebooklm.link.google/bUPOsyUdnwIk", "type": "Notebook"},
-    {"label": "TextSQL Lovable UI", "url": "https://textsql.lovable.app/", "type": "App"},
-    {"label": "Text2SQL Cloud Run", "url": "https://text2sql-511863960484.me-west1.run.app/", "type": "Service"},
-    {"label": "chat-router source", "url": "https://shaam-git-instances-189308823345.me-west1.sourcemanager.dev/ita-malta-prod-git/chat-router", "type": "Source Repo"},
-    {"label": "execution-instructions-rag-service", "url": "https://shaam-git-instances-189308823345.me-west1.sourcemanager.dev/ita-malta-prod-git/execution-instructions-rag-service", "type": "Source Repo"},
-    {"label": "execution-instructions-indexer-service", "url": "https://shaam-git-instances-189308823345.me-west1.sourcemanager.dev/ita-malta-prod-git/execution-instructions-indexer-service", "type": "Source Repo"}
+    {
+      "label": "Notebook / Project reference 1",
+      "url": "https://notebooklm.link.google/tSENWSkwPxRx",
+      "type": "Notebook"
+    },
+    {
+      "label": "Notebook / Project reference 2",
+      "url": "https://notebooklm.link.google/bUPOsyUdnwIk",
+      "type": "Notebook"
+    },
+    {
+      "label": "TextSQL Lovable UI",
+      "url": "https://textsql.lovable.app/",
+      "type": "App"
+    },
+    {
+      "label": "Text2SQL Cloud Run",
+      "url": "https://text2sql-511863960484.me-west1.run.app/",
+      "type": "Service"
+    },
+    {
+      "label": "chat-router source",
+      "url": "https://shaam-git-instances-189308823345.me-west1.sourcemanager.dev/ita-malta-prod-git/chat-router",
+      "type": "Source Repo"
+    },
+    {
+      "label": "execution-instructions-rag-service",
+      "url": "https://shaam-git-instances-189308823345.me-west1.sourcemanager.dev/ita-malta-prod-git/execution-instructions-rag-service",
+      "type": "Source Repo"
+    },
+    {
+      "label": "execution-instructions-indexer-service",
+      "url": "https://shaam-git-instances-189308823345.me-west1.sourcemanager.dev/ita-malta-prod-git/execution-instructions-indexer-service",
+      "type": "Source Repo"
+    }
   ]
 }

@@ -61,13 +61,15 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   try {
     const p = req.body || {};
-    const { baseUrl, token, method='GET', apiPath='/', body, stream=false } = p;
+    const { baseUrl, token, authHeader='X-Serverless-Authorization', method='GET', apiPath='/', body, stream=false } = p;
     if (!baseUrl) return res.status(400).json({error:'Base URL is required'});
     const target = await safeTarget(baseUrl, apiPath, method);
     const payloadText = body == null ? '' : (typeof body === 'string' ? body : JSON.stringify(body));
     if(payloadText.length > 512_000) return res.status(413).json({error:'Request body is too large'});
     const h = {'Accept':'application/json, text/event-stream, */*'};
-    if (token) h.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+    const allowedAuthHeaders=new Set(['X-Serverless-Authorization','Authorization']);
+    if(!allowedAuthHeaders.has(authHeader)) return res.status(400).json({error:'Unsupported auth header'});
+    if (token) h[authHeader] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
     let payload;
     if (body !== undefined && body !== null && method.toUpperCase() !== 'GET') {
       h['Content-Type'] = 'application/json';

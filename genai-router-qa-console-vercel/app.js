@@ -9,7 +9,7 @@ const esc = (v='') => String(v ?? '').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&
 const now = () => new Date().toISOString();
 
 const CONTRACT_GAPS = [
-  {severity:'HIGH',area:'Authentication',gap:'ב־Swagger לא מוגדר securityScheme של Bearer Token. מהצוות ידוע שה-Token מופק ב-Google CLI, תקף כשעה ודורש משתמש ענן מורשה.',impact:'תהליך ההזדהות ידוע חלקית, אך חסרים command/audience וקודי שגיאה פורמליים בחוזה.'},
+  {severity:'MEDIUM',area:'Authentication',gap:'ב־Swagger לא מוגדר securityScheme. לפי ההנחיה שהתקבלה ה-Identity Token מופק ב-gcloud auth print-identity-token ונשלח ב-X-Serverless-Authorization: Bearer <TOKEN>.',impact:'דרך ההזדהות ידועה כעת, אך עדיין חסרים תיעוד פורמלי ב-Swagger וקודי שגיאה מוסכמים.'},
   {severity:'HIGH',area:'Environment / Network',gap:'ה־servers ב־Swagger אינו מצביע על TSH. הצוות ציין שנדרשת תקשורת TSH↔NON-PROD והרשאה לשירות.',impact:'Vercel ציבורי עלול לא להגיע ליעד; יש להריץ Browser Direct או Postman מתוך הרשת המתאימה.'},
   {severity:'MEDIUM',area:'Case ID',gap:'הצוות הבהיר ש-Case ID אינו קריטי להתנעה ויכול להיות ערך בדיקה; Swagger מגדיר 9 ספרות ו-nullable אך לא required.',impact:'Test Data כבר לא blocker, אך missing/null עדיין דורשים אישור Runtime.'},
   {severity:'HIGH',area:'History / Messages',gap:'הדרישה העסקית היא 20 הודעות אחרונות, אבל הכמות והסדר אינם Contract מפורש ב-Get Conversation.',impact:'לא ניתן לקבוע PASS/FAIL חד־משמעי לסדר ולגבול בלי walkthrough.'},
@@ -26,9 +26,9 @@ function readiness(){
   const tokenFresh = !c.token ? false : tokenAge==null ? true : tokenAge < 60*60*1000;
   const items=[
     ['TSH Base URL',!!c.baseUrl,'הערך עצמו עדיין חסר; לפי הצוות הוא אצל אנדריי'],
-    ['Bearer Token',!!c.token&&tokenFresh,'מופק ב-Google CLI, תקף ~שעה'],
+    ['Identity Token',!!c.token&&tokenFresh,'gcloud auth print-identity-token · תוקף ~שעה'],
     ['App ID',!!c.appId,'ברירת מחדל מה-Swagger: Desktop'],
-    ['User ID',!!c.userId,'האימייל השע״מי שלך שמסתיים ב-@taxes'],
+    ['User ID',!!c.userId,'aviorha@taxes.gov.il'],
     ['Case ID',!c.caseId||validCaseId(c.caseId),'לא blocker; אם נשלח — 9 ספרות'],
     ['Cloud Access',c.cloudAccessConfirmed||state.connectionOk,'משתמש ענן + הרשאה לשירות Router']
   ];
@@ -36,7 +36,7 @@ function readiness(){
   const executable = c.executionMode!=='postman';
   const core=[
     ['Connection target',!!c.baseUrl,'TSH Base URL מדויק'],
-    ['Identity',!!c.token&&tokenFresh&&!!c.userId,'Token + User ID @taxes'],
+    ['Identity',!!c.token&&tokenFresh&&!!c.userId,'X-Serverless-Authorization + aviorha@taxes.gov.il'],
     ['Test defaults',!!c.appId&&(!c.caseId||validCaseId(c.caseId)),'App ID=Desktop; Case ID יכול להיות ערך בדיקה'],
     ['Execution path',executable,'Browser Direct / Proxy; במצב Postman האתר מייצר בקשות בלבד']
   ];
@@ -46,7 +46,7 @@ function readiness(){
   return all;
 }
 function copyQuestions(){
-  const txt=`היי, עדכון אחרי מעבר על החומרים — רוב ה-Test Data כבר ברור. כדי להתחיל הרצה אמיתית חסרים לי בעיקר:\n1. ה-TSH Base URL המדויק שכבר נמסר לאנדריי.\n2. לוודא שהיוזר הענני שלי מורשה להפעיל את ה-Router + לקבל את פקודת Google CLI המדויקת להפקת ה-Token (ידוע שהוא תקף שעה).\n3. בהמשך walkthrough קצר על State/Delete, 20 messages ו-RBAC כדי לסגור Expected Results.`;
+  const txt=`היי, עדכון: דרך ההזדהות כבר ברורה — gcloud auth print-identity-token ושליחה ב-X-Serverless-Authorization: Bearer <TOKEN>. כדי להתחיל הרצה אמיתית חסרים לי בעיקר:\n1. ה-TSH Base URL המדויק.\n2. לוודא שהיוזר הענני שלי מורשה להפעיל את ה-Router.\n3. בהמשך walkthrough קצר על State/Delete, 20 messages ו-RBAC כדי לסגור Expected Results.`;
   navigator.clipboard?.writeText(txt).then(()=>{const b=$('copyQuestionsBtn'); const old=b.textContent;b.textContent='הועתק ✓';setTimeout(()=>b.textContent=old,1500)}).catch(()=>alert(txt));
 }
 function markTokenNow(){ state.tokenMarkedAt=Date.now(); updateTokenCountdown(); readiness(); }
@@ -92,7 +92,7 @@ function cfg(){
     userId:$('userId').value.trim(), caseId:$('caseId').value.trim() || null,
     userIdB:$('userIdB').value.trim(), tokenB:$('tokenB').value.trim(),
     conversationId:$('conversationId').value.trim(), messageId:$('messageId').value.trim(),
-    executionMode:$('executionMode')?.value || 'direct', cloudAccessConfirmed:!!$('cloudAccessConfirmed')?.checked
+    executionMode:$('executionMode')?.value || 'direct', authHeader:$('authHeader')?.value || 'X-Serverless-Authorization', cloudAccessConfirmed:!!$('cloudAccessConfirmed')?.checked
   };
 }
 function requireFields(names){ const c=cfg(); const missing=names.filter(n=>!c[n]); if(missing.length) throw new Error('חסרים שדות: '+missing.join(', ')); return c; }
@@ -114,6 +114,28 @@ async function loadData(){
   }
   const q=raw['04_שאלות_פתוחות']; const qh=q[0];
   state.questions=q.slice(1).map(r=>Object.fromEntries(qh.map((x,i)=>[x,r[i]])));
+
+  const boundaryTests = [
+    ['BND-001','P1','Validation','/v1/conversations/new','App ID ריק (0 תווים)','שלח appId=""','4xx Validation','auto'],
+    ['BND-002','P1','Validation','/v1/conversations/new','User ID מעל 128 תווים','שלח email באורך >128','4xx Validation','auto'],
+    ['BND-003','P1','Pagination','/v1/conversations/history','limit=1 (מינימום חוקי)','שלח limit=1','2xx','auto'],
+    ['BND-004','P1','Pagination','/v1/conversations/history','limit=0 (מתחת למינימום)','שלח limit=0','4xx Validation','auto'],
+    ['BND-005','P1','Pagination','/v1/conversations/history','offset=101 (מעל המקסימום)','שלח offset=101','4xx Validation','auto'],
+    ['BND-006','P1','Feedback','/v1/messages/send/feedback','feedbackType לא חוקי','שלח feedbackType=invalid','4xx Validation','auto'],
+    ['BND-007','P1','Feedback','/v1/messages/send/feedback','feedbackType=text ללא feedbackText','שלח type=text בלי טקסט','4xx Validation','auto'],
+    ['BND-008','P1','Feedback','/v1/messages/send/feedback','feedbackText באורך 4001','שלח type=text ו-4001 תווים','4xx Validation','auto'],
+    ['BND-009','P1','Chunks','/v1/conversations/fetch/chunks/text','מערך chunks ריק','chunks=[]','4xx Validation','auto'],
+    ['BND-010','P1','Chunks','/v1/conversations/fetch/chunks/text','101 chunks (מעל maxItems)','שלח 101 פריטים','4xx Validation','auto'],
+    ['BND-011','P1','Chunks','/v1/conversations/fetch/chunks/text','chunkId=-1','ערך מתחת למינימום','4xx Validation','auto'],
+    ['BND-012','P1','Chunks','/v1/conversations/fetch/chunks/text','chunkId=10001','ערך מעל המקסימום','4xx Validation','auto'],
+    ['BND-013','P1','Files','/v1/files/download','bucketName באורך 223','ערך אחד מעל maxLength=222','4xx Validation','auto'],
+    ['BND-014','P1','Files','/v1/files/download','fileName באורך 1025','ערך אחד מעל maxLength=1024','4xx Validation','auto'],
+    ['BND-015','P1','Statistics','/v1/statistics/active-users','startDate=endDate','טווח באורך אפס','4xx Validation','auto'],
+    ['BND-016','P1','Statistics','/v1/statistics/active-users','Timestamp ללא 3 ספרות מילישניות','שלח ...00Z במקום ...00.000Z','4xx Validation','auto']
+  ];
+  for (const [ID,priority,domain,Endpoint,scenario,steps,expected,mode] of boundaryTests) {
+    state.tests.push({ID,priority,mode,'תחום':domain,Endpoint,'תרחיש בדיקה':scenario,'תנאים מקדימים':'Base URL + Identity Token תקינים','צעדים / קלט':steps,'Expected Result':expected,'שאלה פתוחה / נדרש אישור':'','מקור / הערה':'Boundary Pack v1.3'});
+  }
   state.operations=sw.operations;
   renderAll(); populateEndpoints();
 }
@@ -152,7 +174,7 @@ function targetUrl(baseUrl,path){
 async function directRequest({method,path,body,token,stream=false}){
   const c=cfg(); const url=targetUrl(c.baseUrl,path);
   const headers={'Accept':'application/json, text/event-stream, */*'};
-  const tok=token===undefined?c.token:token; if(tok) headers.Authorization=tok.startsWith('Bearer ')?tok:`Bearer ${tok}`;
+  const tok=token===undefined?c.token:token; if(tok) headers[c.authHeader]=tok.startsWith('Bearer ')?tok:`Bearer ${tok}`;
   let payload;
   if(body!==undefined && body!==null && method.toUpperCase()!=='GET'){headers['Content-Type']='application/json';payload=JSON.stringify(body);}
   const started=Date.now();
@@ -169,7 +191,7 @@ async function proxy({method,path,body,token,stream=false}){
   if(!c.baseUrl) throw new Error('יש להזין TSH Base URL');
   if(c.executionMode==='postman') throw new Error('מצב Postman/cURL אינו מריץ בקשות מהדפדפן. השתמש בכפתור "העתק cURL" והרץ בתוך הסביבה הפנימית.');
   if(c.executionMode==='direct') return directRequest({method,path,body,token,stream});
-  const res=await fetch('/api/proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({baseUrl:c.baseUrl,token:token===undefined?c.token:token,method,apiPath:path,body,stream})});
+  const res=await fetch('/api/proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({baseUrl:c.baseUrl,token:token===undefined?c.token:token,authHeader:c.authHeader,method,apiPath:path,body,stream})});
   if(stream){ return {status:res.status,stream:res.body,headers:res.headers}; }
   const wrapper=await res.json();
   if(!res.ok) throw new Error(wrapper.error||'Proxy error');
@@ -179,7 +201,7 @@ async function proxy({method,path,body,token,stream=false}){
 function buildCurl(method,path,body){
   const c=cfg(); const base=c.baseUrl||'<TSH_BASE_URL>'; let url;
   try{url=targetUrl(base,path)}catch{url=`${base.replace(/\/$/,'')}${path}`;}
-  const parts=[`curl -i -X ${method.toUpperCase()} '${url}'`,`  -H 'Authorization: Bearer <BEARER_TOKEN>'`,`  -H 'Accept: application/json, text/event-stream, */*'`];
+  const parts=[`curl -i -X ${method.toUpperCase()} '${url}'`,`  -H '${c.authHeader}: Bearer <IDENTITY_TOKEN>'`,`  -H 'Accept: application/json, text/event-stream, */*'`];
   if(body!==undefined && body!==null && method.toUpperCase()!=='GET'){
     parts.push(`  -H 'Content-Type: application/json'`);
     const json=JSON.stringify(body).replace(/'/g,"'\\''");
@@ -290,6 +312,22 @@ async function runTest(id){
       case 'P2-005': requireFields(['conversationId','appId','userId']); body=requestBody('/v1/conversations/messages','POST'); body.content='א'.repeat(32769); r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); {const text=await readStream(r.stream);pass=r.status>=400&&r.status<500;actual=`HTTP ${r.status}\n${text.slice(0,200)}`;} break;
       case 'P2-007': return result(id,'QUESTION','הרץ שאלה בעברית דרך GenAI Inspector ואז Get Conversation','בדיקת Round-trip דורשת תוכן עברי ידוע והשוואה.');
       case 'P2-011': return result(id,'BLOCKED','הזן טווח ללא נתונים דרך API Runner','Endpoint סטטיסטיקה נבחר לפי צורך.');
+      case 'BND-001': body=requestBody('/v1/conversations/new','POST'); body.appId=''; r=await proxy({method:'POST',path:'/v1/conversations/new',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
+      case 'BND-002': body=requestBody('/v1/conversations/new','POST'); body.userId='a'.repeat(120)+'@taxes.gov.il'; r=await proxy({method:'POST',path:'/v1/conversations/new',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
+      case 'BND-003': body=requestBody('/v1/conversations/history','POST'); body.limit=1; r=await proxy({method:'POST',path:'/v1/conversations/history',body}); pass=r.status>=200&&r.status<300; actual=`HTTP ${r.status}`; break;
+      case 'BND-004': body=requestBody('/v1/conversations/history','POST'); body.limit=0; r=await proxy({method:'POST',path:'/v1/conversations/history',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
+      case 'BND-005': body=requestBody('/v1/conversations/history','POST'); body.offset=101; r=await proxy({method:'POST',path:'/v1/conversations/history',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
+      case 'BND-006': requireFields(['messageId']); body={messageId:c.messageId,feedbackType:'invalid'}; r=await proxy({method:'POST',path:'/v1/messages/send/feedback',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
+      case 'BND-007': requireFields(['messageId']); body={messageId:c.messageId,feedbackType:'text'}; r=await proxy({method:'POST',path:'/v1/messages/send/feedback',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
+      case 'BND-008': requireFields(['messageId']); body={messageId:c.messageId,feedbackType:'text',feedbackText:'א'.repeat(4001)}; r=await proxy({method:'POST',path:'/v1/messages/send/feedback',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
+      case 'BND-009': body={chunks:[]}; r=await proxy({method:'POST',path:'/v1/conversations/fetch/chunks/text',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
+      case 'BND-010': body={chunks:Array.from({length:101},(_,i)=>({documentBucket:'qa-bucket',documentFileName:'qa.pdf',chunkId:i}))}; r=await proxy({method:'POST',path:'/v1/conversations/fetch/chunks/text',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
+      case 'BND-011': body={chunks:[{documentBucket:'qa-bucket',documentFileName:'qa.pdf',chunkId:-1}]}; r=await proxy({method:'POST',path:'/v1/conversations/fetch/chunks/text',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
+      case 'BND-012': body={chunks:[{documentBucket:'qa-bucket',documentFileName:'qa.pdf',chunkId:10001}]}; r=await proxy({method:'POST',path:'/v1/conversations/fetch/chunks/text',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
+      case 'BND-013': body={bucketName:'a'.repeat(223),fileName:'x.pdf'}; r=await proxy({method:'POST',path:'/v1/files/download',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
+      case 'BND-014': body={bucketName:'qa-bucket',fileName:'a'.repeat(1025)}; r=await proxy({method:'POST',path:'/v1/files/download',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
+      case 'BND-015': {const dt=new Date().toISOString(); body={startDate:dt,endDate:dt}; r=await proxy({method:'POST',path:'/v1/statistics/active-users',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`;} break;
+      case 'BND-016': body={startDate:'2026-09-14T00:00:00Z',endDate:'2026-09-15T00:00:00Z'}; r=await proxy({method:'POST',path:'/v1/statistics/active-users',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
       default: return result(id,'BLOCKED','אין אוטומציה ייעודית עדיין','התסריט נשאר זמין לביצוע ידני/דרך API Runner.');
     }
     return result(id,pass?'PASS':'FAIL',actual,t['Expected Result']||'');
@@ -298,6 +336,11 @@ async function runTest(id){
 
 async function runSafeP0(){
   const ids=['P0-001','P0-002','P0-003','P0-004','P0-006','P0-007']; $('runSummary').innerHTML='';
+  for(const id of ids){ const r=await runTest(id); $('runSummary').innerHTML += `<div class="run-item"><b>${id}</b> — <span class="${statusClass(r.status)}">${r.status}</span> — ${esc(r.actual)}</div>`; }
+}
+
+async function runBoundaryPack(){
+  const ids=state.tests.filter(t=>t.ID.startsWith('BND-')&&t.mode==='auto').map(t=>t.ID); $('runSummary').innerHTML='';
   for(const id of ids){ const r=await runTest(id); $('runSummary').innerHTML += `<div class="run-item"><b>${id}</b> — <span class="${statusClass(r.status)}">${r.status}</span> — ${esc(r.actual)}</div>`; }
 }
 
@@ -364,10 +407,10 @@ function demo(){state.demo=!state.demo;$('demoBtn').textContent=state.demo?'Demo
 function wire(){
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tabpage').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active');});
   $('searchTests').oninput=renderCatalog;$('priorityFilter').onchange=renderCatalog;$('modeFilter').onchange=renderCatalog;
-  $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('markTokenBtn').onclick=markTokenNow;$('readinessBtn').onclick=readiness;$('copyQuestionsBtn').onclick=copyQuestions;$('runSafeP0').onclick=runSafeP0;$('runHappyFlow').onclick=happyFlow;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('copyCurlBtn').onclick=copyCurl;$('aiRunBtn').onclick=aiRun;
+  $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('markTokenBtn').onclick=markTokenNow;$('readinessBtn').onclick=readiness;$('copyQuestionsBtn').onclick=copyQuestions;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runHappyFlow').onclick=happyFlow;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('copyCurlBtn').onclick=copyCurl;$('aiRunBtn').onclick=aiRun;
   $('clearResults').onclick=()=>{state.results={};$('runSummary').innerHTML='';renderAll();};
   $('exportJson').onclick=exportJson;$('exportCsv').onclick=exportCsv;
-  ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',readiness)); $('executionMode').addEventListener('change',readiness); $('cloudAccessConfirmed').addEventListener('change',readiness); $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));
+  ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',readiness)); $('executionMode').addEventListener('change',readiness); $('authHeader').addEventListener('change',readiness); $('cloudAccessConfirmed').addEventListener('change',readiness); $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));
   document.querySelectorAll('[data-rating]').forEach(b=>b.onclick=()=>{state.aiRating={rating:b.dataset.rating,note:$('aiNote').value,time:now()};$('aiRating').textContent=`נבחר: ${b.dataset.rating}`;});
 }
 
