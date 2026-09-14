@@ -1,6 +1,7 @@
 const state = {
   tests: [], questions: [], operations: [], results: {}, lastStream: '', aiRating: null,
-  demo: false, createdConversationId: null, selectedTestId: null
+  demo: false, createdConversationId: null, selectedTestId: null,
+  context: null, tokenMarkedAt: null, connectionOk: false
 };
 
 const $ = (id) => document.getElementById(id);
@@ -8,33 +9,55 @@ const esc = (v='') => String(v ?? '').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&
 const now = () => new Date().toISOString();
 
 const CONTRACT_GAPS = [
-  {severity:'HIGH',area:'Authentication',gap:'ב־Swagger לא מוגדר securityScheme של Bearer Token.',impact:'QA לא יכול לדעת מהחוזה הרשמי אילו endpoints דורשים Authentication.'},
-  {severity:'HIGH',area:'Environment',gap:'ה־servers ב־Swagger אינו מצביע על TSH האמיתי.',impact:'אי אפשר להתחיל הרצה אמיתית בלי Base URL חיצוני.'},
-  {severity:'HIGH',area:'Create Conversation',gap:'הצוות הגדיר Case ID כחובה, אך ב־Swagger הוא נראה nullable/optional.',impact:'לא ברור האם missing/null צריך להחזיר 4xx או להצליח.'},
-  {severity:'HIGH',area:'History / Messages',gap:'הדרישה העסקית היא 20 הודעות אחרונות, אבל הכמות והסדר אינם Contract מפורש.',impact:'לא ניתן לקבוע PASS/FAIL חד־משמעי לסדר ולגבול.'},
-  {severity:'MEDIUM',area:'Delete',gap:'לא מוגדר אם המחיקה Hard Delete או Soft Delete ומה מצב הרשומה לאחר מכן.',impact:'אימות DB/State נשאר ידני עד לקבלת Business Rule.'},
+  {severity:'HIGH',area:'Authentication',gap:'ב־Swagger לא מוגדר securityScheme של Bearer Token. מהצוות ידוע שה-Token מופק ב-Google CLI, תקף כשעה ודורש משתמש ענן מורשה.',impact:'תהליך ההזדהות ידוע חלקית, אך חסרים command/audience וקודי שגיאה פורמליים בחוזה.'},
+  {severity:'HIGH',area:'Environment / Network',gap:'ה־servers ב־Swagger אינו מצביע על TSH. הצוות ציין שנדרשת תקשורת TSH↔NON-PROD והרשאה לשירות.',impact:'Vercel ציבורי עלול לא להגיע ליעד; יש להריץ Browser Direct או Postman מתוך הרשת המתאימה.'},
+  {severity:'MEDIUM',area:'Case ID',gap:'הצוות הבהיר ש-Case ID אינו קריטי להתנעה ויכול להיות ערך בדיקה; Swagger מגדיר 9 ספרות ו-nullable אך לא required.',impact:'Test Data כבר לא blocker, אך missing/null עדיין דורשים אישור Runtime.'},
+  {severity:'HIGH',area:'History / Messages',gap:'הדרישה העסקית היא 20 הודעות אחרונות, אבל הכמות והסדר אינם Contract מפורש ב-Get Conversation.',impact:'לא ניתן לקבוע PASS/FAIL חד־משמעי לסדר ולגבול בלי walkthrough.'},
+  {severity:'MEDIUM',area:'Delete / State',gap:'AlloyDB מזוהה כ-DB של sessions/state/logs, אך לא מוגדר אם Delete הוא Hard/Soft ומה משתנה בטבלאות.',impact:'אימות persistence נשאר ידני עד לקבלת table/schema + business rule.'},
   {severity:'MEDIUM',area:'Streaming',gap:'קיים event בשם thought ללא הגדרה האם זה Progress מסונן או reasoning פנימי.',impact:'נדרשת בדיקת אבטחה שאין חשיפת System Prompt/Chain-of-Thought.'},
-  {severity:'MEDIUM',area:'Message Length',gap:'Request מאפשר עד 32,768 תווים בעוד Message persisted/returned מתועד עד 8,192.',impact:'לא ברור מה Expected עבור הודעה גדולה מ־8,192.'}
+  {severity:'MEDIUM',area:'Message Length',gap:'Request מאפשר עד 32,768 תווים בעוד Message persisted/returned מתועד עד 8,192.',impact:'לא ברור מה Expected עבור הודעה גדולה מ־8,192.'},
+  {severity:'MEDIUM',area:'Authorization / Sources',gap:'מסמך ההרשאות מגדיר least-privilege ל-Service Accounts, אך לא ownership אפליקטיבי של File/Chunk/Case למשתמש.',impact:'בדיקות IDOR על GCS/Chunks עדיין דורשות כלל הרשאה מוסכם.'}
 ];
 
+function validCaseId(v){ return /^\d{9}$/.test(v||''); }
 function readiness(){
   const c=cfg();
+  const tokenAge = state.tokenMarkedAt ? Date.now()-state.tokenMarkedAt : null;
+  const tokenFresh = !c.token ? false : tokenAge==null ? true : tokenAge < 60*60*1000;
   const items=[
-    ['TSH Base URL',!!c.baseUrl,'כתובת סביבת הבדיקות'],
-    ['Bearer Token',!!c.token,'Token תקין של Text-to-SQL'],
-    ['App ID',!!c.appId,'נתון בדיקה תקין'],
-    ['User ID',!!c.userId,'משתמש בדיקה'],
-    ['Case ID',!!c.caseId,'נדרש לפי דרישת הצוות']
+    ['TSH Base URL',!!c.baseUrl,'הערך עצמו עדיין חסר; לפי הצוות הוא אצל אנדריי'],
+    ['Bearer Token',!!c.token&&tokenFresh,'מופק ב-Google CLI, תקף ~שעה'],
+    ['App ID',!!c.appId,'ברירת מחדל מה-Swagger: Desktop'],
+    ['User ID',!!c.userId,'האימייל השע״מי שלך שמסתיים ב-@taxes'],
+    ['Case ID',!c.caseId||validCaseId(c.caseId),'לא blocker; אם נשלח — 9 ספרות'],
+    ['Cloud Access',c.cloudAccessConfirmed||state.connectionOk,'משתמש ענן + הרשאה לשירות Router']
   ];
   if($('readinessGrid')) $('readinessGrid').innerHTML=items.map(([n,ok,d])=>`<div class="ready-item ${ok?'ok':'missing'}"><b>${ok?'✓':'○'} ${esc(n)}</b><span>${esc(d)}</span></div>`).join('');
-  const core=[['TSH + Token',!!c.baseUrl&&!!c.token,'מאפשרים בכלל לשלוח בקשות לשרת'],['Test Data',!!c.appId&&!!c.userId&&!!c.caseId,'App ID + User ID + Case ID'],['Happy Flow',!!c.baseUrl&&!!c.token&&!!c.appId&&!!c.userId&&!!c.caseId,'ברגע שכל הקודמים קיימים אפשר להתחיל']];
+  const executable = c.executionMode!=='postman';
+  const core=[
+    ['Connection target',!!c.baseUrl,'TSH Base URL מדויק'],
+    ['Identity',!!c.token&&tokenFresh&&!!c.userId,'Token + User ID @taxes'],
+    ['Test defaults',!!c.appId&&(!c.caseId||validCaseId(c.caseId)),'App ID=Desktop; Case ID יכול להיות ערך בדיקה'],
+    ['Execution path',executable,'Browser Direct / Proxy; במצב Postman האתר מייצר בקשות בלבד']
+  ];
   if($('blockingSummary')) $('blockingSummary').innerHTML=core.map(([n,ok,d])=>`<div class="block-card"><b>${ok?'✅':'⏳'} ${esc(n)}</b><small>${esc(d)}</small></div>`).join('');
   const all=core.every(x=>x[1]); const badge=$('startBadge'); if(badge){badge.textContent=all?'מוכן להרצה':'ממתין לנתונים';badge.className='badge '+(all?'pass':'question');}
+  updateTokenCountdown();
   return all;
 }
 function copyQuestions(){
-  const txt=`היי, כדי שאוכל להתחיל בדיקות בפועל חסרים לי כרגע 3 דברים קריטיים:\n1. ה־TSH Base URL המדויק + איך מקבלים Bearer Token תקין.\n2. App ID, User ID ו־Case ID תקינים לסביבת הבדיקות.\n3. walkthrough קצר של ה־Happy Flow המצופה: Create → Send Message → History/Fetch → Delete, ומה ה־Expected בכל שלב.`;
+  const txt=`היי, עדכון אחרי מעבר על החומרים — רוב ה-Test Data כבר ברור. כדי להתחיל הרצה אמיתית חסרים לי בעיקר:\n1. ה-TSH Base URL המדויק שכבר נמסר לאנדריי.\n2. לוודא שהיוזר הענני שלי מורשה להפעיל את ה-Router + לקבל את פקודת Google CLI המדויקת להפקת ה-Token (ידוע שהוא תקף שעה).\n3. בהמשך walkthrough קצר על State/Delete, 20 messages ו-RBAC כדי לסגור Expected Results.`;
   navigator.clipboard?.writeText(txt).then(()=>{const b=$('copyQuestionsBtn'); const old=b.textContent;b.textContent='הועתק ✓';setTimeout(()=>b.textContent=old,1500)}).catch(()=>alert(txt));
+}
+function markTokenNow(){ state.tokenMarkedAt=Date.now(); updateTokenCountdown(); readiness(); }
+function updateTokenCountdown(){
+  const el=$('tokenExpiry'); if(!el) return;
+  if(!state.tokenMarkedAt){el.textContent='לא סומן זמן הפקה';el.className='field-help';return;}
+  const remain=60*60*1000-(Date.now()-state.tokenMarkedAt);
+  if(remain<=0){el.textContent='Token כנראה פג תוקף — הפק חדש';el.className='field-help token-expired';return;}
+  const m=Math.floor(remain/60000), sec=Math.floor((remain%60000)/1000);
+  el.textContent=`תוקף משוער: עוד ${m}:${String(sec).padStart(2,'0')} דקות`;
+  el.className='field-help'+(remain<10*60*1000?' token-warn':'');
 }
 function renderContract(){
   if(!$('contractTable')) return;
@@ -68,14 +91,20 @@ function cfg(){
     baseUrl:$('baseUrl').value.trim(), token:$('token').value.trim(), appId:$('appId').value.trim(),
     userId:$('userId').value.trim(), caseId:$('caseId').value.trim() || null,
     userIdB:$('userIdB').value.trim(), tokenB:$('tokenB').value.trim(),
-    conversationId:$('conversationId').value.trim(), messageId:$('messageId').value.trim()
+    conversationId:$('conversationId').value.trim(), messageId:$('messageId').value.trim(),
+    executionMode:$('executionMode')?.value || 'direct', cloudAccessConfirmed:!!$('cloudAccessConfirmed')?.checked
   };
 }
 function requireFields(names){ const c=cfg(); const missing=names.filter(n=>!c[n]); if(missing.length) throw new Error('חסרים שדות: '+missing.join(', ')); return c; }
 function setConn(text,kind='neutral'){ const el=$('connectionBadge'); el.textContent=text; el.className='badge '+kind; }
 
 async function loadData(){
-  const [raw,sw] = await Promise.all([fetch('/data/qa_tests_from_excel.json').then(r=>r.json()), fetch('/data/swagger-summary.json').then(r=>r.json())]);
+  const [raw,sw,context] = await Promise.all([
+    fetch('/data/qa_tests_from_excel.json').then(r=>r.json()),
+    fetch('/data/swagger-summary.json').then(r=>r.json()),
+    fetch('/data/project-context.json').then(r=>r.json())
+  ]);
+  state.context=context;
   for(const sheet of ['01_P0_קריטי','02_P1_חשוב','03_P2_משלים']){
     const rows=raw[sheet]; const h=rows[0];
     for(const r of rows.slice(1)){
@@ -106,7 +135,7 @@ function requestBody(path,method,c=cfg()){
     case 'POST /v1/conversations/new': return {appId:c.appId,userId:c.userId,...(c.caseId?{caseId:c.caseId}:{})};
     case 'POST /v1/conversations/history': return {appId:c.appId,userId:c.userId,...(c.caseId?{caseId:c.caseId}:{}),limit:20,offset:0};
     case 'POST /v1/conversations/id': case 'DELETE /v1/conversations/id': return {conversationId:c.conversationId,userId:c.userId};
-    case 'POST /v1/conversations/messages': return {conversationId:c.conversationId,userId:c.userId,appId:c.appId,caseId:c.caseId,content:'בדיקת QA'};
+    case 'POST /v1/conversations/messages': return {conversationId:c.conversationId,userId:c.userId,appId:c.appId,...(c.caseId?{caseId:c.caseId}:{}),content:'בדיקת QA'};
     case 'POST /v1/messages/send/feedback': return {messageId:c.messageId,feedbackType:'thumbs_up'};
     case 'POST /v1/conversations/fetch/chunks/text': return {chunks:[{bucketName:'REPLACE_ME',fileName:'REPLACE_ME.pdf',chunkId:0}]};
     case 'POST /v1/files/download': return {bucketName:'REPLACE_ME',fileName:'REPLACE_ME.pdf'};
@@ -114,15 +143,55 @@ function requestBody(path,method,c=cfg()){
   }
 }
 
+function targetUrl(baseUrl,path){
+  const b=baseUrl.endsWith('/')?baseUrl:baseUrl+'/';
+  const u=new URL(path.replace(/^\//,''),b);
+  if(u.protocol!=='https:') throw new Error('TSH Base URL חייב להיות HTTPS');
+  return u.toString();
+}
+async function directRequest({method,path,body,token,stream=false}){
+  const c=cfg(); const url=targetUrl(c.baseUrl,path);
+  const headers={'Accept':'application/json, text/event-stream, */*'};
+  const tok=token===undefined?c.token:token; if(tok) headers.Authorization=tok.startsWith('Bearer ')?tok:`Bearer ${tok}`;
+  let payload;
+  if(body!==undefined && body!==null && method.toUpperCase()!=='GET'){headers['Content-Type']='application/json';payload=JSON.stringify(body);}
+  const started=Date.now();
+  let res;
+  try{res=await fetch(url,{method:method.toUpperCase(),headers,body:payload});}
+  catch(e){throw new Error('Browser Direct נכשל. ייתכן CORS או שאין גישה מהרשת הנוכחית ל-TSH. נסה Postman מתוך SH/TSH. '+(e.message||''));}
+  const ct=res.headers.get('content-type')||'';
+  if(stream||ct.includes('text/event-stream')) return {status:res.status,stream:res.body,headers:res.headers,latencyMs:Date.now()-started};
+  const txt=await res.text(); let parsed=txt; try{parsed=JSON.parse(txt)}catch{}
+  return {status:res.status,body:parsed,raw:txt,latencyMs:Date.now()-started,contentType:ct,isBinary:false};
+}
 async function proxy({method,path,body,token,stream=false}){
   const c=cfg(); if(state.demo) return demoResponse(method,path,body,stream);
   if(!c.baseUrl) throw new Error('יש להזין TSH Base URL');
+  if(c.executionMode==='postman') throw new Error('מצב Postman/cURL אינו מריץ בקשות מהדפדפן. השתמש בכפתור "העתק cURL" והרץ בתוך הסביבה הפנימית.');
+  if(c.executionMode==='direct') return directRequest({method,path,body,token,stream});
   const res=await fetch('/api/proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({baseUrl:c.baseUrl,token:token===undefined?c.token:token,method,apiPath:path,body,stream})});
   if(stream){ return {status:res.status,stream:res.body,headers:res.headers}; }
   const wrapper=await res.json();
   if(!res.ok) throw new Error(wrapper.error||'Proxy error');
   let parsed=wrapper.body; try{parsed=JSON.parse(wrapper.body)}catch{}
   return {status:wrapper.upstreamStatus, body:parsed, raw:wrapper.body, latencyMs:wrapper.latencyMs, contentType:wrapper.contentType, isBinary:wrapper.isBinary};
+}
+function buildCurl(method,path,body){
+  const c=cfg(); const base=c.baseUrl||'<TSH_BASE_URL>'; let url;
+  try{url=targetUrl(base,path)}catch{url=`${base.replace(/\/$/,'')}${path}`;}
+  const parts=[`curl -i -X ${method.toUpperCase()} '${url}'`,`  -H 'Authorization: Bearer <BEARER_TOKEN>'`,`  -H 'Accept: application/json, text/event-stream, */*'`];
+  if(body!==undefined && body!==null && method.toUpperCase()!=='GET'){
+    parts.push(`  -H 'Content-Type: application/json'`);
+    const json=JSON.stringify(body).replace(/'/g,"'\\''");
+    parts.push(`  --data '${json}'`);
+  }
+  return parts.join(' \\\n');
+}
+async function copyCurl(){
+  const o=state.operations[+$('endpointSelect').value||0]; if(!o)return;
+  let b; try{b=JSON.parse($('apiBody').value||'{}')}catch{alert('Request JSON אינו תקין');return;}
+  const txt=buildCurl(o.method,o.path,o.method==='GET'?undefined:b);
+  try{await navigator.clipboard.writeText(txt);const btn=$('copyCurlBtn');const old=btn.textContent;btn.textContent='cURL הועתק ✓';setTimeout(()=>btn.textContent=old,1500);}catch{prompt('העתק cURL',txt);}
 }
 function demoResponse(method,path,body,stream){
   if(stream){
@@ -243,7 +312,7 @@ async function happyFlow(){
       let body=requestBody(path,method,{...cfg(),conversationId});
       if(path==='/v1/conversations/new') body={appId:c.appId,userId:c.userId,...(c.caseId?{caseId:c.caseId}:{})};
       if(path==='/v1/conversations/history') body={appId:c.appId,userId:c.userId,...(c.caseId?{caseId:c.caseId}:{}),limit:20,offset:0};
-      if(path==='/v1/conversations/messages') body={conversationId,userId:c.userId,appId:c.appId,caseId:c.caseId,content:$('flowQuestion').value.trim()||'בדיקת QA'};
+      if(path==='/v1/conversations/messages') body={conversationId,userId:c.userId,appId:c.appId,...(c.caseId?{caseId:c.caseId}:{}),content:$('flowQuestion').value.trim()||'בדיקת QA'};
       if(path==='/v1/conversations/id') body={conversationId,userId:c.userId};
       let r;
       if(path==='/v1/conversations/messages'){
@@ -266,31 +335,41 @@ function renderCatalog(){
     const r=state.results[t.ID]; return `<tr><td>${esc(t.ID)}</td><td class="${t.priority.toLowerCase()}">${t.priority}</td><td class="mode-${t.mode}">${modeLabel(t.mode)}</td><td>${esc(t['תחום'])}</td><td dir="ltr">${esc(t.Endpoint)}</td><td>${esc(t['תרחיש בדיקה'])}</td><td>${esc(t['Expected Result'])}</td><td>${esc(t['שאלה פתוחה / נדרש אישור'])}</td><td class="${r?statusClass(r.status):''}">${r?esc(r.status):'Not Run'}</td><td><div class="actions-row"><button class="btn test-run" data-id="${t.ID}">${t.mode==='manual'?'סמן':'Run'}</button><button class="btn ghost test-open" data-id="${t.ID}">פרטים</button></div></td></tr>`}).join('')}</tbody></table>`;
   document.querySelectorAll('.test-run').forEach(b=>b.onclick=()=>{const t=state.tests.find(x=>x.ID===b.dataset.id); if(t?.mode==='manual') openTest(b.dataset.id); else runTest(b.dataset.id);}); document.querySelectorAll('.test-open').forEach(b=>b.onclick=()=>openTest(b.dataset.id));
 }
-function renderQuestions(){ $('questionsTable').innerHTML=`<table class="qa-table"><thead><tr><th>Test ID</th><th>תחום</th><th>Endpoint</th><th>שאלה</th><th>למה נדרש</th></tr></thead><tbody>${state.questions.map(q=>`<tr><td>${esc(q['Test ID'])}</td><td>${esc(q['תחום'])}</td><td dir="ltr">${esc(q.Endpoint)}</td><td>${esc(q['שאלה פתוחה'])}</td><td>${esc(q['מקור / למה נדרש'])}</td></tr>`).join('')}</tbody></table>`; }
-function renderKpis(){ $('kpiTotal').textContent=state.tests.length; $('kpiAuto').textContent=state.tests.filter(t=>t.mode!=='manual').length; $('kpiPass').textContent=Object.values(state.results).filter(r=>r.status==='PASS').length; $('kpiFail').textContent=Object.values(state.results).filter(r=>r.status==='FAIL').length; $('kpiOpen').textContent=state.questions.length; }
+function renderQuestions(){ $('questionsTable').innerHTML=`<table class="qa-table"><thead><tr><th>Test ID</th><th>תחום</th><th>Endpoint</th><th>שאלה</th><th>למה נדרש</th><th>Status</th></tr></thead><tbody>${state.questions.map(q=>{const st=(q.Status||'Open').toLowerCase().replace(/\s+/g,'-');return `<tr><td>${esc(q['Test ID'])}</td><td>${esc(q['תחום'])}</td><td dir="ltr">${esc(q.Endpoint)}</td><td>${esc(q['שאלה פתוחה'])}</td><td>${esc(q['מקור / למה נדרש'])}</td><td class="status-${st}">${esc(q.Status||'Open')}</td></tr>`}).join('')}</tbody></table>`; }
+function renderContext(){
+  const c=state.context; if(!c)return;
+  if($('knownFacts')) $('knownFacts').innerHTML=c.knownFacts.map(x=>`<div class="context-card"><h3>${esc(x.title)}</h3><div class="context-value">${esc(x.value)}</div><p>${esc(x.detail)}</p></div>`).join('');
+  if($('pendingFacts')) $('pendingFacts').innerHTML=c.pending.map(x=>`<div class="context-card ${String(x.priority).toLowerCase()}"><h3>${esc(x.priority)} · ${esc(x.title)}</h3><p>${esc(x.detail)}</p></div>`).join('');
+  if($('architectureTable')) $('architectureTable').innerHTML=`<table class="qa-table"><thead><tr><th>Component</th><th>תפקיד</th><th>QA Focus</th></tr></thead><tbody>${c.architecture.map(x=>`<tr><td><b>${esc(x.component)}</b></td><td>${esc(x.role)}</td><td>${esc(x.qa)}</td></tr>`).join('')}</tbody></table>`;
+  if($('candidateTests')) $('candidateTests').innerHTML=`<table class="qa-table"><thead><tr><th>Priority</th><th>Risk</th><th>Scenario</th><th>Expected</th></tr></thead><tbody>${c.candidateTests.map(x=>`<tr><td class="${x.priority.toLowerCase()}">${esc(x.priority)}</td><td>${esc(x.risk)}</td><td>${esc(x.scenario)}</td><td>${esc(x.expected)}</td></tr>`).join('')}</tbody></table>`;
+  if($('referenceLinks')) $('referenceLinks').innerHTML=c.references.map(x=>`<a class="reference-card" href="${esc(x.url)}" target="_blank" rel="noopener noreferrer"><span><b>${esc(x.label)}</b><br><small>${esc(x.type)}</small></span><span>↗</span></a>`).join('');
+}
+
+function renderKpis(){ $('kpiTotal').textContent=state.tests.length; $('kpiAuto').textContent=state.tests.filter(t=>t.mode!=='manual').length; $('kpiPass').textContent=Object.values(state.results).filter(r=>r.status==='PASS').length; $('kpiFail').textContent=Object.values(state.results).filter(r=>r.status==='FAIL').length; $('kpiOpen').textContent=state.questions.filter(q=>(q.Status||'Open')==='Open').length; }
 function renderReport(){ const rs=Object.values(state.results); $('reportTable').innerHTML=rs.length?`<table class="qa-table"><thead><tr><th>ID</th><th>Status</th><th>Actual</th><th>Details</th><th>Time</th></tr></thead><tbody>${rs.map(r=>`<tr><td>${r.id}</td><td class="${statusClass(r.status)}">${r.status}</td><td>${esc(r.actual)}</td><td>${esc(r.details)}</td><td dir="ltr">${r.time}</td></tr>`).join('')}</tbody></table>`:'אין תוצאות עדיין.'; }
-function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderContract();readiness();}
+function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderContract();renderContext();readiness();}
 
 function populateEndpoints(){ const s=$('endpointSelect'); s.innerHTML=state.operations.map((o,i)=>`<option value="${i}">${o.method} ${o.path} — ${esc(o.operationId)}</option>`).join(''); s.onchange=syncApiTemplate; syncApiTemplate(); }
 function syncApiTemplate(){ const o=state.operations[+$('endpointSelect').value||0]; if(!o)return; $('apiMethod').value=o.method; $('apiBody').value=JSON.stringify(requestBody(o.path,o.method),null,2); }
-async function apiRun(){ try{const o=state.operations[+$('endpointSelect').value||0]; let b; try{b=JSON.parse($('apiBody').value||'{}')}catch{throw new Error('Request JSON אינו תקין');} const isStream=o.path==='/v1/conversations/messages'; const r=await proxy({method:o.method,path:o.path,body:(o.method==='GET'?undefined:b),stream:isStream}); if(isStream){$('apiResponse').textContent=''; const txt=await readStream(r.stream,(c,f)=>$('apiResponse').textContent=f.slice(-10000)); $('apiMeta').textContent=`HTTP ${r.status}\nSSE`; const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid;} else {$('apiResponse').textContent=typeof r.body==='string'?r.body:JSON.stringify(r.body,null,2);$('apiMeta').textContent=`HTTP ${r.status}\n${r.latencyMs??''} ms\n${r.contentType??''}`;} }catch(e){$('apiResponse').textContent=e.message;$('apiMeta').textContent='BLOCKED';} }
-async function aiRun(){ try{const c=requireFields(['conversationId','appId','userId']); const body={conversationId:c.conversationId,userId:c.userId,appId:c.appId,caseId:c.caseId,content:$('aiPrompt').value.trim()}; $('aiStream').textContent=''; const r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); const txt=await readStream(r.stream,(ch,full)=>{$('aiStream').textContent=full.slice(-15000);renderSseEvents(full);}); renderSseEvents(txt); const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid; }catch(e){$('aiStream').textContent=e.message;} }
+async function apiRun(){ try{const o=state.operations[+$('endpointSelect').value||0]; let b; try{b=JSON.parse($('apiBody').value||'{}')}catch{throw new Error('Request JSON אינו תקין');} if(cfg().executionMode==='postman'){const curl=buildCurl(o.method,o.path,o.method==='GET'?undefined:b);$('apiResponse').textContent=curl;$('apiMeta').textContent='POSTMAN / cURL MODE — לא נשלחה בקשה';return;} const isStream=o.path==='/v1/conversations/messages'; const r=await proxy({method:o.method,path:o.path,body:(o.method==='GET'?undefined:b),stream:isStream}); if(isStream){$('apiResponse').textContent=''; const txt=await readStream(r.stream,(c,f)=>$('apiResponse').textContent=f.slice(-10000)); $('apiMeta').textContent=`HTTP ${r.status}\nSSE`; const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid;} else {$('apiResponse').textContent=typeof r.body==='string'?r.body:JSON.stringify(r.body,null,2);$('apiMeta').textContent=`HTTP ${r.status}\n${r.latencyMs??''} ms\n${r.contentType??''}`;} }catch(e){$('apiResponse').textContent=e.message;$('apiMeta').textContent='BLOCKED';} }
+async function aiRun(){ try{const c=requireFields(['conversationId','appId','userId']); const body={conversationId:c.conversationId,userId:c.userId,appId:c.appId,...(c.caseId?{caseId:c.caseId}:{}),content:$('aiPrompt').value.trim()}; $('aiStream').textContent=''; const r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); const txt=await readStream(r.stream,(ch,full)=>{$('aiStream').textContent=full.slice(-15000);renderSseEvents(full);}); renderSseEvents(txt); const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid; }catch(e){$('aiStream').textContent=e.message;} }
 
 function exportBlob(name,type,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 function exportJson(){exportBlob(`qa-report-${Date.now()}.json`,'application/json',JSON.stringify({generatedAt:now(),environment:cfg().baseUrl,results:Object.values(state.results),aiRating:state.aiRating},null,2));}
 function exportCsv(){const rows=[['ID','Status','Actual','Details','Time'],...Object.values(state.results).map(r=>[r.id,r.status,r.actual,r.details,r.time])];const csv=rows.map(row=>row.map(x=>'"'+String(x??'').replace(/"/g,'""')+'"').join(',')).join('\n');exportBlob(`qa-report-${Date.now()}.csv`,'text/csv;charset=utf-8','\ufeff'+csv);}
 
-async function health(){ try{const r=await proxy({method:'GET',path:'/health'}); const ok=r.status===200; setConn(ok?`מחובר · HTTP ${r.status}`:`HTTP ${r.status}`,ok?'pass':'fail');}catch(e){setConn(e.message,'fail');} }
+async function health(){ if(cfg().executionMode==='postman'){setConn('Postman mode · העתק cURL','question');return;} try{const r=await proxy({method:'GET',path:'/health'}); const ok=r.status===200; state.connectionOk=ok; setConn(ok?`מחובר · HTTP ${r.status}`:`HTTP ${r.status}`,ok?'pass':'fail'); readiness();}catch(e){state.connectionOk=false;setConn(e.message,'fail');readiness();} }
 function demo(){state.demo=!state.demo;$('demoBtn').textContent=state.demo?'Demo: ON':'Demo Mode';setConn(state.demo?'Demo Mode':'לא מחובר',state.demo?'question':'neutral');}
 
 function wire(){
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tabpage').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active');});
   $('searchTests').oninput=renderCatalog;$('priorityFilter').onchange=renderCatalog;$('modeFilter').onchange=renderCatalog;
-  $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('readinessBtn').onclick=readiness;$('copyQuestionsBtn').onclick=copyQuestions;$('runSafeP0').onclick=runSafeP0;$('runHappyFlow').onclick=happyFlow;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('aiRunBtn').onclick=aiRun;
+  $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('markTokenBtn').onclick=markTokenNow;$('readinessBtn').onclick=readiness;$('copyQuestionsBtn').onclick=copyQuestions;$('runSafeP0').onclick=runSafeP0;$('runHappyFlow').onclick=happyFlow;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('copyCurlBtn').onclick=copyCurl;$('aiRunBtn').onclick=aiRun;
   $('clearResults').onclick=()=>{state.results={};$('runSummary').innerHTML='';renderAll();};
   $('exportJson').onclick=exportJson;$('exportCsv').onclick=exportCsv;
-  ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',readiness)); $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));
+  ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',readiness)); $('executionMode').addEventListener('change',readiness); $('cloudAccessConfirmed').addEventListener('change',readiness); $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));
   document.querySelectorAll('[data-rating]').forEach(b=>b.onclick=()=>{state.aiRating={rating:b.dataset.rating,note:$('aiNote').value,time:now()};$('aiRating').textContent=`נבחר: ${b.dataset.rating}`;});
 }
 
+setInterval(updateTokenCountdown,1000);
 wire(); loadData().catch(e=>document.body.insertAdjacentHTML('beforeend',`<pre>${esc(e.message)}</pre>`));

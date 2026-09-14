@@ -1,0 +1,151 @@
+{
+  "version": "2026-09-14",
+  "knownFacts": [
+    {
+      "title": "יעד הבדיקות",
+      "value": "Router בסביבת TSH / NON-PROD",
+      "detail": "הגישה היא ישירות ל-Router, לא דרך Tool אחר. לצורך בדיקות נדרשת תקשורת בין TSH ל-NON-PROD."
+    },
+    {
+      "title": "Bearer Token",
+      "value": "מופק ע\"י הבודק דרך Google CLI",
+      "detail": "ה-Token מיוצר מחוץ לסביבה, מועבר פנימה, תקף כשעה ודורש משתמש ענן + הרשאה לשירות."
+    },
+    {
+      "title": "App ID",
+      "value": "Desktop",
+      "detail": "לשלב ההתנעה ניתן להשתמש בדוגמה שמופיעה ב-Swagger."
+    },
+    {
+      "title": "User ID",
+      "value": "האימייל השע\"מי של הבודק",
+      "detail": "לפי ההנחיה בצוות, יש להשתמש בכתובת האימייל הפנימית שמסתיימת ב-@taxes."
+    },
+    {
+      "title": "Case ID",
+      "value": "לא קריטי להתנעה",
+      "detail": "אפשר להשתמש בערך בדיקה בן 9 ספרות. Case אמיתי נדרש רק לתרחישים שרוצים לקשור לנתוני תיק/טקסט אמיתיים."
+    },
+    {
+      "title": "Base URL",
+      "value": "קיים אצל אנדריי - הערך עצמו עדיין לא הוזן כאן",
+      "detail": "ברגע שמתקבל ה-Base URL המדויק אפשר להתחיל להריץ בקשות אמיתיות."
+    }
+  ],
+  "pending": [
+    {
+      "priority": "BLOCKER",
+      "title": "TSH Base URL מדויק",
+      "detail": "הצוות ציין שהוא כבר נמסר לאנדריי, אך הערך עצמו לא הופיע בחומרים שסופקו."
+    },
+    {
+      "priority": "BLOCKER",
+      "title": "אימות הרשאת משתמש הענן",
+      "detail": "צריך לוודא שהמשתמש הענני שלך אכן מורשה להפעיל את השירות, ולא רק קיים ללא הרשאות."
+    },
+    {
+      "priority": "HIGH",
+      "title": "פקודת Google CLI המדויקת",
+      "detail": "ידוע שה-Token מופק ב-Google CLI ותקף שעה, אך הפקודה/ה-audience המדויקים אמורים להגיע במדריך של דן."
+    },
+    {
+      "priority": "HIGH",
+      "title": "Walkthrough עם הפיתוח",
+      "detail": "עדיין נדרש walkthrough של Happy Flow, State transitions, Delete behavior, RBAC וקודי שגיאה מדויקים."
+    }
+  ],
+  "architecture": [
+    {
+      "component": "Router / Master Agent",
+      "role": "ניתוב שאילתות, ניהול סשנים והפעלת Agents/Tools",
+      "qa": "Happy Flow, authorization, session isolation, routing correctness, error handling"
+    },
+    {
+      "component": "Vertex AI / Gemini",
+      "role": "LLM, embeddings ו-inference",
+      "qa": "איכות תשובה, latency, fallback, model errors"
+    },
+    {
+      "component": "Model Armor",
+      "role": "שכבת אבטחה ל-prompts/responses",
+      "qa": "Prompt Injection, מידע רגיש, תוכן מזיק, וידוא שאין bypass"
+    },
+    {
+      "component": "Sessions + Memory Bank",
+      "role": "State שיחה וזיכרון ארוך טווח",
+      "qa": "בידוד משתמשים/Cases, continuity, stale context, deletion/state consistency"
+    },
+    {
+      "component": "BigQuery",
+      "role": "Vectors, indexing וקריאות נתונים ל-RAG/Text2SQL",
+      "qa": "Source correctness, permissions, latest-version retrieval, consistency"
+    },
+    {
+      "component": "AlloyDB",
+      "role": "Sessions, metadata, state, logs ונתוני Statistics",
+      "qa": "Create/Delete state, auditability, data consistency, rollback after failures"
+    },
+    {
+      "component": "GCS",
+      "role": "מסמכים מקוריים, artifacts וקבצי ביניים",
+      "qa": "File/chunk access control, missing files, source integrity"
+    },
+    {
+      "component": "Statistics Service",
+      "role": "נתוני שימוש וביצועים",
+      "qa": "RBAC, aggregation correctness, privacy, date range edge cases"
+    },
+    {
+      "component": "Text2SQL",
+      "role": "שירות נפרד לתרגום עברית ל-SQL",
+      "qa": "Tool routing, auth, separation from Router state, SQL correctness"
+    }
+  ],
+  "candidateTests": [
+    {
+      "risk": "Model Armor bypass",
+      "priority": "P0",
+      "scenario": "Prompt Injection ישיר ועקיף דרך מסמך מקור",
+      "expected": "אין חשיפת system prompt/secrets ואין ביצוע הוראות זדוניות מתוך מקור"
+    },
+    {
+      "risk": "Memory leakage",
+      "priority": "P0",
+      "scenario": "User/Case חדש מקבל context משיחה קודמת של משתמש אחר",
+      "expected": "אין זליגת זיכרון או facts בין principals שונים"
+    },
+    {
+      "risk": "Router routing",
+      "priority": "P1",
+      "scenario": "שאלת Text2SQL מול שאלת RAG",
+      "expected": "ה-Router מפעיל את הכלי המתאים ומחזיר trace/source עקבי"
+    },
+    {
+      "risk": "AlloyDB state",
+      "priority": "P0",
+      "scenario": "כשל באמצע Create/Send/Delete",
+      "expected": "אין state חלקי/שבור; אפשר להמשיך או לשחזר בצורה מוגדרת"
+    },
+    {
+      "risk": "GCS authorization",
+      "priority": "P0",
+      "scenario": "ניסיון לקרוא file/chunk שלא שייך להרשאת המשתמש",
+      "expected": "גישה נחסמת ולא נחשפים metadata/content"
+    },
+    {
+      "risk": "Statistics privacy",
+      "priority": "P1",
+      "scenario": "משתמש רגיל פונה ל-statistics",
+      "expected": "גישה בהתאם ל-RBAC בלבד וללא זליגת user/email/token usage"
+    }
+  ],
+  "references": [
+    {"label": "Notebook / Project reference 1", "url": "https://notebooklm.link.google/tSENWSkwPxRx", "type": "Notebook"},
+    {"label": "Notebook / Project reference 2", "url": "https://notebooklm.link.google/bUPOsyUdnwIk", "type": "Notebook"},
+    {"label": "TextSQL Lovable UI", "url": "https://textsql.lovable.app/", "type": "App"},
+    {"label": "Text2SQL Cloud Run", "url": "https://text2sql-511863960484.me-west1.run.app/", "type": "Service"},
+    {"label": "chat-router source", "url": "https://shaam-git-instances-189308823345.me-west1.sourcemanager.dev/ita-malta-prod-git/chat-router", "type": "Source Repo"},
+    {"label": "execution-instructions-rag-service", "url": "https://shaam-git-instances-189308823345.me-west1.sourcemanager.dev/ita-malta-prod-git/execution-instructions-rag-service", "type": "Source Repo"},
+    {"label": "execution-instructions-indexer-service", "url": "https://shaam-git-instances-189308823345.me-west1.sourcemanager.dev/ita-malta-prod-git/execution-instructions-indexer-service", "type": "Source Repo"}
+  ]
+}

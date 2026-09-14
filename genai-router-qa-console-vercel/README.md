@@ -1,18 +1,16 @@
-# GenAI Router QA Console v1.1
+# GenAI Router QA Console v1.2
 
-כלי QA ל-Router API 1.0.6.
+QA console for Router Swagger 1.0.6, enriched with project context received on 2026-09-14.
 
-## מה נוסף ב-v1.1
-- Readiness checklist: TSH URL, Bearer Token, App ID, User ID, Case ID.
-- כפתור להעתקת 3 השאלות הקריטיות לצוות הפיתוח.
-- מסך פערי API Contract מרכזיים.
-- חלון פרטי Test Case ואפשרות לסמן בדיקה ידנית PASS / FAIL / BLOCKED / QUESTION עם הערה.
-- SSE Inspector שמפרק אירועים ומסמן `thought` לבדיקה מיוחדת של דליפת reasoning.
-- Proxy מוקשח: רק 23 הפעולות שב-Swagger, HTTPS בלבד, חסימת localhost/private IP, timeout ומגבלת payload.
-- Token נשאר בזיכרון הדפדפן בלבד ואינו נכלל בדוחות.
+## v1.2 changes
+- TSH execution modes: Browser Direct, Vercel Proxy, or Postman/cURL generator.
+- Bearer token helper: Google CLI flow note + 60-minute expiry countdown.
+- Default App ID `Desktop` and sample Case ID `123456789` per Swagger/team guidance.
+- User ID guidance for the internal `@taxes` email.
+- New project-context tab: known facts, remaining blockers, architecture map, candidate architecture tests and reference links.
+- Contract gaps updated with TSH/NON-PROD networking, AlloyDB state/logs, Model Armor, GCS and service-account boundaries.
+- Test catalog still contains the original 78 Swagger scenarios; 3 open questions are now marked partially clarified.
+- cURL generation never embeds the real bearer token; it uses `<BEARER_TOKEN>` placeholder.
 
-## לפני הרצה אמיתית
-נדרשים: TSH Base URL, Bearer Token תקין, App ID, User ID, Case ID.
-
-## הערת רשת
-אם סביבת TSH נגישה רק מתוך VPN/רשת פנימית, Vercel ציבורי לא יוכל להגיע אליה. במקרה כזה יש להריץ את הכלי מקומית/מתוך הרשת או להגדיר קישוריות מאושרת.
+## Important
+A public Vercel deployment may not be able to reach an internal TSH endpoint. Prefer Browser Direct from an authorized network or copy the generated cURL into Postman inside SH/TSH.

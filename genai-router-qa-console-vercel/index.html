@@ -10,10 +10,10 @@
   <header class="topbar">
     <div>
       <h1>GenAI Router QA Console</h1>
-      <p>כלי בדיקות ל־Swagger של Router 1.0.6 — ידני + אוטומטי</p>
+      <p>כלי QA ל־Router 1.0.6 — Swagger + TSH + ארכיטקטורה + Postman</p>
     </div>
     <div class="top-actions">
-      <span class="badge version">v1.1</span>
+      <span class="badge version">v1.2</span>
       <span id="connectionBadge" class="badge neutral">לא מחובר</span>
       <button id="demoBtn" class="btn ghost">Demo Mode</button>
     </div>
@@ -22,21 +22,23 @@
   <main>
     <section class="card setup">
       <div class="section-head">
-        <div><h2>1. הגדרת סביבת בדיקה</h2><p>ה־Token נשמר בזיכרון הדפדפן בלבד ואינו נשמר בדוחות או ב־localStorage.</p></div>
-        <button id="healthBtn" class="btn">בדיקת חיבור</button>
+        <div><h2>1. הגדרת סביבת בדיקה</h2><p>ה־Token נשמר בזיכרון הדפדפן בלבד. לפי הצוות הוא מופק ב־Google CLI, תקף כשעה ומחייב משתמש ענן מורשה.</p></div>
+        <div class="actions-row"><button id="healthBtn" class="btn">בדיקת חיבור</button><button id="markTokenBtn" class="btn ghost">Token הופק עכשיו</button></div>
       </div>
       <div class="grid cols-3">
-        <label>TSH Base URL<input id="baseUrl" placeholder="https://..." autocomplete="off"></label>
-        <label>Bearer Token<input id="token" type="password" placeholder="Token של Text-to-SQL" autocomplete="off"></label>
-        <label>App ID<input id="appId" placeholder="appId"></label>
-        <label>User ID A<input id="userId" placeholder="qa.user@..." inputmode="email"></label>
-        <label>Case ID<input id="caseId" placeholder="9 ספרות"></label>
+        <label>TSH Base URL<input id="baseUrl" placeholder="מחכה ל־Base URL מאנדריי" autocomplete="off"></label>
+        <label>Bearer Token<input id="token" type="password" placeholder="Google CLI token · תוקף ~שעה" autocomplete="off"><small id="tokenExpiry" class="field-help">לא סומן זמן הפקה</small></label>
+        <label>Execution Mode<select id="executionMode"><option value="direct">Browser Direct → Router (מומלץ בתוך SH/TSH)</option><option value="proxy">Vercel Proxy (רק אם היעד ציבורי)</option><option value="postman">Postman / cURL generator בלבד</option></select></label>
+        <label>App ID<input id="appId" value="Desktop" placeholder="Desktop"></label>
+        <label>User ID A<input id="userId" placeholder="האימייל השע״מי שלך …@taxes" inputmode="email"></label>
+        <label>Case ID<input id="caseId" value="123456789" placeholder="9 ספרות"></label>
         <label>User ID B (אופציונלי)<input id="userIdB" placeholder="לבדיקות הרשאה"></label>
         <label>Token B (אופציונלי)<input id="tokenB" type="password" placeholder="Token של משתמש B" autocomplete="off"></label>
         <label>Conversation ID<input id="conversationId" placeholder="מתמלא אוטומטית"></label>
         <label>Message ID<input id="messageId" placeholder="מתמלא אוטומטית"></label>
       </div>
-      <div class="notice">⚠️ השתמש רק ב־credentials של TSH/QA. לא ב־Production.</div>
+      <div class="notice">⚠️ השתמש רק ב־credentials של TSH/QA. לא ב־Production. אם ה־TSH פנימי, Vercel לא בהכרח יוכל להגיע אליו — השתמש ב־Browser Direct או העתק בקשה ל־Postman.</div>
+      <label class="checkline"><input id="cloudAccessConfirmed" type="checkbox"> <span>וידאתי שיש לי משתמש ענן והרשאה להפעיל את שירות ה־Router</span></label>
       <div class="readiness-head">
         <div><b>מוכנות להרצה אמיתית</b><span>האתר בודק מה חסר לפני שמתחילים.</span></div>
         <div class="actions-row"><button id="readinessBtn" class="btn">בדוק מוכנות</button><button id="copyQuestionsBtn" class="btn ghost">העתק שאלות לצוות</button></div>
@@ -51,13 +53,14 @@
       <button data-tab="api" class="tab">API Runner</button>
       <button data-tab="ai" class="tab">GenAI / RAG</button>
       <button data-tab="questions" class="tab">שאלות פתוחות</button>
+      <button data-tab="context" class="tab">מה התחדש / ארכיטקטורה</button>
       <button data-tab="contract" class="tab">פערי Contract</button>
       <button data-tab="report" class="tab">דוח</button>
     </nav>
 
     <section id="dashboard" class="tabpage active">
       <div class="card start-card">
-        <div class="section-head"><div><h2>מה צריך כדי להתחיל</h2><p>שלושת הנתונים הקריטיים: סביבת TSH, Token תקין ונתוני בדיקה.</p></div><span id="startBadge" class="badge question">ממתין לנתונים</span></div>
+        <div class="section-head"><div><h2>מה צריך כדי להתחיל</h2><p>החסמים להתנעה כרגע: Base URL מדויק, Token תקין והרשאת משתמש ענן; App ID ו־Case ID כבר קיבלו ברירות מחדל.</p></div><span id="startBadge" class="badge question">ממתין לנתונים</span></div>
         <div id="blockingSummary" class="blocking-summary"></div>
       </div>
       <div class="kpis">
@@ -108,7 +111,7 @@
 
     <section id="api" class="tabpage">
       <div class="card">
-        <div class="section-head"><div><h2>API Runner</h2><p>הרצה חופשית של כל Endpoint מה־Swagger.</p></div><button id="apiRunBtn" class="btn primary">Run</button></div>
+        <div class="section-head"><div><h2>API Runner</h2><p>הרצה חופשית של כל Endpoint מה־Swagger, או יצירת cURL ל־Postman/סביבה פנימית.</p></div><div class="actions-row"><button id="apiRunBtn" class="btn primary">Run</button><button id="copyCurlBtn" class="btn ghost">העתק cURL</button></div></div>
         <div class="grid cols-2">
           <label>Endpoint<select id="endpointSelect"></select></label>
           <label>Method<input id="apiMethod" readonly></label>
@@ -151,6 +154,32 @@
       </div>
     </section>
 
+
+    <section id="context" class="tabpage">
+      <div class="card">
+        <div class="section-head"><div><h2>מה כבר ידוע מהצוות</h2><p>המידע כאן מעודכן מהחומרים האחרונים ולא מחליף את ה־Swagger; הוא משלים את ה־API Contract.</p></div><span class="badge pass">Context 14/09</span></div>
+        <div id="knownFacts" class="context-grid"></div>
+      </div>
+      <div class="card">
+        <h2>מה עדיין חסר כדי להריץ אמת</h2>
+        <div id="pendingFacts" class="context-grid"></div>
+      </div>
+      <div class="card">
+        <h2>מפת מערכת → מה זה אומר ל־QA</h2>
+        <div id="architectureTable" class="table-wrap"></div>
+      </div>
+      <div class="card">
+        <h2>בדיקות ארכיטקטורה מומלצות</h2>
+        <p class="muted">אלו Candidate Tests שנוספו מהמסמך הארכיטקטוני; הם עדיין לא משנים את 78 תרחישי ה־Swagger עד לאישור הצוות.</p>
+        <div id="candidateTests" class="table-wrap"></div>
+      </div>
+      <div class="card">
+        <h2>קישורי פרויקט ורכיבי מקור</h2>
+        <p class="muted">קישורים שנשלחו בצוות. חלקם פנימיים ודורשים הרשאות.</p>
+        <div id="referenceLinks" class="reference-grid"></div>
+      </div>
+    </section>
+
     <section id="report" class="tabpage">
       <div class="card">
         <div class="section-head"><div><h2>Test Run Report</h2><p>ה־Token לעולם לא נכנס לדוח.</p></div><div><button id="exportJson" class="btn">Export JSON</button> <button id="exportCsv" class="btn ghost">Export CSV</button></div></div>
@@ -173,7 +202,7 @@
       </div>
     </form>
   </dialog>
-  <footer>GenAI Router QA Console · Swagger 1.0.6 · UI v1.1</footer>
+  <footer>GenAI Router QA Console · Swagger 1.0.6 · UI v1.2</footer>
   <script src="/app.js" type="module"></script>
 </body>
 </html>

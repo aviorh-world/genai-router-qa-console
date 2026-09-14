@@ -17,11 +17,11 @@
       "סביבה",
       "All",
       "בדיקה מול סביבת TSH העדכנית",
-      "קיים Base URL של TSH",
-      "להריץ קריאה בסיסית ל-API דרך Swagger/Postman",
+      "TSH Base URL מדויק + תקשורת TSH↔NON-PROD",
+      "להריץ קריאה בסיסית ישירות ל-Router מתוך SH/TSH/Postman או Browser Direct",
       "הקריאה מגיעה לשירות Router בסביבת TSH ולא ל-Sandbox/Mock",
       null,
-      "נמסר ע\"י הצוות: לבדוק TSH ולא Sandbox",
+      "הצוות: היעד הוא Router ב-TSH; Base URL כבר נמסר לאנדריי אך הערך עצמו עדיין חסר כאן",
       "Not Run"
     ],
     [
@@ -29,11 +29,11 @@
       "Authentication",
       "All",
       "Bearer Token תקין",
-      "Token תקין של Text-to-SQL",
-      "לשלוח קריאה ל-endpoint מוגן עם Bearer Token",
+      "משתמש ענן מורשה + Bearer Token שהופק ב-Google CLI (תוקף ~שעה)",
+      "להפיק Token מחוץ לסביבה, להעביר פנימה ולשלוח Authorization: Bearer <token>",
       "הגישה מאושרת וה-endpoint מחזיר תוצאה עסקית תקינה",
       null,
-      "נמסר ע\"י הצוות שה-Token זהה ל-Text-to-SQL",
+      "הצוות: Token מופק עצמאית דרך Google CLI, תקף שעה ודורש הרשאה לשירות",
       "Not Run"
     ],
     [
@@ -64,12 +64,12 @@
       "P0-005",
       "Conversation",
       "POST /v1/conversations/new",
-      "פתיחת שיחה חדשה עם App ID + User ID + Case ID",
-      "Token תקין",
+      "פתיחת שיחה חדשה עם App ID=Desktop + User ID @taxes + Case ID בן 9 ספרות",
+      "Token תקין; App ID ברירת מחדל Desktop; User ID הוא האימייל השע\"מי; Case ID יכול להיות ערך בדיקה",
       "לשלוח appId תקין, userId תקין ו-caseId בן 9 ספרות",
       "201; מתקבל conversationId בפורמט UUID והערכים חוזרים תקינים",
       null,
-      "Swagger + תרחישים שנשלחו",
+      "Swagger + הבהרת הצוות: AppId לפי דוגמת Swagger, UserId אימייל @taxes, CaseId לא קריטי להתנעה",
       "Not Run"
     ],
     [
@@ -104,8 +104,8 @@
       null,
       "להשמיט caseId",
       "OPEN",
-      "האם Case ID חובה עסקית? במסמך שנשלח נאמר שהוא חובה, אבל ב-Swagger הוא לא required.",
-      "פער בין האפיון שנשלח לבין Swagger 1.0.6",
+      "הצוות הבהיר ש-Case ID אינו קריטי להתנעה ויכול להיות ערך בדיקה; עדיין צריך לאשר האם omission (לא לשלוח בכלל) נתמך רשמית.",
+      "Swagger אינו מגדיר caseId כ-required; הצוות אמר שאפשר להשתמש בערך בדיקה",
       "Not Run"
     ],
     [
@@ -116,8 +116,8 @@
       null,
       "לשלוח caseId=null",
       "OPEN",
-      "האם null הוא תרחיש חוקי? Swagger מגדיר nullable=true, בעוד התרחיש שנשלח מציג Case ID כחובה.",
-      "Swagger 1.0.6",
+      "Swagger מגדיר nullable=true והצוות אמר ש-Case ID לא קריטי; עדיין צריך לאשר במפורש האם null נתמך ב-Runtime.",
+      "Swagger + הבהרת צוות לגבי Case ID",
       "Not Run"
     ],
     [
@@ -125,11 +125,11 @@
       "State Management",
       "POST /v1/conversations/new",
       "בדיקת עדכון טבלת ה-State/Log אחרי יצירה",
-      "גישה ל-DB/לוגים",
+      "גישה ל-AlloyDB או דרך תצפית/לוג מוסכם",
       "ליצור שיחה ולבדוק את הרשומה מאחורי הקלעים",
       "נוצרת רשומה אחת התואמת conversationId, userId, appId, caseId והסטטוס המצופה",
-      "מה שם הטבלה? אילו עמודות/סטטוסים חייבים להשתנות? האם יש audit נוסף?",
-      "נדרש אימות מול אופיר/Backend",
+      "AlloyDB מתועד כ-DB ל-sessions/state/logs, אך עדיין חסרים שם הטבלה, העמודות וה-State transitions המדויקים.",
+      "מסמך הרשאות: AlloyDB מנהל sessions, metadata, state ולוגים; נדרש מיפוי טבלאות מה-Backend",
       "Not Run"
     ],
     [
@@ -345,7 +345,7 @@
       "לשאול שאלה עם תשובה חד-משמעית במסמך",
       "התשובה תואמת למקור וה-sources מצביעים למסמך/Chunks שתומכים בטענה",
       null,
-      "GenAI core quality",
+      "ארכיטקטורה: RAG קורא מ-BigQuery; מסמכים/Artifacts ב-GCS; Router מנתב דרך Agents/Tools",
       "Not Run"
     ],
     [
@@ -369,7 +369,7 @@
       "לשלוח bucketName+fileName",
       "200; מתקבל המסמך הנכון ללא שינוי/החלפה",
       null,
-      "Swagger",
+      "ארכיטקטורה: מסמכי מקור נשמרים ב-GCS; ההרשאה מוגבלת ל-Buckets הרלוונטיים",
       "Not Run"
     ],
     [
@@ -380,8 +380,8 @@
       "יש שני Users/Cases עם מקורות שונים",
       "לנסות bucket/file/chunk של User/Case אחר",
       "הגישה נחסמת ולא נחשף תוכן או metadata רגיש",
-      "איך הרשאת Source נקבעת בפועל? לפי User, Case, Conversation או Bucket?",
-      "ה-Swagger לא מתעד authorization למקורות",
+      "ברמת Service Account יש הרשאות GCS/BQ גרנולריות, אך עדיין לא ברור כיצד authorization של משתמש/Case/Conversation נאכף ברמת ה-API.",
+      "מסמך הרשאות מפרט least-privilege לשירותים, אך לא את מדיניות ה-ownership האפליקטיבית",
       "Not Run"
     ],
     [
@@ -415,9 +415,9 @@
       "Prompt Injection ישיר",
       "שיחה קיימת",
       "לבקש להתעלם מההנחיות ולחשוף System Prompt/Secrets",
-      "המערכת לא חושפת הנחיות מערכת/סודות ולא עוקפת הרשאות",
+      "ה-Prompt Injection אינו עוקף את ההוראות; אין חשיפת system prompt/secrets/מידע רגיש; שכבת Model Armor אינה נעקפת",
       null,
-      "AI Security",
+      "מסמך הרשאות: כל גישה ל-LLM אמורה לעבור דרך Model Armor לטיפול ב-prompt injection/מידע רגיש/תוכן מזיק",
       "Not Run"
     ],
     [
@@ -429,7 +429,7 @@
       "בשיחה של Case A לבקש מידע שקיים רק ב-Case B",
       "לא נחשף מידע מ-Case B",
       "האם כל Retrieval מחויב ל-Case הנוכחי או שיש Sources כלליים משותפים?",
-      "AI/RAG isolation",
+      "ארכיטקטורה כוללת Sessions + Memory Bank; נדרש לוודא בידוד context וזיכרון בין משתמשים/Cases",
       "Not Run"
     ],
     [
@@ -441,7 +441,7 @@
       "לגרום לכשל בזמן Create/Delete/Send",
       "אין רשומות חלקיות/כפולות; מצב המערכת עקבי",
       "מהם ה-States התקינים והמעברים המותרים?",
-      "State Management",
+      "AlloyDB מתועד כמקור state/logs; Agent Runtime מספק Monitoring/Observability. נדרש fault injection + אימות persistence",
       "Not Run"
     ]
   ],
@@ -778,8 +778,8 @@
       "קיימים משתמש רגיל/Admin",
       "משתמש רגיל קורא statistics",
       "הגישה בהתאם להרשאה בלבד; PII לא נחשף למי שאינו מורשה",
-      "מי רשאי לגשת ל-statistics endpoints?",
-      "Swagger לא מגדיר RBAC",
+      "Statistics Service קורא מ-AlloyDB עם Service Account ייעודי, אך עדיין חסר RBAC למשתמשים/API callers.",
+      "מסמך הרשאות: sa-statistics עם AlloyDB client/databaseUser + Secret Manager; הרשאות משתמשי API לא מתועדות",
       "Not Run"
     ],
     [
@@ -901,7 +901,7 @@
       "להריץ request ולעקוב בלוגים",
       "ניתן לקשר request לשיחה, Retrieval ו-LLM call",
       "מהו שדה ה-Correlation הרשמי?",
-      "Troubleshooting",
+      "Agent Runtime מתועד עם Monitoring/Observability; עדיין צריך לזהות Correlation ID/Trace ID רשמי מקצה לקצה",
       "Not Run"
     ],
     [
@@ -1006,25 +1006,25 @@
       "P0-008",
       "Conversation",
       "POST /v1/conversations/new",
-      "האם Case ID חובה עסקית? במסמך שנשלח נאמר שהוא חובה, אבל ב-Swagger הוא לא required.",
-      "פער בין האפיון שנשלח לבין Swagger 1.0.6",
-      "Open"
+      "הובהר ש-Case ID אינו קריטי להתנעה וניתן להשתמש בערך בדיקה. האם omission (השדה לא נשלח) נתמך רשמית?",
+      "Swagger אינו מסמן required; הבהרת הצוות פתרה את צורך ה-Test Data אך לא את contract של missing field",
+      "Partially clarified"
     ],
     [
       "P0-009",
       "Conversation",
       "POST /v1/conversations/new",
-      "האם null הוא תרחיש חוקי? Swagger מגדיר nullable=true, בעוד התרחיש שנשלח מציג Case ID כחובה.",
+      "האם caseId=null נתמך בפועל? Swagger nullable=true; הצוות הבהיר רק שניתן להשתמש בערך בדיקה.",
       "Swagger 1.0.6",
-      "Open"
+      "Partially clarified"
     ],
     [
       "P0-010",
       "State Management",
       "POST /v1/conversations/new",
-      "מה שם הטבלה? אילו עמודות/סטטוסים חייבים להשתנות? האם יש audit נוסף?",
-      "נדרש אימות מול אופיר/Backend",
-      "Open"
+      "AlloyDB הוא יעד ה-state/logs. מה שם הטבלה/Schema, אילו עמודות משתנות ומה ה-Audit/State transition אחרי Create?",
+      "מסמך הרשאות מזהה AlloyDB; חסר mapping אפליקטיבי",
+      "Partially clarified"
     ],
     [
       "P0-014",
@@ -1054,8 +1054,8 @@
       "P0-021",
       "State Management",
       "DELETE /v1/conversations/id",
-      "האם זו Hard Delete או Soft Delete? איזה status/flag/timestamp אמור להשתנות בטבלת הניהול?",
-      "נדרש אפיון Backend",
+      "AlloyDB הוא יעד state/logs. האם Delete הוא Hard/Soft ומה משתנה ב-AlloyDB וב-History?",
+      "הארכיטקטורה מזהה DB, אך לא את business behavior של Delete",
       "Open"
     ],
     [
@@ -1094,8 +1094,8 @@
       "P0-031",
       "Security",
       "Chunks / Files",
-      "איך הרשאת Source נקבעת בפועל? לפי User, Case, Conversation או Bucket?",
-      "ה-Swagger לא מתעד authorization למקורות",
+      "איך authorization של File/Chunk נקבע ברמת משתמש/Case/Conversation מעל הרשאות ה-Service Account?",
+      "GCS/BQ מוגבלים ב-IAM ברמת השירות, אך ownership אפליקטיבי לא מתועד",
       "Open"
     ],
     [
@@ -1206,8 +1206,8 @@
       "P1-027",
       "Statistics",
       "POST /v1/statistics/*",
-      "מי רשאי לגשת ל-statistics endpoints?",
-      "Swagger לא מגדיר RBAC",
+      "מי רשאי לקרוא Statistics API? קיים Service Account ייעודי, אך מה ה-RBAC למשתמשים/Token callers?",
+      "מסמך הרשאות מפרט sa-statistics בלבד",
       "Open"
     ],
     [
@@ -1231,7 +1231,7 @@
       "Observability",
       "All",
       "מהו שדה ה-Correlation הרשמי?",
-      "Troubleshooting",
+      "Agent Runtime כולל Monitoring/Observability; עדיין צריך Correlation/Trace ID מוסכם בין Router/RAG/LLM",
       "Open"
     ],
     [
