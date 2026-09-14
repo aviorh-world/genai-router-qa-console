@@ -99,12 +99,13 @@
 <button class="btn" id="runBoundaryPack">▶ Run Boundary Pack</button>
 <button class="btn" id="runRagSpecPack">▶ RAG Spec Pack</button>
 <button class="btn" id="runHappyFlow">▶ Conversation Happy Flow</button>
-<button class="btn ghost" id="uiSelfTestBtn">בדיקת UI</button>
+<button class="btn ghost" id="uiSelfTestBtn">Console Self-Test</button>
 <button class="btn ghost" id="clearResults">איפוס תוצאות</button>
 </div>
 <div class="bulk-progress" hidden="" id="bulkProgress"><div class="bulk-progress-bar" id="bulkProgressBar"></div><span id="bulkProgressText"></span></div>
 <div class="run-summary" id="runSummary"></div>
 </div>
+<div class="card"><div class="section-head"><div><h2>מפת חבילות הבדיקות</h2><p>הדשבורד מפריד בין רכיב שנבדק, סוג הבדיקה וכלי ה־QA עצמו. Console Self-Test אינו בדיקת מוצר ואינו מעיד על תקינות ה־Router API.</p></div><span class="badge neutral">Coverage Map</span></div><div class="context-grid"><div class="context-card"><h3>Router / API</h3><p>Authentication · Conversations · Messages/SSE · State · Files/Chunks · Statistics</p></div><div class="context-card"><h3>AI Components</h3><p><button class="term-link" data-glossary="Routing">Routing</button> · RAG · <button class="term-link" data-glossary="Text2SQL">Text2SQL</button>. יעדי הניתוב המדויקים עדיין דורשים אישור Runtime.</p></div><div class="context-card"><h3>AI Quality</h3><p>Golden Regression · Retrieval · Grounding · Answer Correctness</p></div><div class="context-card"><h3>Cross-Cutting</h3><p>Security · Boundary/Negative · E2E/Happy Flow</p></div><div class="context-card"><h3>QA Tool — לא המוצר</h3><p><b>Console Self-Test</b>: בודק טאבים, כפתורים והודעות באתר הבדיקות עצמו בלבד.</p></div></div></div>
 <div class="card">
 <h2>מה האתר לא יכול לקבוע לבד</h2>
 <ul>
@@ -188,7 +189,7 @@
 <div class="context-grid" id="aiQaLessons"></div>
 </div>
 <div class="card"><h2>איך בודקים תשובת RAG בפועל?</h2><div class="pipeline-steps"><div class="pipeline-step"><span>1</span>שואלים שאלה שה־Expected שלה ידוע מראש</div><div class="pipeline-step"><span>2</span>בודקים את תשובת ה־AI מול תשובת הזהב — לא לפי ניסוח זהה אלא לפי העובדות</div><div class="pipeline-step"><span>3</span>בודקים את <button class="term-link" data-glossary="Source">Source</button> וה־<button class="term-link" data-glossary="Chunk">Chunk</button> שעליהם התשובה מבוססת</div><div class="pipeline-step"><span>4</span>בודקים שאין עובדות שלא נתמכות במקור — <button class="term-link" data-glossary="Hallucination">Hallucination</button></div><div class="pipeline-step"><span>5</span>שומרים תוצאה מול אותה גרסת Model / Prompt / Index כדי שאפשר יהיה להשוות רגרסיה</div></div></div>
-<div class="card"><h2>איך מסווגים כשל AI?</h2><div class="failure-grid"><div class="failure-card retrieval"><h3><button class="term-link" data-glossary="Retrieval Failure">Retrieval Failure</button></h3><p>המידע הנכון לא נמצא, Source/Chunk שגוי או רלוונטי דורג נמוך מדי.</p></div><div class="failure-card generation"><h3><button class="term-link" data-glossary="Generation Failure">Generation Failure</button></h3><p>ה־Chunk נכון, אבל ה־LLM ניסח תשובה שגויה/חסרה.</p></div><div class="failure-card grounding"><h3><button class="term-link" data-glossary="Grounding Failure">Grounding Failure</button></h3><p>התשובה מוסיפה או משנה טענה שאינה נתמכת ב־Context.</p></div><div class="failure-card security"><h3><button class="term-link" data-glossary="Authorization/Security Failure">Authorization/Security Failure</button></h3><p>המערכת חשפה מידע/Source/Chunk שאסור למשתמש לראות או עקפה Guardrail.</p></div></div></div>
+<div class="card"><h2>איך מסווגים כשל AI?</h2><div class="failure-grid"><div class="failure-card retrieval"><h3><button class="term-link" data-glossary="Retrieval Failure">Retrieval Failure</button></h3><p>המידע הנכון לא נמצא, Source/Chunk שגוי או רלוונטי דורג נמוך מדי.</p></div><div class="failure-card generation"><h3><button class="term-link" data-glossary="Generation Failure">Generation Failure</button></h3><p>ה־Chunk נכון, אבל ה־LLM ניסח תשובה שגויה/חסרה.</p></div><div class="failure-card grounding"><h3><button class="term-link" data-glossary="Grounding Failure">Grounding Failure</button></h3><p>התשובה מוסיפה או משנה טענה שאינה נתמכת ב־Context.</p></div><div class="failure-card security"><h3><button class="term-link" data-glossary="Authorization/Security Failure">Authorization/Security Failure</button></h3><p>המערכת חשפה מידע/Source/Chunk שאסור למשתמש לראות או עקפה Guardrail.</p></div><div class="failure-card"><h3><button class="term-link" data-glossary="Routing Failure">Routing Failure</button></h3><p>ה־Router זיהה Intent לא נכון או שלח את השאלה לרכיב הלא נכון, למשל RAG במקום Text2SQL.</p></div></div></div>
 <div class="card"><h2>Release Sanity מומלץ</h2><div class="pipeline-steps"><div class="pipeline-step"><span>1</span>מייבאים <button class="term-link" data-glossary="Golden Dataset">Golden Dataset</button> מאושר</div><div class="pipeline-step"><span>2</span>מתעדים Build + Model + Prompt + Index + Config</div><div class="pipeline-step"><span>3</span>מריצים את כל השאלות ומושכים Sources/Chunks</div><div class="pipeline-step"><span>4</span>עוברים רק על <button class="term-link" data-glossary="Review Queue">Review Queue</button></div><div class="pipeline-step"><span>5</span>משווים ל־<button class="term-link" data-glossary="Baseline">Baseline</button> ומפיקים Evidence לבאגים</div></div></div>
 </div>
 <div class="subpage" data-subpage="guideGlossary">
@@ -401,7 +402,7 @@
 <div class="dialog-body" id="dialogBody"></div>
 <div class="dialog-evidence" id="dialogEvidence"></div>
 <label>הערת QA<textarea id="manualNote" placeholder="מה בדקת ומה בפועל קרה?" rows="4"></textarea></label>
-<div class="grid cols-2 bug-classifier"><label>סיווג כשל<select id="manualBugCategory"><option value="">לא סווג</option><option>Retrieval Failure</option><option>Generation Failure</option><option>Grounding Failure</option><option>Authorization/Security Failure</option></select><span class="field-help">רלוונטי בעיקר ל־FAIL. הסבר במילון AI.</span></label><div class="bug-type-help"><button class="term-link" type="button" data-glossary="Failure Taxonomy">מה ההבדל בין 4 הסוגים?</button></div></div>
+<div class="grid cols-2 bug-classifier"><label>סיווג כשל<select id="manualBugCategory"><option value="">לא סווג</option><option>Retrieval Failure</option><option>Generation Failure</option><option>Grounding Failure</option><option>Authorization/Security Failure</option><option>Routing Failure</option></select><span class="field-help">רלוונטי בעיקר ל־FAIL. הסבר במילון AI.</span></label><div class="bug-type-help"><button class="term-link" type="button" data-glossary="Failure Taxonomy">מה ההבדל בין 4 הסוגים?</button></div></div>
 <div class="actions-row dialog-actions">
 <button class="btn" data-manual-status="PASS" type="button">PASS</button>
 <button class="btn" data-manual-status="FAIL" type="button">FAIL</button>
@@ -413,7 +414,7 @@
 </div>
 </form>
 </dialog>
-<footer>GenAI Router QA Console · Swagger 1.0.6 · UI v2.0</footer>
+<footer>GenAI Router QA Console · Swagger 1.0.6 · UI v2.1</footer>
 <script src="/app.js" type="module"></script>
 </body>
 </html>

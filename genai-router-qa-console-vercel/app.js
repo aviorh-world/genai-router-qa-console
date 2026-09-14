@@ -80,7 +80,8 @@ const BUG_CATEGORIES = [
   'Retrieval Failure',
   'Generation Failure',
   'Grounding Failure',
-  'Authorization/Security Failure'
+  'Authorization/Security Failure',
+  'Routing Failure'
 ];
 function bugCategoryOptions(selected=''){return `<option value="">לא סווג</option>`+BUG_CATEGORIES.map(x=>`<option ${x===selected?'selected':''}>${esc(x)}</option>`).join('');}
 function classifyGoldenReason(r={}){
@@ -120,7 +121,8 @@ const AI_QA_LESSONS = [
   {title:'7. גרסה היא חלק מהתוצאה',body:'כשמשווים רגרסיה צריך לדעת מול איזו גרסת Model, Prompt, Index/Corpus, Embedding/Chunking ו־Config הורצה הבדיקה. אחרת קשה להסביר למה תוצאה השתנתה.'},
   {title:'8. אוטומציה עוזרת — אבל לא כל Judge הוא אמת',body:'Similarity או LLM-as-a-Judge יכולים לסנן תוצאות ולהאיץ עבודה, אבל חייבים לכייל אותם מול Human/SME. במיוחד במיסוי, תשובה שנשמעת דומה יכולה להיות שגויה בפרט קטן.'},
   {title:'9. בדיקות חוזרות חושפות חוסר יציבות',body:'לתסריטים קריטיים כדאי לעיתים להריץ אותה שאלה כמה פעמים. אם פעם אחת היא נכונה ופעמיים שגויה, הממוצע חשוב יותר מהרצה מוצלחת בודדת.'},
-  {title:'10. אבטחה והרשאות הן חלק מאיכות AI',body:'RAG איכותי לא רק עונה נכון; הוא גם לא מחזיר מסמך, Chunk או מידע מקטגוריה שהמשתמש אינו מורשה לראות, ולא נופל ל־Prompt Injection.'}
+  {title:'10. אבטחה והרשאות הן חלק מאיכות AI',body:'RAG איכותי לא רק עונה נכון; הוא גם לא מחזיר מסמך, Chunk או מידע מקטגוריה שהמשתמש אינו מורשה לראות, ולא נופל ל־Prompt Injection.'},
+  {title:'11. בודקים גם את ה־Router וגם כל רכיב בנפרד',body:'ב־E2E שולחים שאלה דרך ה־Router ובודקים שה־Intent נותב ליכולת הנכונה. אם קיימים APIs ישירים ל־RAG/Text2SQL, מוסיפים Component Tests לכל רכיב כדי לבודד את מקור הכשל. יעדי הניתוב בפועל חייבים להיות מאומתים מול Runtime/Observability.'}
 ];
 
 const AI_GLOSSARY = [
@@ -196,7 +198,21 @@ const AI_GLOSSARY = [
   {term:'Idempotency',aliases:['אידמפוטנטיות'],desc:'היכולת לחזור על אותה פעולה בלי ליצור תוצאה כפולה לא רצויה. Retry אחרי Timeout של Send Message עלול ליצור שתי הודעות אם אין מנגנון Idempotency.'},
   {term:'Correlation ID',aliases:['Trace ID'],desc:'מזהה שמאפשר לקשור Request אחד בין Router, Retrieval, LLM, Tools ולוגים. הוא מקצר Debugging כי אפשר למצוא את כל האירועים של אותה הרצה.'},
   {term:'Latency / TTFT',aliases:['Time To First Token','זמן תגובה'],desc:'Latency הוא זמן התגובה; ב־Streaming חשוב במיוחד TTFT — הזמן עד ה־event/token הראשון — בנוסף לזמן הכולל עד done. את שניהם כדאי למדוד מול SLA מוגדר.'},
-  {term:'Clarification',aliases:['Clarification Policy','שאלת הבהרה'],desc:'התנהגות שבה המערכת מבקשת מידע נוסף כשהשאלה עמומה במקום לנחש. QA בודק מתי מצופה Clarification, שהשאלה באמת מועילה ושלא נוצר Hallucination במקום הבהרה.'}
+  {term:'Clarification',aliases:['Clarification Policy','שאלת הבהרה'],desc:'התנהגות שבה המערכת מבקשת מידע נוסף כשהשאלה עמומה במקום לנחש. QA בודק מתי מצופה Clarification, שהשאלה באמת מועילה ושלא נוצר Hallucination במקום הבהרה.'},
+  {term:'Routing',aliases:['AI Routing','ניתוב'],desc:'החלטת ה־Router לאיזה Agent/Tool/יכולת להעביר את שאלת המשתמש. בדיקת QA טובה מגדירה Expected Route ומנסה לאמת Actual Route דרך SSE, Tool event, Trace או Log — ולא מנחשת אותו רק לפי נוסח התשובה.'},
+  {term:'Intent Classification',aliases:['Intent Detection','זיהוי כוונה'],desc:'השלב שבו המערכת מסווגת מה המשתמש מבקש כדי לבחור Route מתאים. לדוגמה, שאלה על נתון מובנה עשויה להתאים ל־Text2SQL ושאלה על נוהל למסלול מסמכים/RAG — אך החלוקה המדויקת בפרויקט חייבת להיות מאושרת מול הארכיטקטורה בפועל.'},
+  {term:'Routing Accuracy',aliases:[],desc:'אחוז שאלות שבהן Actual Route תואם ל־Expected Route המאושר. אפשר לבנות Golden Routing Dataset קטן של Question + Expected Route ולמדוד אותו בנפרד מאיכות התשובה.'},
+  {term:'Routing Failure',aliases:[],desc:'כשל שבו ה־Router שולח בקשה ליכולת הלא נכונה או לא מזהה נכון את ה־Intent. זהו סיווג נפרד: גם RAG וגם Text2SQL יכולים להיות תקינים בפני עצמם, אך ה־E2E ייכשל אם הניתוב ביניהם שגוי.'},
+  {term:'Component Test',aliases:['Component Testing','בדיקת רכיב'],desc:'בדיקה של רכיב מסוים בבידוד ככל האפשר, למשל RAG או Text2SQL ישירות. היא עוזרת להבדיל בין כשל פנימי ברכיב לבין כשל Routing/Integration. אפשר לבצע אותה רק אם יש Interface/Endpoint/כלי מתאים.'},
+  {term:'End-to-End Test',aliases:['E2E','בדיקת קצה לקצה'],desc:'בדיקה דרך נקודת הכניסה האמיתית של המוצר, מה־Request ועד התשובה הסופית. דרך Router API היא עשויה לכסות Router → Tool/Agent → Data/RAG → LLM → Response, ולכן כשל E2E לבדו לא תמיד אומר באיזה רכיב התקלה.'},
+  {term:'Integration Test',aliases:['בדיקת אינטגרציה'],desc:'בדיקה של החיבור בין רכיבים, למשל Router שמעביר Context והרשאות ל־RAG/Text2SQL ומקבל מהם תוצאה. המיקוד הוא בחוזה ובמעבר המידע בין השירותים.'},
+  {term:'Expected Route',aliases:[],desc:'היעד שאושר מראש עבור שאלת בדיקה, למשל RAG או Text2SQL. הוא צריך להגיע מאפיון/SME/צוות הארכיטקטורה ולא מהשערה של ה־QA.'},
+  {term:'Actual Route',aliases:[],desc:'היעד שאליו המערכת ניתבה בפועל. רצוי לזהות אותו מ־Observability — Tool/SSE/Trace/Log — ולא להסיק רק מהתשובה. Expected מול Actual מאפשר PASS/FAIL אוטומטי ל־Routing.'},
+  {term:'API Test',aliases:['API Testing'],desc:'בדיקה ישירה של Contract והתנהגות Endpoint: Request, Headers, Validation, HTTP status, Schema, State ו־Errors. אין צורך ב־UI של המוצר כדי לבצע API Testing.'},
+  {term:'Console Self-Test',aliases:['QA Tool Self-Test'],desc:'בדיקה של אתר ה־QA עצמו: שהטאבים, הכפתורים, Run All, הודעות שגיאה/הצלחה ורכיבי התצוגה עובדים. זו אינה בדיקת המוצר או Router API, ולכן יש להפריד אותה מספירת Product QA.'},
+  {term:'Boundary Test',aliases:['Boundary Value Analysis','בדיקת גבולות'],desc:'בדיקה סביב גבולות קלט: מינימום, מקסימום, בדיוק על הגבול ומעבר לו. לדוגמה limit=1/0 או אורך שדה מקסימלי+1. זהו סוג בדיקה שחוצה רכיבים ולא רכיב בפני עצמו.'},
+  {term:'Negative Test',aliases:['Negative Testing','בדיקה שלילית'],desc:'בדיקה שמכניסה קלט שגוי, חסר, לא מורשה או בלתי צפוי כדי לוודא שהמערכת נכשלת בצורה בטוחה וצפויה, עם status/error נכון וללא state שבור.'},
+  {term:'Test Dimension',aliases:['ממד בדיקה'],desc:'דרך להפריד בין שאלות שונות בדשבורד: מה נבדק (Component/Domain), איך נבדק (Boundary/Security/E2E), מה העדיפות (P0/P1/P2), ומה מצב ההרצה. ערבוב הממדים עלול ליצור Dashboard מבלבל.'}
 ];
 
 const ENDPOINT_GUIDE = {
@@ -868,7 +884,7 @@ function runUiSelfTest(){
   check('Demo אינו PASS אמיתי',true,'ב־Demo תוצאות אוטומטיות מסומנות DEMO');
   const failed=checks.filter(x=>!x.ok); state.uiSelfTest={time:now(),checks};
   $('runSummary').innerHTML=`<div class="ui-test-list">${checks.map(x=>`<div class="ui-test-item ${x.ok?'ok':'fail'}"><b>${x.ok?'✓':'✕'} ${esc(x.name)}</b>${x.detail?` — ${esc(x.detail)}`:''}</div>`).join('')}</div>`;
-  showToast(failed.length?`בדיקת UI מצאה ${failed.length} בעיות.`:`בדיקת UI עברה: ${checks.length} checks.` ,failed.length?'error':'success',5000);
+  showToast(failed.length?`Console Self-Test מצאה ${failed.length} בעיות.`:`Console Self-Test עברה: ${checks.length} checks.` ,failed.length?'error':'success',5000);
   return {ok:failed.length===0,checks};
 }
 
