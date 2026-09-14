@@ -1,11 +1,67 @@
 const state = {
   tests: [], questions: [], operations: [], results: {}, lastStream: '', aiRating: null,
-  demo: false, createdConversationId: null
+  demo: false, createdConversationId: null, selectedTestId: null
 };
 
 const $ = (id) => document.getElementById(id);
 const esc = (v='') => String(v ?? '').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const now = () => new Date().toISOString();
+
+const CONTRACT_GAPS = [
+  {severity:'HIGH',area:'Authentication',gap:'ב־Swagger לא מוגדר securityScheme של Bearer Token.',impact:'QA לא יכול לדעת מהחוזה הרשמי אילו endpoints דורשים Authentication.'},
+  {severity:'HIGH',area:'Environment',gap:'ה־servers ב־Swagger אינו מצביע על TSH האמיתי.',impact:'אי אפשר להתחיל הרצה אמיתית בלי Base URL חיצוני.'},
+  {severity:'HIGH',area:'Create Conversation',gap:'הצוות הגדיר Case ID כחובה, אך ב־Swagger הוא נראה nullable/optional.',impact:'לא ברור האם missing/null צריך להחזיר 4xx או להצליח.'},
+  {severity:'HIGH',area:'History / Messages',gap:'הדרישה העסקית היא 20 הודעות אחרונות, אבל הכמות והסדר אינם Contract מפורש.',impact:'לא ניתן לקבוע PASS/FAIL חד־משמעי לסדר ולגבול.'},
+  {severity:'MEDIUM',area:'Delete',gap:'לא מוגדר אם המחיקה Hard Delete או Soft Delete ומה מצב הרשומה לאחר מכן.',impact:'אימות DB/State נשאר ידני עד לקבלת Business Rule.'},
+  {severity:'MEDIUM',area:'Streaming',gap:'קיים event בשם thought ללא הגדרה האם זה Progress מסונן או reasoning פנימי.',impact:'נדרשת בדיקת אבטחה שאין חשיפת System Prompt/Chain-of-Thought.'},
+  {severity:'MEDIUM',area:'Message Length',gap:'Request מאפשר עד 32,768 תווים בעוד Message persisted/returned מתועד עד 8,192.',impact:'לא ברור מה Expected עבור הודעה גדולה מ־8,192.'}
+];
+
+function readiness(){
+  const c=cfg();
+  const items=[
+    ['TSH Base URL',!!c.baseUrl,'כתובת סביבת הבדיקות'],
+    ['Bearer Token',!!c.token,'Token תקין של Text-to-SQL'],
+    ['App ID',!!c.appId,'נתון בדיקה תקין'],
+    ['User ID',!!c.userId,'משתמש בדיקה'],
+    ['Case ID',!!c.caseId,'נדרש לפי דרישת הצוות']
+  ];
+  if($('readinessGrid')) $('readinessGrid').innerHTML=items.map(([n,ok,d])=>`<div class="ready-item ${ok?'ok':'missing'}"><b>${ok?'✓':'○'} ${esc(n)}</b><span>${esc(d)}</span></div>`).join('');
+  const core=[['TSH + Token',!!c.baseUrl&&!!c.token,'מאפשרים בכלל לשלוח בקשות לשרת'],['Test Data',!!c.appId&&!!c.userId&&!!c.caseId,'App ID + User ID + Case ID'],['Happy Flow',!!c.baseUrl&&!!c.token&&!!c.appId&&!!c.userId&&!!c.caseId,'ברגע שכל הקודמים קיימים אפשר להתחיל']];
+  if($('blockingSummary')) $('blockingSummary').innerHTML=core.map(([n,ok,d])=>`<div class="block-card"><b>${ok?'✅':'⏳'} ${esc(n)}</b><small>${esc(d)}</small></div>`).join('');
+  const all=core.every(x=>x[1]); const badge=$('startBadge'); if(badge){badge.textContent=all?'מוכן להרצה':'ממתין לנתונים';badge.className='badge '+(all?'pass':'question');}
+  return all;
+}
+function copyQuestions(){
+  const txt=`היי, כדי שאוכל להתחיל בדיקות בפועל חסרים לי כרגע 3 דברים קריטיים:\n1. ה־TSH Base URL המדויק + איך מקבלים Bearer Token תקין.\n2. App ID, User ID ו־Case ID תקינים לסביבת הבדיקות.\n3. walkthrough קצר של ה־Happy Flow המצופה: Create → Send Message → History/Fetch → Delete, ומה ה־Expected בכל שלב.`;
+  navigator.clipboard?.writeText(txt).then(()=>{const b=$('copyQuestionsBtn'); const old=b.textContent;b.textContent='הועתק ✓';setTimeout(()=>b.textContent=old,1500)}).catch(()=>alert(txt));
+}
+function renderContract(){
+  if(!$('contractTable')) return;
+  $('contractTable').innerHTML=`<table class="qa-table"><thead><tr><th>חומרה</th><th>תחום</th><th>פער</th><th>השפעה על QA</th></tr></thead><tbody>${CONTRACT_GAPS.map(g=>`<tr><td class="contract-severity sev-${g.severity.toLowerCase()}">${g.severity}</td><td>${esc(g.area)}</td><td>${esc(g.gap)}</td><td>${esc(g.impact)}</td></tr>`).join('')}</tbody></table>`;
+}
+function parseSse(text=''){
+  const events=[];
+  for(const block of String(text).split(/\n\n+/)){
+    const data=block.split(/\n/).filter(x=>x.startsWith('data:')).map(x=>x.slice(5).trim()).join('\n');
+    if(!data) continue;
+    try{const obj=JSON.parse(data);events.push(obj)}catch{events.push({type:'raw',data})}
+  }
+  return events;
+}
+function renderSseEvents(text){
+  const events=parseSse(text); if(!$('aiEvents')) return events;
+  $('aiEvents').innerHTML=events.length?events.map(e=>{const warn=String(e.type||'').toLowerCase()==='thought';return `<div class="event-chip ${warn?'warn':''}"><b>${esc(e.type||'unknown')}</b>${warn?' ⚠️ review for reasoning leakage':''}<br>${esc(JSON.stringify(e).slice(0,650))}</div>`}).join(''):'לא זוהו אירועי SSE.';
+  return events;
+}
+function openTest(id){
+  const t=state.tests.find(x=>x.ID===id); if(!t)return; state.selectedTestId=id;
+  $('dialogTitle').textContent=`${t.ID} — ${t['תרחיש בדיקה']||''}`; $('dialogSubtitle').textContent=`${t.priority} · ${modeLabel(t.mode)} · ${t.Endpoint||''}`;
+  $('dialogBody').innerHTML=[['תנאים מקדימים',t['תנאים מקדימים']],['צעדים / קלט',t['צעדים / קלט']],['Expected Result',t['Expected Result']],['שאלה פתוחה',t['שאלה פתוחה / נדרש אישור']],['מקור / הערה',t['מקור / הערה']]].filter(x=>x[1]).map(([a,b])=>`<div class="detail-row"><b>${esc(a)}</b>${esc(b)}</div>`).join('');
+  $('manualNote').value=state.results[id]?.details||''; $('dialogRunBtn').style.display=t.mode==='manual'?'none':'inline-block'; $('testDialog').showModal();
+}
+function saveManual(status){ const id=state.selectedTestId;if(!id)return; result(id,status,'Manual review',$('manualNote').value.trim()||'סומן ידנית');$('testDialog').close(); }
+
 
 function cfg(){
   return {
@@ -207,18 +263,18 @@ function renderCatalog(){
   const q=$('searchTests')?.value?.toLowerCase()||'', p=$('priorityFilter')?.value||'', m=$('modeFilter')?.value||'';
   const rows=state.tests.filter(t=>(!p||t.priority===p)&&(!m||t.mode===m)&&(!q||[t.ID,t['תחום'],t.Endpoint,t['תרחיש בדיקה']].join(' ').toLowerCase().includes(q)));
   $('testsTableWrap').innerHTML=`<table class="qa-table"><thead><tr><th>ID</th><th>רמה</th><th>מצב</th><th>תחום</th><th>Endpoint</th><th>תרחיש</th><th>Expected</th><th>שאלה פתוחה</th><th>תוצאה</th><th></th></tr></thead><tbody>${rows.map(t=>{
-    const r=state.results[t.ID]; return `<tr><td>${esc(t.ID)}</td><td class="${t.priority.toLowerCase()}">${t.priority}</td><td class="mode-${t.mode}">${modeLabel(t.mode)}</td><td>${esc(t['תחום'])}</td><td dir="ltr">${esc(t.Endpoint)}</td><td>${esc(t['תרחיש בדיקה'])}</td><td>${esc(t['Expected Result'])}</td><td>${esc(t['שאלה פתוחה / נדרש אישור'])}</td><td class="${r?statusClass(r.status):''}">${r?esc(r.status):'Not Run'}</td><td><button class="btn test-run" data-id="${t.ID}">${t.mode==='manual'?'סמן/פתח':'Run'}</button></td></tr>`}).join('')}</tbody></table>`;
-  document.querySelectorAll('.test-run').forEach(b=>b.onclick=()=>runTest(b.dataset.id));
+    const r=state.results[t.ID]; return `<tr><td>${esc(t.ID)}</td><td class="${t.priority.toLowerCase()}">${t.priority}</td><td class="mode-${t.mode}">${modeLabel(t.mode)}</td><td>${esc(t['תחום'])}</td><td dir="ltr">${esc(t.Endpoint)}</td><td>${esc(t['תרחיש בדיקה'])}</td><td>${esc(t['Expected Result'])}</td><td>${esc(t['שאלה פתוחה / נדרש אישור'])}</td><td class="${r?statusClass(r.status):''}">${r?esc(r.status):'Not Run'}</td><td><div class="actions-row"><button class="btn test-run" data-id="${t.ID}">${t.mode==='manual'?'סמן':'Run'}</button><button class="btn ghost test-open" data-id="${t.ID}">פרטים</button></div></td></tr>`}).join('')}</tbody></table>`;
+  document.querySelectorAll('.test-run').forEach(b=>b.onclick=()=>{const t=state.tests.find(x=>x.ID===b.dataset.id); if(t?.mode==='manual') openTest(b.dataset.id); else runTest(b.dataset.id);}); document.querySelectorAll('.test-open').forEach(b=>b.onclick=()=>openTest(b.dataset.id));
 }
 function renderQuestions(){ $('questionsTable').innerHTML=`<table class="qa-table"><thead><tr><th>Test ID</th><th>תחום</th><th>Endpoint</th><th>שאלה</th><th>למה נדרש</th></tr></thead><tbody>${state.questions.map(q=>`<tr><td>${esc(q['Test ID'])}</td><td>${esc(q['תחום'])}</td><td dir="ltr">${esc(q.Endpoint)}</td><td>${esc(q['שאלה פתוחה'])}</td><td>${esc(q['מקור / למה נדרש'])}</td></tr>`).join('')}</tbody></table>`; }
 function renderKpis(){ $('kpiTotal').textContent=state.tests.length; $('kpiAuto').textContent=state.tests.filter(t=>t.mode!=='manual').length; $('kpiPass').textContent=Object.values(state.results).filter(r=>r.status==='PASS').length; $('kpiFail').textContent=Object.values(state.results).filter(r=>r.status==='FAIL').length; $('kpiOpen').textContent=state.questions.length; }
 function renderReport(){ const rs=Object.values(state.results); $('reportTable').innerHTML=rs.length?`<table class="qa-table"><thead><tr><th>ID</th><th>Status</th><th>Actual</th><th>Details</th><th>Time</th></tr></thead><tbody>${rs.map(r=>`<tr><td>${r.id}</td><td class="${statusClass(r.status)}">${r.status}</td><td>${esc(r.actual)}</td><td>${esc(r.details)}</td><td dir="ltr">${r.time}</td></tr>`).join('')}</tbody></table>`:'אין תוצאות עדיין.'; }
-function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();}
+function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderContract();readiness();}
 
 function populateEndpoints(){ const s=$('endpointSelect'); s.innerHTML=state.operations.map((o,i)=>`<option value="${i}">${o.method} ${o.path} — ${esc(o.operationId)}</option>`).join(''); s.onchange=syncApiTemplate; syncApiTemplate(); }
 function syncApiTemplate(){ const o=state.operations[+$('endpointSelect').value||0]; if(!o)return; $('apiMethod').value=o.method; $('apiBody').value=JSON.stringify(requestBody(o.path,o.method),null,2); }
 async function apiRun(){ try{const o=state.operations[+$('endpointSelect').value||0]; let b; try{b=JSON.parse($('apiBody').value||'{}')}catch{throw new Error('Request JSON אינו תקין');} const isStream=o.path==='/v1/conversations/messages'; const r=await proxy({method:o.method,path:o.path,body:(o.method==='GET'?undefined:b),stream:isStream}); if(isStream){$('apiResponse').textContent=''; const txt=await readStream(r.stream,(c,f)=>$('apiResponse').textContent=f.slice(-10000)); $('apiMeta').textContent=`HTTP ${r.status}\nSSE`; const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid;} else {$('apiResponse').textContent=typeof r.body==='string'?r.body:JSON.stringify(r.body,null,2);$('apiMeta').textContent=`HTTP ${r.status}\n${r.latencyMs??''} ms\n${r.contentType??''}`;} }catch(e){$('apiResponse').textContent=e.message;$('apiMeta').textContent='BLOCKED';} }
-async function aiRun(){ try{const c=requireFields(['conversationId','appId','userId']); const body={conversationId:c.conversationId,userId:c.userId,appId:c.appId,caseId:c.caseId,content:$('aiPrompt').value.trim()}; $('aiStream').textContent=''; const r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); const txt=await readStream(r.stream,(ch,full)=>$('aiStream').textContent=full.slice(-15000)); const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid; }catch(e){$('aiStream').textContent=e.message;} }
+async function aiRun(){ try{const c=requireFields(['conversationId','appId','userId']); const body={conversationId:c.conversationId,userId:c.userId,appId:c.appId,caseId:c.caseId,content:$('aiPrompt').value.trim()}; $('aiStream').textContent=''; const r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); const txt=await readStream(r.stream,(ch,full)=>{$('aiStream').textContent=full.slice(-15000);renderSseEvents(full);}); renderSseEvents(txt); const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid; }catch(e){$('aiStream').textContent=e.message;} }
 
 function exportBlob(name,type,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 function exportJson(){exportBlob(`qa-report-${Date.now()}.json`,'application/json',JSON.stringify({generatedAt:now(),environment:cfg().baseUrl,results:Object.values(state.results),aiRating:state.aiRating},null,2));}
@@ -230,9 +286,10 @@ function demo(){state.demo=!state.demo;$('demoBtn').textContent=state.demo?'Demo
 function wire(){
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tabpage').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active');});
   $('searchTests').oninput=renderCatalog;$('priorityFilter').onchange=renderCatalog;$('modeFilter').onchange=renderCatalog;
-  $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('runSafeP0').onclick=runSafeP0;$('runHappyFlow').onclick=happyFlow;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('aiRunBtn').onclick=aiRun;
+  $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('readinessBtn').onclick=readiness;$('copyQuestionsBtn').onclick=copyQuestions;$('runSafeP0').onclick=runSafeP0;$('runHappyFlow').onclick=happyFlow;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('aiRunBtn').onclick=aiRun;
   $('clearResults').onclick=()=>{state.results={};$('runSummary').innerHTML='';renderAll();};
   $('exportJson').onclick=exportJson;$('exportCsv').onclick=exportCsv;
+  ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',readiness)); $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));
   document.querySelectorAll('[data-rating]').forEach(b=>b.onclick=()=>{state.aiRating={rating:b.dataset.rating,note:$('aiNote').value,time:now()};$('aiRating').textContent=`נבחר: ${b.dataset.rating}`;});
 }
 

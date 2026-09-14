@@ -13,6 +13,7 @@
       <p>כלי בדיקות ל־Swagger של Router 1.0.6 — ידני + אוטומטי</p>
     </div>
     <div class="top-actions">
+      <span class="badge version">v1.1</span>
       <span id="connectionBadge" class="badge neutral">לא מחובר</span>
       <button id="demoBtn" class="btn ghost">Demo Mode</button>
     </div>
@@ -36,6 +37,11 @@
         <label>Message ID<input id="messageId" placeholder="מתמלא אוטומטית"></label>
       </div>
       <div class="notice">⚠️ השתמש רק ב־credentials של TSH/QA. לא ב־Production.</div>
+      <div class="readiness-head">
+        <div><b>מוכנות להרצה אמיתית</b><span>האתר בודק מה חסר לפני שמתחילים.</span></div>
+        <div class="actions-row"><button id="readinessBtn" class="btn">בדוק מוכנות</button><button id="copyQuestionsBtn" class="btn ghost">העתק שאלות לצוות</button></div>
+      </div>
+      <div id="readinessGrid" class="readiness-grid"></div>
     </section>
 
     <nav class="tabs">
@@ -45,10 +51,15 @@
       <button data-tab="api" class="tab">API Runner</button>
       <button data-tab="ai" class="tab">GenAI / RAG</button>
       <button data-tab="questions" class="tab">שאלות פתוחות</button>
+      <button data-tab="contract" class="tab">פערי Contract</button>
       <button data-tab="report" class="tab">דוח</button>
     </nav>
 
     <section id="dashboard" class="tabpage active">
+      <div class="card start-card">
+        <div class="section-head"><div><h2>מה צריך כדי להתחיל</h2><p>שלושת הנתונים הקריטיים: סביבת TSH, Token תקין ונתוני בדיקה.</p></div><span id="startBadge" class="badge question">ממתין לנתונים</span></div>
+        <div id="blockingSummary" class="blocking-summary"></div>
+      </div>
       <div class="kpis">
         <div class="kpi"><b id="kpiTotal">78</b><span>תסריטים</span></div>
         <div class="kpi"><b id="kpiAuto">0</b><span>אוטומטיים/מסייעים</span></div>
@@ -115,7 +126,7 @@
         <div class="section-head"><div><h2>GenAI / RAG Inspector</h2><p>הרץ שאלה, ראה את אירועי ה־SSE וסמן איכות ידנית.</p></div><button id="aiRunBtn" class="btn primary">▶ שאל</button></div>
         <label>Prompt<textarea id="aiPrompt" rows="4">ענה על סמך מסמכי המקור בלבד. אם אין מספיק מידע, אמור שאין מספיק מידע.</textarea></label>
         <div class="result-grid">
-          <div><h3>Streaming / Answer</h3><pre id="aiStream">—</pre></div>
+          <div><h3>Streaming / Answer</h3><pre id="aiStream">—</pre><h3>אירועי SSE שזוהו</h3><div id="aiEvents" class="event-list">—</div></div>
           <div><h3>הערכת QA</h3>
             <div class="rating-buttons">
               <button data-rating="Correct" class="btn ghost">Correct</button>
@@ -133,6 +144,13 @@
 
     <section id="questions" class="tabpage"><div class="card"><h2>שאלות פתוחות</h2><div id="questionsTable" class="table-wrap"></div></div></section>
 
+    <section id="contract" class="tabpage">
+      <div class="card">
+        <div class="section-head"><div><h2>פערי API Contract שכבר זוהו</h2><p>אלו אינם Bugs בהכרח — אלו נקודות שדורשות החלטה/תיעוד כדי ש־QA ידע מהו Expected Result.</p></div></div>
+        <div id="contractTable" class="table-wrap"></div>
+      </div>
+    </section>
+
     <section id="report" class="tabpage">
       <div class="card">
         <div class="section-head"><div><h2>Test Run Report</h2><p>ה־Token לעולם לא נכנס לדוח.</p></div><div><button id="exportJson" class="btn">Export JSON</button> <button id="exportCsv" class="btn ghost">Export CSV</button></div></div>
@@ -140,7 +158,22 @@
       </div>
     </section>
   </main>
-  <footer>GenAI Router QA Console · Swagger 1.0.6</footer>
+
+  <dialog id="testDialog" class="test-dialog">
+    <form method="dialog" class="dialog-card">
+      <div class="section-head"><div><h2 id="dialogTitle">Test</h2><p id="dialogSubtitle"></p></div><button class="btn ghost" value="cancel">✕</button></div>
+      <div id="dialogBody" class="dialog-body"></div>
+      <label>הערת QA<textarea id="manualNote" rows="4" placeholder="מה בדקת ומה בפועל קרה?"></textarea></label>
+      <div class="actions-row dialog-actions">
+        <button type="button" class="btn" data-manual-status="PASS">PASS</button>
+        <button type="button" class="btn" data-manual-status="FAIL">FAIL</button>
+        <button type="button" class="btn" data-manual-status="BLOCKED">BLOCKED</button>
+        <button type="button" class="btn" data-manual-status="QUESTION">QUESTION</button>
+        <button id="dialogRunBtn" type="button" class="btn primary">Run</button>
+      </div>
+    </form>
+  </dialog>
+  <footer>GenAI Router QA Console · Swagger 1.0.6 · UI v1.1</footer>
   <script src="/app.js" type="module"></script>
 </body>
 </html>
