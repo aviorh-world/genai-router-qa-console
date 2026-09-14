@@ -87,6 +87,50 @@ const CONTRACT_GAPS = [
   {severity:'MEDIUM',area:'RAG Management APIs',gap:'המסמך מציג Category / Document Category / Permission APIs אך מסיים את הסעיף ב-"להשלים!!".',impact:'אין לבנות אוטומציה מול endpoints אלה עד לקבלת API Contract סופי.'}
 ];
 
+
+const ENDPOINT_GUIDE = {
+  'GET /health': ['בדיקת בריאות השירות','HTTP 200 כשה־Router חי ונגיש','להבדיל בין בעיית רשת/סביבה לבין כשל עסקי.'],
+  'POST /v1/files/download': ['הורדת קובץ ממאגר האחסון','הקובץ המבוקש מוחזר רק למשתמש מורשה','בדיקות file/bucket שגויים, הרשאות ו־IDOR.'],
+  'POST /v1/conversations/new': ['יצירת שיחה חדשה','נוצר conversationId חדש ונשמר state התחלתי','App/User/Case, יצירה כפולה, ולידציה ו־state.'],
+  'POST /v1/conversations/history': ['שליפת היסטוריית שיחות למשתמש','מוחזרות רק שיחות ששייכות למשתמש/Case ובהתאם ל־pagination','Real-time אחרי Create, limit/offset, בידוד בין משתמשים.'],
+  'POST /v1/conversations/id': ['שליפת שיחה אחת וההודעות שלה','השיחה המבוקשת מוחזרת רק לבעל הרשאה','conversationId לא קיים, משתמש אחר, סדר/כמות הודעות.'],
+  'DELETE /v1/conversations/id': ['מחיקת שיחה','ה־API מאשר מחיקה וה־state משתנה לפי ה־Business Rule','לאמת שלא ניתן להמשיך להשתמש בשיחה; Hard/Soft Delete עדיין דורש Contract.'],
+  'POST /v1/conversations/messages': ['שליחת הודעה וקבלת תשובת AI ב־SSE','מתקבל stream תקין שמסתיים ב־done/error ושומר messageId/state','סדר אירועים, sources, error handling, ניתוק stream ו־thought leakage.'],
+  'POST /v1/conversations/fetch/chunks/text': ['שליפת טקסט של Chunks ממסמכים','מוחזרים רק ה־chunks שהתבקשו ושמותר למשתמש לקרוא','גבולות מערך, chunkId, מסמך לא מורשה ו־IDOR.'],
+  'POST /v1/messages/send/feedback': ['שמירת משוב על תשובת AI','המשוב נקשר ל־messageId הנכון ונשמר פעם אחת לפי הכללים','thumb/text, message לא קיים, אורך טקסט, עדכון/כפילות.'],
+  'POST /v1/statistics/active-users': ['סטטיסטיקת משתמשים פעילים','מוחזר נתון לתקופת הזמן המבוקשת למי שמורשה','טווחי זמן, timezone/RFC3339, הרשאות וחשיפת מידע.'],
+  'POST /v1/statistics/conversations/count': ['מספר שיחות בתקופה','ספירה עקבית לפי הפילטרים','גבולות תאריכים ודיוק מול מקור נתונים.'],
+  'POST /v1/statistics/conversations/count-by-user': ['מספר שיחות לפי משתמש','פירוט משתמשים וספירות בהתאם להרשאה','PII/RBAC ודיוק אגרגציה.'],
+  'POST /v1/statistics/messages/user/count': ['מספר הודעות משתמש','ספירה נכונה של הודעות User','להבדיל user/assistant ולבדוק טווח זמן.'],
+  'POST /v1/statistics/conversations/average-user-messages': ['ממוצע הודעות משתמש לשיחה','ממוצע מחושב על אוכלוסיית השיחות הנכונה','0 שיחות, rounding, פילטרים.'],
+  'POST /v1/statistics/conversations/user-message-buckets': ['חלוקת שיחות לקבוצות לפי מספר הודעות','כל שיחה נכנסת ל־bucket המתאים פעם אחת','גבולות bucket וסכום כולל.'],
+  'POST /v1/statistics/messages/average-duration': ['משך הודעה ממוצע','ממוצע duration תקין לתקופה','null/0, יחידות זמן וחריגים.'],
+  'POST /v1/statistics/tools/count': ['מספר קריאות לכלים','ספירת tool calls עקבית','פילטרים, tool לא מוכר ודיוק.'],
+  'POST /v1/statistics/tools/average-duration': ['משך ממוצע לפי Tool','ממוצע latency/duration לכל כלי','יחידות, failed calls ו־outliers.'],
+  'POST /v1/statistics/tools/success-rate': ['אחוז הצלחה לפי Tool','success rate בין 0 ל־100%/0..1 לפי ה־Contract','הגדרת success, no calls וחישוב.'],
+  'POST /v1/statistics/tokens/total': ['סך צריכת Tokens','סכום tokens לתקופה/פילטרים','דיוק, הרשאות ונתונים רגישים.'],
+  'POST /v1/statistics/tokens/average-per-conversation': ['ממוצע Tokens לשיחה','ממוצע עקבי מול total/conversation count','0 שיחות ו־rounding.'],
+  'POST /v1/statistics/tokens/by-user': ['צריכת Tokens לפי משתמש','פירוט צריכה למשתמשים מורשים בלבד','RBAC/PII ודיוק סכומים.'],
+  'POST /v1/statistics/feedback/thumbs-comparison': ['השוואת 👍/👎','ספירה/יחס עקביים עם המשובים שנשמרו','טווח זמן, no feedback ודיוק אגרגציה.']
+};
+
+function renderEndpointGuide(){
+  const host=$('endpointGuide'); if(!host) return;
+  const groups=[
+    ['Core / Health', o=>o.path==='/health'],
+    ['Conversations', o=>o.path.startsWith('/v1/conversations/') && !o.path.includes('/fetch/chunks')],
+    ['Files / Retrieval / Feedback', o=>o.path==='/v1/files/download' || o.path.includes('/fetch/chunks') || o.path.includes('/feedback')],
+    ['Statistics', o=>o.path.startsWith('/v1/statistics/')]
+  ];
+  host.innerHTML=groups.map(([name,filter])=>{
+    const ops=state.operations.filter(filter); if(!ops.length) return '';
+    return `<details class="endpoint-group" open><summary>${esc(name)} <span>${ops.length}</span></summary><div class="endpoint-list">${ops.map(o=>{
+      const key=`${o.method} ${o.path}`; const [purpose,success,qa]=ENDPOINT_GUIDE[key]||[o.summary||'פעולת API','תגובה מוצלחת לפי ה־Swagger','להשוות Request/Response ל־Contract.'];
+      return `<article class="endpoint-card"><div class="endpoint-title"><span class="method ${o.method.toLowerCase()}">${esc(o.method)}</span><code>${esc(o.path)}</code></div><h3>${esc(purpose)}</h3><p><b>מה מצופה:</b> ${esc(success)}</p><p><b>מה חשוב ל־QA:</b> ${esc(qa)}</p><small>Swagger responses: ${esc((o.responses||[]).join(', ')||'—')}</small></article>`;
+    }).join('')}</div></details>`;
+  }).join('');
+}
+
 function validCaseId(v){ return /^\d{9}$/.test(v||''); }
 function readiness(){
   const c=cfg();
@@ -112,10 +156,6 @@ function readiness(){
   const all=core.every(x=>x[1]); const badge=$('startBadge'); if(badge){badge.textContent=all?'מוכן להרצה':'ממתין לנתונים';badge.className='badge '+(all?'pass':'question');}
   updateTokenCountdown();
   return all;
-}
-function copyQuestions(){
-  const txt=`היי, עדכון: דרך ההזדהות כבר ברורה — gcloud auth print-identity-token ושליחה ב-X-Serverless-Authorization: Bearer <TOKEN>. כדי להתחיל הרצה אמיתית חסרים לי בעיקר:\n1. ה-TSH Base URL המדויק.\n2. לוודא שהיוזר הענני שלי מורשה להפעיל את ה-Router.\n3. בהמשך walkthrough קצר על State/Delete, 20 messages ו-RBAC כדי לסגור Expected Results.`;
-  navigator.clipboard?.writeText(txt).then(()=>{const b=$('copyQuestionsBtn'); const old=b.textContent;b.textContent='הועתק ✓';setTimeout(()=>b.textContent=old,1500)}).catch(()=>alert(txt));
 }
 function markTokenNow(){ state.tokenMarkedAt=Date.now(); updateTokenCountdown(); readiness(); }
 function updateTokenCountdown(){
@@ -524,7 +564,7 @@ async function happyFlow(){
 
 function runUiSelfTest(){
   const checks=[]; const check=(name,ok,detail='')=>checks.push({name,ok:!!ok,detail});
-  const buttonIds=['demoBtn','healthBtn','markTokenBtn','readinessBtn','copyQuestionsBtn','runAllTests','runSafeP0','runBoundaryPack','runRagSpecPack','runHappyFlow','uiSelfTestBtn','clearResults','flowRunBtn','apiRunBtn','copyCurlBtn','aiRunBtn','exportJson','exportCsv','exportStpBtn','exportStdBtn','dialogRunBtn','dialogCopyCurlBtn'];
+  const buttonIds=['demoBtn','healthBtn','markTokenBtn','readinessBtn','runAllTests','runSafeP0','runBoundaryPack','runRagSpecPack','runHappyFlow','uiSelfTestBtn','clearResults','flowRunBtn','apiRunBtn','copyCurlBtn','aiRunBtn','exportJson','exportCsv','exportStpBtn','exportStdBtn','dialogRunBtn','dialogCopyCurlBtn'];
   buttonIds.forEach(id=>{const el=$(id);check(`כפתור ${id}`,!!el && (typeof el.onclick==='function'||id==='dialogCopyCurlBtn'),!el?'לא נמצא':typeof el.onclick);});
   document.querySelectorAll('.tab').forEach(tab=>check(`Tab ${tab.dataset.tab}`,!!$(tab.dataset.tab)&&typeof tab.onclick==='function','Target section + click handler'));
   document.querySelectorAll('[data-manual-status]').forEach(b=>check(`Manual status ${b.dataset.manualStatus}`,typeof b.onclick==='function','click handler'));
@@ -533,7 +573,7 @@ function runUiSelfTest(){
   check('קטלוג בדיקות נטען',state.tests.length>0,`${state.tests.length} tests`); check('Swagger operations נטענו',state.operations.length>0,`${state.operations.length} operations`);
   check('P0-002 ברור',plainTestExplanation({ID:'P0-002'}).includes('gcloud'),'הסבר פשוט קיים');
   check('הנחיות Setup מקופלות',document.querySelector('details.setup-help')!=null,'native details/summary');
-  check('RAG Spec נטען',!!state.context?.ragSpec && state.tests.some(t=>t.ID==='RAG-001'),'Spec cards + RAG test pack');
+  check('מדריך מערכת נטען',!!$('guide') && !!$('endpointGuide'),'Guide + endpoint guide'); check('RAG Spec נטען בתוך המדריך',!!state.context?.ragSpec && state.tests.some(t=>t.ID==='RAG-001'),'Spec cards + RAG test pack'); document.querySelectorAll('.subtab').forEach(tab=>check(`Subtab ${tab.dataset.subtab}`,!!tab.closest('.tabpage')?.querySelector(`[data-subpage=\"${tab.dataset.subtab}\"]`) && typeof tab.onclick==='function','Target subpage + click handler')); 
   check('Demo אינו PASS אמיתי',true,'ב־Demo תוצאות אוטומטיות מסומנות DEMO');
   const failed=checks.filter(x=>!x.ok); state.uiSelfTest={time:now(),checks};
   $('runSummary').innerHTML=`<div class="ui-test-list">${checks.map(x=>`<div class="ui-test-item ${x.ok?'ok':'fail'}"><b>${x.ok?'✓':'✕'} ${esc(x.name)}</b>${x.detail?` — ${esc(x.detail)}`:''}</div>`).join('')}</div>`;
@@ -628,7 +668,7 @@ function exportStd(){exportBlob('STD-GenAI-Router-he.md','text/markdown;charset=
 
 function renderKpis(){ $('kpiTotal').textContent=state.tests.length; $('kpiAuto').textContent=state.tests.filter(t=>t.mode!=='manual').length; $('kpiPass').textContent=Object.values(state.results).filter(r=>r.status==='PASS').length; $('kpiFail').textContent=Object.values(state.results).filter(r=>r.status==='FAIL').length; if($('kpiNA'))$('kpiNA').textContent=Object.values(state.results).filter(r=>r.status==='N/A').length; if($('kpiDemo'))$('kpiDemo').textContent=Object.values(state.results).filter(r=>r.status==='DEMO').length; $('kpiOpen').textContent=state.questions.filter(q=>(q.Status||'Open')==='Open').length; }
 function renderReport(){ const rs=Object.values(state.results); $('reportTable').innerHTML=rs.length?`<table class="qa-table"><thead><tr><th>ID</th><th>Status</th><th>Mode</th><th>Actual</th><th>Details</th><th>Evidence</th><th>Time</th></tr></thead><tbody>${rs.map(r=>`<tr><td>${r.id}</td><td class="${statusClass(r.status)}">${r.status}</td><td>${esc(r.evidence?.mode||'—')}</td><td>${esc(r.actual)}</td><td>${esc(r.details)}</td><td>${r.evidence?'Request/Response שמור':'—'}</td><td dir="ltr">${r.time}</td></tr>`).join('')}</tbody></table>`:'אין תוצאות עדיין.'; }
-function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderContract();renderContext();renderRagSpec();renderStpStd();readiness();}
+function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderContract();renderContext();renderRagSpec();renderStpStd();renderEndpointGuide();readiness();}
 
 function populateEndpoints(){ const s=$('endpointSelect'); s.innerHTML=state.operations.map((o,i)=>`<option value="${i}">${o.method} ${o.path} — ${esc(o.operationId)}</option>`).join(''); s.onchange=syncApiTemplate; syncApiTemplate(); }
 function syncApiTemplate(){ const o=state.operations[+$('endpointSelect').value||0]; if(!o)return; $('apiMethod').value=o.method; $('apiBody').value=JSON.stringify(requestBody(o.path,o.method),null,2); }
@@ -643,9 +683,9 @@ async function health(){ if(cfg().executionMode==='postman'){setConn('Postman mo
 function demo(){state.demo=!state.demo;$('demoBtn').textContent=state.demo?'Demo: ON':'Demo Mode';$('demoWarning').hidden=!state.demo;setConn(state.demo?'Demo Mode · סימולציה בלבד':'לא מחובר',state.demo?'demo':'neutral');showToast(state.demo?'Demo Mode הופעל: לא נשלחות בקשות אמיתיות.':'Demo Mode כובה.','info');}
 
 function wire(){
-  document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tabpage').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active');});
+  document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tabpage').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active');}); document.querySelectorAll('.subtab').forEach(b=>b.onclick=()=>{const root=b.closest('.tabpage'); if(!root)return; root.querySelectorAll('.subtab').forEach(x=>x.classList.remove('active')); root.querySelectorAll('.subpage').forEach(x=>x.classList.remove('active')); b.classList.add('active'); const page=root.querySelector(`[data-subpage=\"${b.dataset.subtab}\"]`); if(page)page.classList.add('active');});
   $('searchTests').oninput=renderCatalog;$('priorityFilter').onchange=renderCatalog;$('modeFilter').onchange=renderCatalog;
-  $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('markTokenBtn').onclick=()=>{markTokenNow();showToast('זמן הפקת Token סומן.','success');};$('readinessBtn').onclick=()=>{const ok=readiness();showToast(ok?'הסביבה מוכנה להרצה.':'עדיין חסרים נתונים — ראה כרטיסי המוכנות. ',ok?'success':'warning');};$('copyQuestionsBtn').onclick=copyQuestions;$('runAllTests').onclick=runAllTests;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runRagSpecPack').onclick=runRagSpecPack;$('runHappyFlow').onclick=happyFlow;$('uiSelfTestBtn').onclick=runUiSelfTest;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('copyCurlBtn').onclick=copyCurl;$('aiRunBtn').onclick=aiRun;
+  $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('markTokenBtn').onclick=()=>{markTokenNow();showToast('זמן הפקת Token סומן.','success');};$('readinessBtn').onclick=()=>{const ok=readiness();showToast(ok?'הסביבה מוכנה להרצה.':'עדיין חסרים נתונים — ראה כרטיסי המוכנות. ',ok?'success':'warning');};$('runAllTests').onclick=runAllTests;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runRagSpecPack').onclick=runRagSpecPack;$('runHappyFlow').onclick=happyFlow;$('uiSelfTestBtn').onclick=runUiSelfTest;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('copyCurlBtn').onclick=copyCurl;$('aiRunBtn').onclick=aiRun;
   $('clearResults').onclick=()=>{state.results={};state.lastExchange=null;$('runSummary').innerHTML='';renderAll();showToast('תוצאות ההרצה אופסו.','success');};
   $('exportJson').onclick=exportJson;$('exportCsv').onclick=exportCsv; if($('exportStpBtn')) $('exportStpBtn').onclick=exportStp; if($('exportStdBtn')) $('exportStdBtn').onclick=exportStd;
   ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',readiness)); $('executionMode').addEventListener('change',readiness); $('authHeader').addEventListener('change',readiness); $('cloudAccessConfirmed').addEventListener('change',readiness); $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));

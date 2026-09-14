@@ -1,320 +1,335 @@
-<!doctype html>
-<html lang="he" dir="rtl">
+<!DOCTYPE html>
+
+<html dir="rtl" lang="he">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>GenAI Router QA Console</title>
-  <link rel="stylesheet" href="/styles.css" />
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<title>GenAI Router QA Console</title>
+<link href="/styles.css" rel="stylesheet"/>
 </head>
 <body>
-  <header class="topbar">
-    <div>
-      <h1>GenAI Router QA Console</h1>
-      <p>כלי QA ל־Router 1.0.6 — Swagger + TSH + ארכיטקטורה + Postman</p>
-    </div>
-    <div class="top-actions">
-      <span class="badge version">v1.6</span>
-      <span id="connectionBadge" class="badge neutral">לא מחובר</span>
-      <button id="demoBtn" class="btn ghost">Demo Mode</button>
-    </div>
-  </header>
-  <div id="demoWarning" class="demo-warning" hidden>⚠️ מצב הדגמה פעיל — שום בקשה לא נשלחת ל־TSH. תוצאות סימולציה יסומנו <b>DEMO</b> ולא PASS.</div>
-  <div id="toastHost" class="toast-host" aria-live="polite"></div>
-
-  <main>
-    <section class="card setup">
-      <div class="section-head">
-        <div><h2>1. הגדרת סביבת בדיקה</h2><p>ה־Identity Token נשמר בזיכרון הדפדפן בלבד. לפי ההנחיה: gcloud auth print-identity-token → X-Serverless-Authorization: Bearer &lt;TOKEN&gt;. תוקף משוער: שעה.</p></div>
-        <div class="actions-row"><button id="healthBtn" class="btn">בדיקת חיבור</button><button id="markTokenBtn" class="btn ghost">Token הופק עכשיו</button></div>
-      </div>
-      <div class="grid cols-3">
-        <label>TSH Base URL<input id="baseUrl" placeholder="מחכה ל־Base URL מאנדריי" autocomplete="off"></label>
-        <label>Identity Token<input id="token" type="password" placeholder="gcloud auth print-identity-token · תוקף ~שעה" autocomplete="off"><small id="tokenExpiry" class="field-help">לא סומן זמן הפקה</small></label>
-        <label>Auth Header<select id="authHeader"><option value="X-Serverless-Authorization">X-Serverless-Authorization (לפי המדריך)</option><option value="Authorization">Authorization (fallback בלבד)</option></select></label><label>Execution Mode<select id="executionMode"><option value="direct">Browser Direct → Router (מומלץ בתוך SH/TSH)</option><option value="proxy">Vercel Proxy (רק אם היעד ציבורי)</option><option value="postman">Postman / cURL generator בלבד</option></select></label>
-        <label>App ID<input id="appId" value="Desktop" placeholder="Desktop"></label>
-        <label>User ID A<input id="userId" value="aviorha@taxes.gov.il" placeholder="האימייל השע״מי שלך" inputmode="email"></label>
-        <label>Case ID<input id="caseId" value="123456789" placeholder="9 ספרות"></label>
-        <label>User ID B (אופציונלי)<input id="userIdB" placeholder="לבדיקות הרשאה"></label>
-        <label>Token B (אופציונלי)<input id="tokenB" type="password" placeholder="Token של משתמש B" autocomplete="off"></label>
-        <label>Conversation ID<input id="conversationId" placeholder="מתמלא אוטומטית"></label>
-        <label>Message ID<input id="messageId" placeholder="מתמלא אוטומטית"></label>
-      </div>
-      <details class="setup-help">
-        <summary>ℹ️ הנחיות TSH / Google CLI / בטיחות</summary>
-        <div class="setup-help-body">
-          <div class="notice">⚠️ השתמש רק ב־credentials של TSH/QA. לא ב־Production. אם ה־TSH פנימי, Vercel לא בהכרח יוכל להגיע אליו — השתמש ב־Browser Direct או העתק בקשה ל־Postman.</div>
-          <div class="notice"><b>Google CLI:</b> אם צריך התחברות לחשבון: <code>gcloud init</code> או <code>gcloud init --no-launch-browser</code>. להפקת Identity Token: <code>gcloud auth print-identity-token</code>. לפי המדריך יש לשלוח: <code>X-Serverless-Authorization: Bearer &lt;TOKEN&gt;</code>.</div>
-        </div>
-      </details>
-      <label class="checkline"><input id="cloudAccessConfirmed" type="checkbox"> <span>וידאתי שיש לי משתמש ענן והרשאה להפעיל את שירות ה־Router</span></label>
-      <div class="readiness-head">
-        <div><b>מוכנות להרצה אמיתית</b><span>האתר בודק מה חסר לפני שמתחילים.</span></div>
-        <div class="actions-row"><button id="readinessBtn" class="btn">בדוק מוכנות</button><button id="copyQuestionsBtn" class="btn ghost">העתק שאלות לצוות</button></div>
-      </div>
-      <div id="readinessGrid" class="readiness-grid"></div>
-    </section>
-
-    <nav class="tabs">
-      <button data-tab="dashboard" class="tab active">Dashboard</button>
-      <button data-tab="catalog" class="tab">תסריטים + Boundaries</button>
-      <button data-tab="stp" class="tab">STP – תוכנית בדיקות</button>
-      <button data-tab="std" class="tab">STD – תכנון בדיקות</button>
-      <button data-tab="flow" class="tab">Auto Flow</button>
-      <button data-tab="api" class="tab">API Runner</button>
-      <button data-tab="ai" class="tab">GenAI / RAG</button>
-      <button data-tab="questions" class="tab">שאלות פתוחות</button>
-      <button data-tab="context" class="tab">מה התחדש / ארכיטקטורה</button>
-      <button data-tab="ragSpec" class="tab">אפיון RAG גנרי</button>
-      <button data-tab="contract" class="tab">פערי Contract</button>
-      <button data-tab="report" class="tab">דוח</button>
-    </nav>
-
-    <section id="dashboard" class="tabpage active">
-      <div class="card start-card">
-        <div class="section-head"><div><h2>מה צריך כדי להתחיל</h2><p>החסמים להתנעה כרגע: Base URL מדויק, Token תקין והרשאת משתמש ענן; App ID ו־Case ID כבר קיבלו ברירות מחדל.</p></div><span id="startBadge" class="badge question">ממתין לנתונים</span></div>
-        <div id="blockingSummary" class="blocking-summary"></div>
-      </div>
-      <div class="kpis">
-        <div class="kpi"><b id="kpiTotal">108</b><span>תסריטים</span></div>
-        <div class="kpi"><b id="kpiAuto">0</b><span>אוטומטיים/מסייעים</span></div>
-        <div class="kpi"><b id="kpiPass">0</b><span>PASS</span></div>
-        <div class="kpi"><b id="kpiFail">0</b><span>FAIL</span></div>
-        <div class="kpi"><b id="kpiNA">0</b><span>N/A</span></div>
-        <div class="kpi"><b id="kpiDemo">0</b><span>DEMO</span></div>
-        <div class="kpi"><b id="kpiOpen">37</b><span>שאלות פתוחות</span></div>
-      </div>
-      <div class="card">
-        <div class="section-head"><div><h2>הרצה מהירה</h2><p>אפשר להריץ את כל הבדיקות בלחיצה אחת. בדיקה שחסר לה קלט/הרשאה/מידע תסומן N/A במקום להציג FAIL מטעה.</p></div></div>
-        <div class="actions-row">
-          <button id="runAllTests" class="btn primary">▶ הרץ את כל הטסטים</button>
-          <button id="runSafeP0" class="btn">▶ Run Safe P0</button>
-          <button id="runBoundaryPack" class="btn">▶ Run Boundary Pack</button>
-          <button id="runRagSpecPack" class="btn">▶ RAG Spec Pack</button>
-          <button id="runHappyFlow" class="btn">▶ Conversation Happy Flow</button>
-          <button id="uiSelfTestBtn" class="btn ghost">בדיקת UI</button>
-          <button id="clearResults" class="btn ghost">איפוס תוצאות</button>
-        </div>
-        <div id="bulkProgress" class="bulk-progress" hidden><div id="bulkProgressBar" class="bulk-progress-bar"></div><span id="bulkProgressText"></span></div>
-        <div id="runSummary" class="run-summary"></div>
-      </div>
-      <div class="card">
-        <h2>מה האתר לא יכול לקבוע לבד</h2>
-        <ul>
-          <li>DB / State Management בלי גישה לטבלאות ולוגיקה מוסכמת.</li>
-          <li>איכות GenAI בלי Golden Dataset או אישור SME.</li>
-          <li>Cross-user / Cross-case בלי משתמשי בדיקה/Token נוספים.</li>
-          <li>Performance בלי SLA מוסכם ו־Observability בלי גישה ללוגים.</li><li>האם כל ה־Target Design של ה־RAG הגנרי כבר ממומש ב־TSH — דורש walkthrough/ראיות Runtime.</li>
-        </ul>
-      </div>
-    </section>
-
-    <section id="catalog" class="tabpage">
-      <div class="card">
-        <div class="filters">
-          <input id="searchTests" placeholder="חיפוש לפי ID / Endpoint / תרחיש">
-          <select id="priorityFilter"><option value="">כל הרמות</option><option>P0</option><option>P1</option><option>P2</option></select>
-          <select id="modeFilter"><option value="">כל המצבים</option><option value="auto">אוטומטי</option><option value="assisted">מסייע</option><option value="manual">ידני</option></select>
-        </div>
-        <div id="testsTableWrap" class="table-wrap"></div>
-      </div>
-    </section>
-
-
-    <section id="stp" class="tabpage">
-      <div class="card">
-        <div class="section-head">
-          <div><h2>STP – תוכנית בדיקות מערכת</h2><p>מסמך־על שמסביר <b>מה בודקים, למה, איפה, באיזו שיטה ומתי אפשר להכריז שהבדיקות הושלמו</b>.</p></div>
-          <button id="exportStpBtn" class="btn ghost">הורד STP בעברית</button>
-        </div>
-        <div class="context-grid">
-          <div class="context-card"><h3>מטרת הבדיקות</h3><p>לוודא שה־GenAI Router עובד תקין בסביבת TSH, שומר על הרשאות ובידוד מידע, מנהל שיחות ו־state נכון, ומחזיר תשובות GenAI/RAG אמינות ובטוחות.</p></div>
-          <div class="context-card"><h3>Scope – בתוך הבדיקה</h3><p>API, Authentication, Conversations, History, Messages/SSE, Delete, Files/Chunks, Feedback, Statistics, Boundaries, הרשאות, Prompt Injection, RAG ו־State.</p></div>
-          <div class="context-card"><h3>מחוץ ל־Scope כרגע</h3><p>Production, עומסים מלאים ללא SLA, אימות DB מלא ללא גישה לטבלאות, ואיכות עסקית סופית ללא Golden Dataset/SME.</p></div>
-          <div class="context-card"><h3>סביבת בדיקה</h3><p>TSH / NON-PROD. הזדהות באמצעות Identity Token שמופק ב־gcloud ונשלח ב־X-Serverless-Authorization. תוקף משוער של Token: שעה.</p></div>
-        </div>
-      </div>
-      <div class="card">
-        <h2>אסטרטגיית בדיקות</h2>
-        <div id="stpStrategy" class="table-wrap"></div>
-      </div>
-      <div class="card">
-        <h2>תנאי כניסה ויציאה</h2>
-        <div class="result-grid">
-          <div><h3>Entry Criteria – אפשר להתחיל כש...</h3><ul><li>יש TSH Base URL.</li><li>יש משתמש ענן והרשאה ל־Router.</li><li>ניתן להפיק Identity Token תקין.</li><li>Swagger/Contract זמין.</li><li>קיימים App ID, User ID ו־Case ID לבדיקה.</li></ul></div>
-          <div><h3>Exit Criteria – אפשר לסיים כש...</h3><ul><li>כל בדיקות P0 הקריטיות עברו או שיש חריגה מאושרת ומתועדת.</li><li>אין תקלת אבטחה קריטית פתוחה.</li><li>תוצאות P1/P2 תועדו והסיכונים ידועים.</li><li>פערי Contract שחוסמים PASS/FAIL נסגרו או סומנו במפורש.</li><li>דוח הרצה הופק ונשמר.</li></ul></div>
-        </div>
-      </div>
-      <div class="card">
-        <h2>סיכונים ותלויות</h2>
-        <ul><li>Token קצר־חיים עלול לפוג באמצע ריצה.</li><li>גישה ל־TSH תלויה ברשת ובהרשאות.</li><li>חלק מה־Expected Results עדיין אינם מוגדרים פורמלית ב־Swagger.</li><li>בדיקות State/Delete דורשות גישה או אישור על AlloyDB/לוגים.</li><li>בדיקות GenAI דורשות מקור אמת או SME כדי להכריע איכות עסקית.</li></ul>
-      </div>
-    </section>
-
-    <section id="std" class="tabpage">
-      <div class="card">
-        <div class="section-head">
-          <div><h2>STD – תכנון ותיאור הבדיקות</h2><p>המסמך המפורט שמתרגם את ה־STP ל־<b>מה בדיוק נבדוק ואיך</b>. קטלוג התסריטים באתר הוא למעשה הליבה של ה־STD.</p></div>
-          <button id="exportStdBtn" class="btn ghost">הורד STD בעברית</button>
-        </div>
-        <div id="stdSummary" class="kpis"></div>
-      </div>
-      <div class="card">
-        <h2>מבנה Test Design</h2>
-        <div id="stdDesign" class="table-wrap"></div>
-      </div>
-      <div class="card">
-        <h2>כלל כתיבה לכל Test Case</h2>
-        <p>כל תסריט צריך לכלול: <b>ID, עדיפות, תחום, Endpoint, תנאים מקדימים, קלט/צעדים, Expected Result, נתוני בדיקה ותוצאה בפועל</b>. כאשר ה־Expected אינו ידוע – לא מנחשים; מסמנים QUESTION/BLOCKED ומקשרים לפער Contract.</p>
-      </div>
-      <div class="card">
-        <h2>Traceability – קישור בין סיכון לבדיקה</h2>
-        <div id="stdTraceability" class="table-wrap"></div>
-      </div>
-    </section>
-
-    <section id="flow" class="tabpage">
-      <div class="card">
-        <div class="section-head"><div><h2>Conversation Happy Flow</h2><p>Create → History → Send Message (SSE) → Get Conversation → Delete → Verify deletion.</p></div><button id="flowRunBtn" class="btn primary">▶ הרץ Flow</button></div>
-        <label>שאלה ל־AI<textarea id="flowQuestion" rows="3">מה אפשר להסיק מהמסמכים הרלוונטיים לשאלה זו?</textarea></label>
-        <div id="flowSteps" class="flow-steps"></div>
-      </div>
-    </section>
-
-    <section id="api" class="tabpage">
-      <div class="card">
-        <div class="section-head"><div><h2>API Runner</h2><p>הרצה חופשית של כל Endpoint מה־Swagger, או יצירת cURL ל־Postman/סביבה פנימית.</p></div><div class="actions-row"><button id="apiRunBtn" class="btn primary">Run</button><button id="copyCurlBtn" class="btn ghost">העתק cURL</button></div></div>
-        <div class="grid cols-2">
-          <label>Endpoint<select id="endpointSelect"></select></label>
-          <label>Method<input id="apiMethod" readonly></label>
-        </div>
-        <label>Request JSON<textarea id="apiBody" rows="10" spellcheck="false">{}</textarea></label>
-        <div class="result-grid">
-          <div><h3>Response</h3><pre id="apiResponse">—</pre></div>
-          <div><h3>Meta</h3><pre id="apiMeta">—</pre></div>
-        </div>
-      </div>
-    </section>
-
-    <section id="ai" class="tabpage">
-      <div class="card">
-        <div class="section-head"><div><h2>GenAI / RAG Inspector</h2><p>הרץ שאלה, ראה את אירועי ה־SSE וסמן איכות ידנית.</p></div><button id="aiRunBtn" class="btn primary">▶ שאל</button></div>
-        <label>Prompt<textarea id="aiPrompt" rows="4">ענה על סמך מסמכי המקור בלבד. אם אין מספיק מידע, אמור שאין מספיק מידע.</textarea></label>
-        <div class="result-grid">
-          <div><h3>Streaming / Answer</h3><pre id="aiStream">—</pre><h3>אירועי SSE שזוהו</h3><div id="aiEvents" class="event-list">—</div></div>
-          <div><h3>הערכת QA</h3>
-            <div class="rating-buttons">
-              <button data-rating="Correct" class="btn ghost">Correct</button>
-              <button data-rating="Partially Correct" class="btn ghost">Partially Correct</button>
-              <button data-rating="Wrong" class="btn ghost">Wrong</button>
-              <button data-rating="Hallucination" class="btn ghost">Hallucination</button>
-              <button data-rating="Wrong Source" class="btn ghost">Wrong Source</button>
-            </div>
-            <label>הערה<textarea id="aiNote" rows="6"></textarea></label>
-            <div id="aiRating" class="notice">טרם דורג</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="questions" class="tabpage"><div class="card"><h2>שאלות פתוחות</h2><div id="questionsTable" class="table-wrap"></div></div></section>
-
-    <section id="contract" class="tabpage">
-      <div class="card">
-        <div class="section-head"><div><h2>פערי API Contract שכבר זוהו</h2><p>אלו אינם Bugs בהכרח — אלו נקודות שדורשות החלטה/תיעוד כדי ש־QA ידע מהו Expected Result.</p></div></div>
-        <div id="contractTable" class="table-wrap"></div>
-      </div>
-    </section>
+<header class="topbar">
+<div>
+<h1>GenAI Router QA Console</h1>
+<p>כלי QA ל־Router 1.0.6 — Swagger + TSH + ארכיטקטורה + Postman</p>
+</div>
+<div class="top-actions">
+<span class="badge version">v1.7</span>
+<span class="badge neutral" id="connectionBadge">לא מחובר</span>
+<button class="btn ghost" id="demoBtn">Demo Mode</button>
+</div>
+</header>
+<div class="demo-warning" hidden="" id="demoWarning">⚠️ מצב הדגמה פעיל — שום בקשה לא נשלחת ל־TSH. תוצאות סימולציה יסומנו <b>DEMO</b> ולא PASS.</div>
+<div aria-live="polite" class="toast-host" id="toastHost"></div>
+<main>
+<section class="card setup">
+<div class="section-head">
+<div>
+<h2>1. חיבור לסביבת הבדיקה</h2>
+<p>כדי להתחיל צריך בעיקר Base URL, Identity Token ומשתמש בדיקה. שאר האפשרויות נמצאות תחת "אפשרויות מתקדמות".</p>
+</div>
+<div class="actions-row">
+<button class="btn" id="healthBtn">בדיקת חיבור</button>
+<button class="btn ghost" id="markTokenBtn">Token הופק עכשיו</button>
+</div>
+</div>
+<div class="grid cols-3 setup-essential">
+<label>TSH Base URL<input autocomplete="off" id="baseUrl" placeholder="כתובת Router בסביבת TSH"/></label>
+<label>Identity Token<input autocomplete="off" id="token" placeholder="gcloud auth print-identity-token" type="password"/><small class="field-help" id="tokenExpiry">לא סומן זמן הפקה</small></label>
+<label>User ID<input id="userId" inputmode="email" placeholder="האימייל השע״מי שלך" value="aviorha@taxes.gov.il"/></label>
+<label>App ID<input id="appId" placeholder="Desktop" value="Desktop"/></label>
+<label>Case ID<input id="caseId" placeholder="9 ספרות · כרגע אינו blocker" value="123456789"/></label>
+</div>
+<details class="setup-help advanced-settings">
+<summary>⚙️ אפשרויות מתקדמות</summary>
+<div class="setup-help-body">
+<div class="grid cols-3">
+<label>Execution Mode<select id="executionMode"><option value="direct">Browser Direct → Router</option><option value="proxy">Vercel Proxy (רק אם היעד ציבורי)</option><option value="postman">Postman / cURL generator בלבד</option></select></label>
+<label>Auth Header<select id="authHeader"><option value="X-Serverless-Authorization">X-Serverless-Authorization</option><option value="Authorization">Authorization (fallback)</option></select></label>
+<label>User ID B (אופציונלי)<input id="userIdB" placeholder="לבדיקות הרשאה"/></label>
+<label>Token B (אופציונלי)<input autocomplete="off" id="tokenB" placeholder="Token של משתמש B" type="password"/></label>
+<label>Conversation ID<input id="conversationId" placeholder="מתמלא אוטומטית"/></label>
+<label>Message ID<input id="messageId" placeholder="מתמלא אוטומטית"/></label>
+</div>
+<label class="checkline"><input id="cloudAccessConfirmed" type="checkbox"/> <span>וידאתי שיש לי משתמש ענן והרשאה להפעיל את שירות ה־Router</span></label>
+</div>
+</details>
+<details class="setup-help">
+<summary>ℹ️ הנחיות TSH / Google CLI / בטיחות</summary>
+<div class="setup-help-body">
+<div class="notice">⚠️ השתמש רק ב־credentials של TSH/QA. לא ב־Production. אם ה־TSH פנימי, Vercel לא בהכרח יוכל להגיע אליו — השתמש ב־Browser Direct או העתק בקשה ל־Postman.</div>
+<div class="notice"><b>Google CLI:</b> אם צריך התחברות לחשבון: <code>gcloud init</code> או <code>gcloud init --no-launch-browser</code>. להפקת Identity Token: <code>gcloud auth print-identity-token</code>. לפי המדריך יש לשלוח: <code>X-Serverless-Authorization: Bearer &lt;TOKEN&gt;</code>.</div>
+</div>
+</details>
+<div class="readiness-head">
+<div><b>מוכנות להרצה אמיתית</b><span>האתר בודק מה חסר לפני שמתחילים.</span></div>
+<div class="actions-row"><button class="btn" id="readinessBtn">בדוק מוכנות</button></div>
+</div>
+<div class="readiness-grid" id="readinessGrid"></div>
+</section>
+<nav class="tabs main-tabs">
+<button class="tab active" data-tab="dashboard">Dashboard</button>
+<button class="tab" data-tab="catalog">בדיקות</button>
+<button class="tab" data-tab="guide">מדריך מערכת</button>
+<button class="tab" data-tab="flow">Auto Flow</button>
+<button class="tab" data-tab="api">API Runner</button>
+<button class="tab" data-tab="ai">GenAI / RAG</button>
+<button class="tab" data-tab="qaDocs">מסמכי QA</button>
+<button class="tab" data-tab="report">דוח</button>
+</nav>
+<section class="tabpage active" id="dashboard">
+<div class="card start-card">
+<div class="section-head"><div><h2>מה צריך כדי להתחיל</h2><p>החסמים להתנעה כרגע: Base URL מדויק, Token תקין והרשאת משתמש ענן; App ID ו־Case ID כבר קיבלו ברירות מחדל.</p></div><span class="badge question" id="startBadge">ממתין לנתונים</span></div>
+<div class="blocking-summary" id="blockingSummary"></div>
+</div>
+<div class="kpis">
+<div class="kpi"><b id="kpiTotal">108</b><span>תסריטים</span></div>
+<div class="kpi"><b id="kpiAuto">0</b><span>אוטומטיים/מסייעים</span></div>
+<div class="kpi"><b id="kpiPass">0</b><span>PASS</span></div>
+<div class="kpi"><b id="kpiFail">0</b><span>FAIL</span></div>
+<div class="kpi"><b id="kpiNA">0</b><span>N/A</span></div>
+<div class="kpi"><b id="kpiDemo">0</b><span>DEMO</span></div>
+<div class="kpi"><b id="kpiOpen">37</b><span>שאלות פתוחות</span></div>
+</div>
+<div class="card">
+<div class="section-head"><div><h2>הרצה מהירה</h2><p>אפשר להריץ את כל הבדיקות בלחיצה אחת. בדיקה שחסר לה קלט/הרשאה/מידע תסומן N/A במקום להציג FAIL מטעה.</p></div></div>
+<div class="actions-row">
+<button class="btn primary" id="runAllTests">▶ הרץ את כל הטסטים</button>
+<button class="btn" id="runSafeP0">▶ Run Safe P0</button>
+<button class="btn" id="runBoundaryPack">▶ Run Boundary Pack</button>
+<button class="btn" id="runRagSpecPack">▶ RAG Spec Pack</button>
+<button class="btn" id="runHappyFlow">▶ Conversation Happy Flow</button>
+<button class="btn ghost" id="uiSelfTestBtn">בדיקת UI</button>
+<button class="btn ghost" id="clearResults">איפוס תוצאות</button>
+</div>
+<div class="bulk-progress" hidden="" id="bulkProgress"><div class="bulk-progress-bar" id="bulkProgressBar"></div><span id="bulkProgressText"></span></div>
+<div class="run-summary" id="runSummary"></div>
+</div>
+<div class="card">
+<h2>מה האתר לא יכול לקבוע לבד</h2>
+<ul>
+<li>DB / State Management בלי גישה לטבלאות ולוגיקה מוסכמת.</li>
+<li>איכות GenAI בלי Golden Dataset או אישור SME.</li>
+<li>Cross-user / Cross-case בלי משתמשי בדיקה/Token נוספים.</li>
+<li>Performance בלי SLA מוסכם ו־Observability בלי גישה ללוגים.</li><li>האם כל ה־Target Design של ה־RAG הגנרי כבר ממומש ב־TSH — דורש walkthrough/ראיות Runtime.</li>
+</ul>
+</div>
+</section>
+<section class="tabpage" id="catalog">
+<div class="card">
+<div class="filters">
+<input id="searchTests" placeholder="חיפוש לפי ID / Endpoint / תרחיש"/>
+<select id="priorityFilter"><option value="">כל הרמות</option><option>P0</option><option>P1</option><option>P2</option></select>
+<select id="modeFilter"><option value="">כל המצבים</option><option value="auto">אוטומטי</option><option value="assisted">מסייע</option><option value="manual">ידני</option></select>
+</div>
+<div class="table-wrap" id="testsTableWrap"></div>
+</div>
+</section><section class="tabpage" id="guide">
+<div class="card guide-hero">
+<div class="section-head">
+<div>
+<h2>מדריך כללי למערכת ולבדיקות</h2>
+<p>המקום להבין בפשטות מה האתר עושה, איך נראית זרימה תקינה, מה מצופה מכל Endpoint, ומה עדיין דורש תשובה מהצוות.</p>
+</div>
+<span class="badge pass">QA Guide</span>
+</div>
+<div class="subtabs" role="tablist">
+<button class="subtab active" data-subtab="guideStart">איך משתמשים</button>
+<button class="subtab" data-subtab="guideEndpoints">Endpoints</button>
+<button class="subtab" data-subtab="guideArchitecture">RAG / ארכיטקטורה</button>
+<button class="subtab" data-subtab="guideGaps">פערים ושאלות</button>
+</div>
+</div>
+<div class="subpage active" data-subpage="guideStart">
+<div class="card">
+<h2>מה האתר הזה עושה?</h2>
+<div class="guide-grid">
+<div class="guide-step"><span>1</span><div><b>מחברים ל־TSH</b><p>מזינים Base URL ו־Identity Token ובודקים שה־Router נגיש.</p></div></div>
+<div class="guide-step"><span>2</span><div><b>מריצים בדיקות</b><p>אפשר להריץ טסט יחיד, Pack, Happy Flow או את כל הבדיקות.</p></div></div>
+<div class="guide-step"><span>3</span><div><b>בודקים Evidence</b><p>בכל טסט אמיתי אפשר לראות Request, Response, HTTP status ו־latency ולהעתיק cURL.</p></div></div>
+<div class="guide-step"><span>4</span><div><b>מפרשים תוצאה</b><p>PASS/FAIL הם תוצאה אמיתית; N/A אומר שחסר תנאי; DEMO הוא סימולציה בלבד; QUESTION/BLOCKED דורשים בירור.</p></div></div>
+</div>
+</div>
+<div class="card">
+<h2>הזרימות המרכזיות</h2>
+<div class="pipeline-grid guide-pipelines">
+<div class="pipeline-card"><h3>Authentication</h3><div class="pipeline-steps"><div class="pipeline-step"><span>1</span>gcloud auth print-identity-token</div><div class="pipeline-step"><span>2</span>X-Serverless-Authorization: Bearer TOKEN</div><div class="pipeline-step"><span>3</span>בקשה מוגנת ל־Router</div><div class="pipeline-step"><span>4</span>2xx = גישה תקינה; 401/403 = חסימה</div></div></div>
+<div class="pipeline-card"><h3>Conversation Happy Flow</h3><div class="pipeline-steps"><div class="pipeline-step"><span>1</span>Create Conversation</div><div class="pipeline-step"><span>2</span>History – השיחה מופיעה</div><div class="pipeline-step"><span>3</span>Send Message – SSE</div><div class="pipeline-step"><span>4</span>Get Conversation</div><div class="pipeline-step"><span>5</span>Delete + Verify</div></div></div>
+<div class="pipeline-card"><h3>RAG – ברמת האפיון</h3><div class="pipeline-steps"><div class="pipeline-step"><span>1</span>זיהוי משתמש והרשאות</div><div class="pipeline-step"><span>2</span>בחירת קטגוריות רלוונטיות</div><div class="pipeline-step"><span>3</span>Semantic Search על מסמכים מורשים</div><div class="pipeline-step"><span>4</span>Top-K Chunks</div><div class="pipeline-step"><span>5</span>תשובה + Sources</div></div><p>זה Target Design; לא מניחים שכל שלב כבר ממומש ב־TSH בלי ראיית Runtime.</p></div>
+</div>
+</div>
+<div class="card">
+<h2>סטטוסים באתר</h2>
+<div class="status-guide">
+<div><b class="status-pass">PASS</b><span>התוצאה בפועל תאמה ל־Expected.</span></div>
+<div><b class="status-fail">FAIL</b><span>התוצאה בפועל לא תאמה ל־Expected.</span></div>
+<div><b class="status-na">N/A</b><span>הבדיקה לא רלוונטית/לא ניתנת להרצה כרגע בגלל נתון חסר.</span></div>
+<div><b class="status-demo">DEMO</b><span>סימולציה מקומית בלבד; לא נשלחה בקשה ל־TSH.</span></div>
+<div><b class="status-question">QUESTION</b><span>אין Expected מוסכם או נדרש בירור.</span></div>
+<div><b class="status-blocked">BLOCKED</b><span>הבדיקה אמורה לרוץ אך חסומה טכנית/הרשאתית.</span></div>
+</div>
+</div>
+<div class="card">
+<h2>מה כבר ידוע מהצוות</h2>
+<div class="context-grid" id="knownFacts"></div>
+</div>
+</div>
+<div class="subpage" data-subpage="guideEndpoints">
+<div class="card">
+<div class="section-head"><div><h2>מדריך Endpoints</h2><p>הסבר פשוט: מה כל Endpoint עושה, מה מצופה בהצלחה, ומה ה־QA צריך לבדוק. הפרטים הטכניים המדויקים עדיין מגיעים מה־Swagger.</p></div><span class="badge neutral">23 operations</span></div>
+<div class="endpoint-guide" id="endpointGuide"></div>
+</div>
+</div>
+<div class="subpage" data-subpage="guideArchitecture">
+<div class="card">
+<div class="section-head"><div><h2>RAG / ארכיטקטורה</h2><p>החלק הזה מסביר מה ידוע על המערכת מאחורי ה־API ומה המשמעות ל־QA. אפיון ה־RAG הוא Target Design ולא הוכחת Runtime.</p></div><span class="badge question" id="ragSpecBadge">Spec / Target Design</span></div>
+<details class="guide-details"><summary>שלמות ומגבלות המקור</summary><div class="spec-callout"><b>המסמך נקרא עד סופו.</b> סעיף <b>API נדרשים</b> במסמך עצמו מסתיים ב־"להשלים!!", ולכן APIs לניהול RAG מוצגים כאן כטיוטה ולא כ־Contract סופי.</div></details>
+</div>
+<div class="card"><h2>זרימות RAG מהאפיון</h2><div class="pipeline-grid" id="ragPipelines"></div></div>
+<div class="card"><h2>כללי Business / QA</h2><div class="table-wrap" id="ragRules"></div></div>
+<div class="card"><h2>מפת מערכת → מה זה אומר ל־QA</h2><div class="table-wrap" id="architectureTable"></div></div>
+<div class="card"><h2>בקרת איכות RAG</h2><div class="context-grid" id="ragQuality"></div></div>
+<details class="card guide-details"><summary>טבלאות ו־Observability</summary><p class="muted">השמות מגיעים מהאפיון. קיום טבלה באפיון לא אומר של־QA יש גישה אליה בפועל.</p><div class="table-wrap" id="ragTables"></div></details>
+<details class="card guide-details"><summary>API ניהול RAG – טיוטה</summary><div class="table-wrap" id="ragApiScope"></div></details>
+<details class="card guide-details"><summary>בדיקות ארכיטקטורה מומלצות</summary><div class="table-wrap" id="candidateTests"></div></details>
+<details class="card guide-details"><summary>קישורי פרויקט ורכיבי מקור</summary><div class="reference-grid" id="referenceLinks"></div></details>
+</div>
+<div class="subpage" data-subpage="guideGaps">
+<div class="card"><div class="section-head"><div><h2>פערים ושאלות פתוחות</h2><p>איחדנו כאן את פערי ה־Contract והשאלות לצוות. פער הוא משהו שחסר ב־Contract; שאלה פתוחה היא מה שצריך לקבל עליו תשובה כדי לקבוע Expected או להשלים בדיקה.</p></div></div></div>
+<div class="card"><h2>פערי Contract</h2><div class="table-wrap" id="contractTable"></div></div>
+<div class="card"><h2>שאלות פתוחות</h2><div class="table-wrap" id="questionsTable"></div></div>
+<div class="card"><h2>מה עדיין חסר כדי להריץ/לאמת</h2><div class="context-grid" id="pendingFacts"></div></div>
+</div>
+</section>
 
 
-    <section id="context" class="tabpage">
-      <div class="card">
-        <div class="section-head"><div><h2>מה כבר ידוע מהצוות</h2><p>המידע כאן מעודכן מהחומרים האחרונים ולא מחליף את ה־Swagger; הוא משלים את ה־API Contract.</p></div><span class="badge pass">Context 14/09</span></div>
-        <div id="knownFacts" class="context-grid"></div>
-      </div>
-      <div class="card">
-        <h2>מה עדיין חסר כדי להריץ אמת</h2>
-        <div id="pendingFacts" class="context-grid"></div>
-      </div>
-      <div class="card">
-        <h2>מפת מערכת → מה זה אומר ל־QA</h2>
-        <div id="architectureTable" class="table-wrap"></div>
-      </div>
-      <div class="card">
-        <h2>בדיקות ארכיטקטורה מומלצות</h2>
-        <p class="muted">אלו Candidate Tests מהארכיטקטורה הכללית. בדיקות אפיון ה־RAG הגנרי נוספו בנפרד לקטלוג עם prefix RAG- ומסומנות כ־Target Design/בדיקות מסייעות.</p>
-        <div id="candidateTests" class="table-wrap"></div>
-      </div>
-      <div class="card">
-        <h2>קישורי פרויקט ורכיבי מקור</h2>
-        <p class="muted">קישורים שנשלחו בצוות. חלקם פנימיים ודורשים הרשאות.</p>
-        <div id="referenceLinks" class="reference-grid"></div>
-      </div>
-    </section>
+<section class="tabpage" id="flow">
+<div class="card">
+<div class="section-head"><div><h2>Conversation Happy Flow</h2><p>Create → History → Send Message (SSE) → Get Conversation → Delete → Verify deletion.</p></div><button class="btn primary" id="flowRunBtn">▶ הרץ Flow</button></div>
+<label>שאלה ל־AI<textarea id="flowQuestion" rows="3">מה אפשר להסיק מהמסמכים הרלוונטיים לשאלה זו?</textarea></label>
+<div class="flow-steps" id="flowSteps"></div>
+</div>
+</section>
+<section class="tabpage" id="api">
+<div class="card">
+<div class="section-head"><div><h2>API Runner</h2><p>הרצה חופשית של כל Endpoint מה־Swagger, או יצירת cURL ל־Postman/סביבה פנימית.</p></div><div class="actions-row"><button class="btn primary" id="apiRunBtn">Run</button><button class="btn ghost" id="copyCurlBtn">העתק cURL</button></div></div>
+<div class="grid cols-2">
+<label>Endpoint<select id="endpointSelect"></select></label>
+<label>Method<input id="apiMethod" readonly=""/></label>
+</div>
+<label>Request JSON<textarea id="apiBody" rows="10" spellcheck="false">{}</textarea></label>
+<div class="result-grid">
+<div><h3>Response</h3><pre id="apiResponse">—</pre></div>
+<div><h3>Meta</h3><pre id="apiMeta">—</pre></div>
+</div>
+</div>
+</section>
+<section class="tabpage" id="ai">
+<div class="card">
+<div class="section-head"><div><h2>GenAI / RAG Inspector</h2><p>הרץ שאלה, ראה את אירועי ה־SSE וסמן איכות ידנית.</p></div><button class="btn primary" id="aiRunBtn">▶ שאל</button></div>
+<label>Prompt<textarea id="aiPrompt" rows="4">ענה על סמך מסמכי המקור בלבד. אם אין מספיק מידע, אמור שאין מספיק מידע.</textarea></label>
+<div class="result-grid">
+<div><h3>Streaming / Answer</h3><pre id="aiStream">—</pre><h3>אירועי SSE שזוהו</h3><div class="event-list" id="aiEvents">—</div></div>
+<div><h3>הערכת QA</h3>
+<div class="rating-buttons">
+<button class="btn ghost" data-rating="Correct">Correct</button>
+<button class="btn ghost" data-rating="Partially Correct">Partially Correct</button>
+<button class="btn ghost" data-rating="Wrong">Wrong</button>
+<button class="btn ghost" data-rating="Hallucination">Hallucination</button>
+<button class="btn ghost" data-rating="Wrong Source">Wrong Source</button>
+</div>
+<label>הערה<textarea id="aiNote" rows="6"></textarea></label>
+<div class="notice" id="aiRating">טרם דורג</div>
+</div>
+</div>
+</div>
+</section><section class="tabpage" id="qaDocs">
+<div class="card">
+<div class="section-head"><div><h2>מסמכי QA</h2><p>STP נותן את תוכנית־העל; STD מתאר את תכנון הבדיקות והכיסוי בפועל.</p></div></div>
+<div class="subtabs" role="tablist">
+<button class="subtab active" data-subtab="qaStp">STP – תוכנית בדיקות</button>
+<button class="subtab" data-subtab="qaStd">STD – תכנון בדיקות</button>
+</div>
+</div>
+<div class="subpage active" data-subpage="qaStp">
+<div class="card">
+<div class="section-head">
+<div><h2>STP – תוכנית בדיקות מערכת</h2><p>מסמך־על שמסביר <b>מה בודקים, למה, איפה, באיזו שיטה ומתי אפשר להכריז שהבדיקות הושלמו</b>.</p></div>
+<button class="btn ghost" id="exportStpBtn">הורד STP בעברית</button>
+</div>
+<div class="context-grid">
+<div class="context-card"><h3>מטרת הבדיקות</h3><p>לוודא שה־GenAI Router עובד תקין בסביבת TSH, שומר על הרשאות ובידוד מידע, מנהל שיחות ו־state נכון, ומחזיר תשובות GenAI/RAG אמינות ובטוחות.</p></div>
+<div class="context-card"><h3>Scope – בתוך הבדיקה</h3><p>API, Authentication, Conversations, History, Messages/SSE, Delete, Files/Chunks, Feedback, Statistics, Boundaries, הרשאות, Prompt Injection, RAG ו־State.</p></div>
+<div class="context-card"><h3>מחוץ ל־Scope כרגע</h3><p>Production, עומסים מלאים ללא SLA, אימות DB מלא ללא גישה לטבלאות, ואיכות עסקית סופית ללא Golden Dataset/SME.</p></div>
+<div class="context-card"><h3>סביבת בדיקה</h3><p>TSH / NON-PROD. הזדהות באמצעות Identity Token שמופק ב־gcloud ונשלח ב־X-Serverless-Authorization. תוקף משוער של Token: שעה.</p></div>
+</div>
+</div>
+<div class="card">
+<h2>אסטרטגיית בדיקות</h2>
+<div class="table-wrap" id="stpStrategy"></div>
+</div>
+<div class="card">
+<h2>תנאי כניסה ויציאה</h2>
+<div class="result-grid">
+<div><h3>Entry Criteria – אפשר להתחיל כש...</h3><ul><li>יש TSH Base URL.</li><li>יש משתמש ענן והרשאה ל־Router.</li><li>ניתן להפיק Identity Token תקין.</li><li>Swagger/Contract זמין.</li><li>קיימים App ID, User ID ו־Case ID לבדיקה.</li></ul></div>
+<div><h3>Exit Criteria – אפשר לסיים כש...</h3><ul><li>כל בדיקות P0 הקריטיות עברו או שיש חריגה מאושרת ומתועדת.</li><li>אין תקלת אבטחה קריטית פתוחה.</li><li>תוצאות P1/P2 תועדו והסיכונים ידועים.</li><li>פערי Contract שחוסמים PASS/FAIL נסגרו או סומנו במפורש.</li><li>דוח הרצה הופק ונשמר.</li></ul></div>
+</div>
+</div>
+<div class="card">
+<h2>סיכונים ותלויות</h2>
+<ul><li>Token קצר־חיים עלול לפוג באמצע ריצה.</li><li>גישה ל־TSH תלויה ברשת ובהרשאות.</li><li>חלק מה־Expected Results עדיין אינם מוגדרים פורמלית ב־Swagger.</li><li>בדיקות State/Delete דורשות גישה או אישור על AlloyDB/לוגים.</li><li>בדיקות GenAI דורשות מקור אמת או SME כדי להכריע איכות עסקית.</li></ul>
+</div>
+</div>
+<div class="subpage" data-subpage="qaStd">
+<div class="card">
+<div class="section-head">
+<div><h2>STD – תכנון ותיאור הבדיקות</h2><p>המסמך המפורט שמתרגם את ה־STP ל־<b>מה בדיוק נבדוק ואיך</b>. קטלוג התסריטים באתר הוא למעשה הליבה של ה־STD.</p></div>
+<button class="btn ghost" id="exportStdBtn">הורד STD בעברית</button>
+</div>
+<div class="kpis" id="stdSummary"></div>
+</div>
+<div class="card">
+<h2>מבנה Test Design</h2>
+<div class="table-wrap" id="stdDesign"></div>
+</div>
+<div class="card">
+<h2>כלל כתיבה לכל Test Case</h2>
+<p>כל תסריט צריך לכלול: <b>ID, עדיפות, תחום, Endpoint, תנאים מקדימים, קלט/צעדים, Expected Result, נתוני בדיקה ותוצאה בפועל</b>. כאשר ה־Expected אינו ידוע – לא מנחשים; מסמנים QUESTION/BLOCKED ומקשרים לפער Contract.</p>
+</div>
+<div class="card">
+<h2>Traceability – קישור בין סיכון לבדיקה</h2>
+<div class="table-wrap" id="stdTraceability"></div>
+</div>
+</div>
+</section>
 
-    <section id="ragSpec" class="tabpage">
-      <div class="card">
-        <div class="section-head">
-          <div>
-            <h2>אפיון תשתית RAG גנרית</h2>
-            <p>תמצית QA של מסמך <b>Ingestion & Retrieval Framework</b>. זהו <b>Target Design / אפיון יעד</b> — לא הוכחה שכל ההתנהגויות כבר ממומשות בסביבת TSH.</p>
-          </div>
-          <span id="ragSpecBadge" class="badge question">Spec / Target Design</span>
-        </div>
-        <div class="spec-callout"><b>שלמות המקור:</b> הקובץ שסופק נקרא עד סופו. עם זאת, במסמך עצמו סעיף <b>API נדרשים</b> מסתיים ב־"להשלים!!", ולכן רשימת ה־API שם מסומנת באתר כטיוטה ולא כ־Contract סופי.</div>
-      </div>
 
-      <div class="card">
-        <h2>זרימות מרכזיות</h2>
-        <div id="ragPipelines" class="pipeline-grid"></div>
-      </div>
 
-      <div class="card">
-        <h2>כללי Business / QA שנגזרו מהאפיון</h2>
-        <div id="ragRules" class="table-wrap"></div>
-      </div>
 
-      <div class="card">
-        <h2>טבלאות ו־Observability</h2>
-        <p class="muted">השמות מגיעים מהאפיון. עצם קיום הטבלה במסמך עדיין לא אומר של־QA יש גישה אליה בפועל.</p>
-        <div id="ragTables" class="table-wrap"></div>
-      </div>
-
-      <div class="card">
-        <h2>בקרת איכות RAG</h2>
-        <div id="ragQuality" class="context-grid"></div>
-      </div>
-
-      <div class="card">
-        <h2>API באפיון</h2>
-        <div id="ragApiScope" class="table-wrap"></div>
-      </div>
-    </section>
-
-    <section id="report" class="tabpage">
-      <div class="card">
-        <div class="section-head"><div><h2>Test Run Report</h2><p>ה־Token לעולם לא נכנס לדוח.</p></div><div><button id="exportJson" class="btn">Export JSON</button> <button id="exportCsv" class="btn ghost">Export CSV</button></div></div>
-        <div id="reportTable" class="table-wrap"></div>
-      </div>
-    </section>
-  </main>
-
-  <dialog id="testDialog" class="test-dialog">
-    <form method="dialog" class="dialog-card">
-      <div class="section-head"><div><h2 id="dialogTitle">Test</h2><p id="dialogSubtitle"></p></div><button class="btn ghost" value="cancel">✕</button></div>
-      <div id="dialogBody" class="dialog-body"></div>
-      <div id="dialogEvidence" class="dialog-evidence"></div>
-      <label>הערת QA<textarea id="manualNote" rows="4" placeholder="מה בדקת ומה בפועל קרה?"></textarea></label>
-      <div class="actions-row dialog-actions">
-        <button type="button" class="btn" data-manual-status="PASS">PASS</button>
-        <button type="button" class="btn" data-manual-status="FAIL">FAIL</button>
-        <button type="button" class="btn" data-manual-status="BLOCKED">BLOCKED</button>
-        <button type="button" class="btn" data-manual-status="QUESTION">QUESTION</button>
-        <button id="dialogCopyCurlBtn" type="button" class="btn ghost" hidden>העתק cURL / Postman</button>
-        <button id="dialogRunBtn" type="button" class="btn primary">Run</button>
-      </div>
-    </form>
-  </dialog>
-  <footer>GenAI Router QA Console · Swagger 1.0.6 · UI v1.6</footer>
-  <script src="/app.js" type="module"></script>
+<section class="tabpage" id="report">
+<div class="card">
+<div class="section-head"><div><h2>Test Run Report</h2><p>ה־Token לעולם לא נכנס לדוח.</p></div><div><button class="btn" id="exportJson">Export JSON</button> <button class="btn ghost" id="exportCsv">Export CSV</button></div></div>
+<div class="table-wrap" id="reportTable"></div>
+</div>
+</section>
+</main>
+<dialog class="test-dialog" id="testDialog">
+<form class="dialog-card" method="dialog">
+<div class="section-head"><div><h2 id="dialogTitle">Test</h2><p id="dialogSubtitle"></p></div><button class="btn ghost" value="cancel">✕</button></div>
+<div class="dialog-body" id="dialogBody"></div>
+<div class="dialog-evidence" id="dialogEvidence"></div>
+<label>הערת QA<textarea id="manualNote" placeholder="מה בדקת ומה בפועל קרה?" rows="4"></textarea></label>
+<div class="actions-row dialog-actions">
+<button class="btn" data-manual-status="PASS" type="button">PASS</button>
+<button class="btn" data-manual-status="FAIL" type="button">FAIL</button>
+<button class="btn" data-manual-status="BLOCKED" type="button">BLOCKED</button>
+<button class="btn" data-manual-status="QUESTION" type="button">QUESTION</button>
+<button class="btn ghost" hidden="" id="dialogCopyCurlBtn" type="button">העתק cURL / Postman</button>
+<button class="btn primary" id="dialogRunBtn" type="button">Run</button>
+</div>
+</form>
+</dialog>
+<footer>GenAI Router QA Console · Swagger 1.0.6 · UI v1.7</footer>
+<script src="/app.js" type="module"></script>
 </body>
 </html>

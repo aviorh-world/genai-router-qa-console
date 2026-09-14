@@ -1,4 +1,4 @@
-# GenAI Router QA Console v1.6
+# GenAI Router QA Console v1.7
 
 Update highlights:
 - Default QA user: `aviorha@taxes.gov.il`
@@ -24,10 +24,19 @@ Still required before real execution: exact TSH Base URL and confirmation that t
 - Fixed topbar contrast.
 
 
-## v1.6
+## v1.7
 - Collapsible TSH / Google CLI safety guidance.
 - Added RAG Generic Spec tab, explicitly marked as Target Design.
 - Added 14 assisted RAG spec test cases (authorization, filtered retrieval, ingestion state, re-ingestion, versioning, config, audit, Top-K quality).
 - Added RAG Spec Pack; unavailable/instrumentation-dependent tests become N/A in bulk runs.
 - Added SQL/observability tables and RAG quality flow from the supplied specification.
 - API section from the source is explicitly marked incomplete because the source itself ends it with 'להשלים!!'.
+
+
+## v1.7 UX
+- Reduced top-level navigation to 8 tabs.
+- Unified Contract gaps + open questions under System Guide.
+- Unified STP + STD under QA Documents.
+- Added general usage guide, core flows, result-status guide and a Hebrew guide for all 23 Swagger endpoints.
+- Simplified environment setup; advanced fields are collapsed.
+- Removed the Copy Questions button.
