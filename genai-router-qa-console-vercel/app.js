@@ -49,6 +49,7 @@ function testPrereqIssues(id,t,{bulk=false}={}){
   if(['P0-014','P0-018','P0-020','P0-024'].includes(id) && !c.userIdB) issues.push('חסר User ID B');
   if(['P0-029','P0-030','P0-031','P1-023'].includes(id)) issues.push('חסר Source אמיתי (bucket/file/chunk)');
   if(id==='P0-036') issues.push('נדרש DB/Log visibility או Fault Injection');
+  if(String(id).startsWith('RAG-')) issues.push('נדרשת גישת RAG/Observability או Test Data ייעודי בהתאם לתרחיש');
   return issues;
 }
 function safeEvidenceHeaders(token,authHeader){
@@ -81,7 +82,9 @@ const CONTRACT_GAPS = [
   {severity:'MEDIUM',area:'Delete / State',gap:'AlloyDB מזוהה כ-DB של sessions/state/logs, אך לא מוגדר אם Delete הוא Hard/Soft ומה משתנה בטבלאות.',impact:'אימות persistence נשאר ידני עד לקבלת table/schema + business rule.'},
   {severity:'MEDIUM',area:'Streaming',gap:'קיים event בשם thought ללא הגדרה האם זה Progress מסונן או reasoning פנימי.',impact:'נדרשת בדיקת אבטחה שאין חשיפת System Prompt/Chain-of-Thought.'},
   {severity:'MEDIUM',area:'Message Length',gap:'Request מאפשר עד 32,768 תווים בעוד Message persisted/returned מתועד עד 8,192.',impact:'לא ברור מה Expected עבור הודעה גדולה מ־8,192.'},
-  {severity:'MEDIUM',area:'Authorization / Sources',gap:'מסמך ההרשאות מגדיר least-privilege ל-Service Accounts, אך לא ownership אפליקטיבי של File/Chunk/Case למשתמש.',impact:'בדיקות IDOR על GCS/Chunks עדיין דורשות כלל הרשאה מוסכם.'}
+  {severity:'MEDIUM',area:'Authorization / Sources',gap:'מסמך ההרשאות מגדיר least-privilege ל-Service Accounts, אך לא ownership אפליקטיבי של File/Chunk/Case למשתמש.',impact:'בדיקות IDOR על GCS/Chunks עדיין דורשות כלל הרשאה מוסכם.'},
+  {severity:'HIGH',area:'RAG Target Design',gap:'אפיון ה-RAG הגנרי מתאר Target Design מפורט, אך עדיין לא ידוע אילו חלקים ממנו כבר ממומשים ב-TSH.',impact:'בדיקות RAG-001…RAG-014 מסומנות כבדיקות Spec/Assisted עד walkthrough או observability שמוכיחים Runtime behavior.'},
+  {severity:'MEDIUM',area:'RAG Management APIs',gap:'המסמך מציג Category / Document Category / Permission APIs אך מסיים את הסעיף ב-"להשלים!!".',impact:'אין לבנות אוטומציה מול endpoints אלה עד לקבלת API Contract סופי.'}
 ];
 
 function validCaseId(v){ return /^\d{9}$/.test(v||''); }
@@ -192,6 +195,11 @@ async function loadData(){
   }
   const q=raw['04_שאלות_פתוחות']; const qh=q[0];
   state.questions=q.slice(1).map(r=>Object.fromEntries(qh.map((x,i)=>[x,r[i]])));
+  state.questions.push(
+    {'Test ID':'RAG-SPEC','תחום':'RAG / Scope','Endpoint':'Target Design','שאלה פתוחה':'אילו חלקים מאפיון ה-RAG הגנרי כבר ממומשים בפועל בסביבת TSH ואילו עדיין Future/Planned?','מקור / למה נדרש':'המסמך הוא אפיון יעד; נדרש להפריד בין Expected עתידי לבין Runtime קיים.','Status':'Open'},
+    {'Test ID':'RAG-010','תחום':'RAG Quality','Endpoint':'Retrieval / Top-K','שאלה פתוחה':'מהו סף ההצלחה המוסכם לאיכות Retrieval — Top-3, Top-5, Recall@K או מדד אחר?','מקור / למה נדרש':'האפיון מציע Top-3/Top-5 כדוגמאות אך משאיר את ההחלטה פתוחה.','Status':'Open'},
+    {'Test ID':'RAG-API','תחום':'RAG Management API','Endpoint':'Category / Mapping / Permission APIs','שאלה פתוחה':'מהם ה-endpoints, schemas וקודי השגיאה הסופיים של APIs לניהול קטגוריות/שיוכים/הרשאות?','מקור / למה נדרש':'במסמך סעיף API נדרשים מסתיים ב-"להשלים!!" ולכן אינו Contract סופי.','Status':'Open'}
+  );
 
   const boundaryTests = [
     ['BND-001','P1','Validation','/v1/conversations/new','App ID ריק (0 תווים)','שלח appId=""','4xx Validation','auto'],
@@ -213,6 +221,26 @@ async function loadData(){
   ];
   for (const [ID,priority,domain,Endpoint,scenario,steps,expected,mode] of boundaryTests) {
     state.tests.push({ID,priority,mode,'תחום':domain,Endpoint,'תרחיש בדיקה':scenario,'תנאים מקדימים':'Base URL + Identity Token תקינים','צעדים / קלט':steps,'Expected Result':expected,'שאלה פתוחה / נדרש אישור':'','מקור / הערה':'Boundary Pack v1.3'});
+  }
+
+  const ragSpecTests = [
+    ['RAG-001','P0','RAG Authorization','Retrieval / Category Filtering','קטגוריה לא מורשית אינה נכנסת למרחב החיפוש','הכן מסמך בקטגוריה A המורשית למשתמש ומסמך בקטגוריה B שאינה מורשית; שאל שאלה שמפתה לבחור ב-B','אין document_id/chunk/source מקטגוריה B, ואין תוכן ממנה בתשובה'],
+    ['RAG-002','P0','RAG Authorization','Retrieval / Authorized Categories','משתמש ללא קטגוריות מורשות נעצר לפני Semantic Search','הרץ שאילתה עם משתמש שאין לו category permissions','התהליך נעצר עם הודעה מתאימה; אין חיפוש ואין תשובה המבוססת על מסמכים'],
+    ['RAG-003','P0','RAG Fallback','Retrieval / Category Selection','Confidence נמוך לא מרחיב הרשאות','גרום לבחירת קטגוריה לא בטוחה / ambiguous query','Fallback לכל הקטגוריות המורשות בלבד'],
+    ['RAG-004','P0','Ingestion State','Ingestion','מסמך שנכשל בשלב חובה אינו searchable','גרום לכשל ב-Content Extraction / Chunk / Embedding','ingestion נכשל והמסמך אינו נחשף ל-Retrieval'],
+    ['RAG-005','P0','Re-Ingestion','Ingestion / Versioning','Re-Ingestion כושל לא מחליף גרסה פעילה','הפעל Re-Ingestion לגרסה חדשה וגרום לכשל','הגרסה הקודמת נשארת פעילה וזמינה לחיפוש'],
+    ['RAG-006','P1','Versioning','Ingestion Strategy','שינוי Strategy יוצר Version חדש ללא שינוי רטרואקטיבי','שנה פרמטר Strategy ופרסם','גרסה חדשה להרצות חדשות; מסמכים קיימים שומרים strategy/version המקורי'],
+    ['RAG-007','P1','Configuration','YAML / Admin','קונפיגורציה לא חוקית אינה מתפרסמת','הזן handler לא קיים / ערך מחוץ לטווח / reference חסר','Validation נכשל; אין השפעה על RAG הפעיל'],
+    ['RAG-008','P1','Multi Category','Ingestion / Categories','מסמך בכמה קטגוריות עם Strategies שונות דורש Strategy אחת','שייך מסמך לשתי קטגוריות עם default strategies שונות','נדרשת בחירה לפני תחילת עיבוד; רצה אסטרטגיה אחת בלבד'],
+    ['RAG-009','P1','Chunk Filtering','Retrieval / document_id','Semantic Search רץ רק על document_ids שנבחרו','צור מסמכים דומים בקטגוריות שונות והשווה sources/chunks','Top-K אינו מכיל chunk מ-document_id שסונן החוצה'],
+    ['RAG-010','P1','RAG Quality','Retrieval / Top-K','ה-Chunk הנכון נמצא ב-Top-K עבור Golden Question','שאלה עם expected answer + expected source section','המקור הרלוונטי מופיע ב-Top-K לפי הסף שיוגדר (Top-3/Top-5 עדיין פתוח)'],
+    ['RAG-011','P1','Audit','AUDIT','שינוי קטגוריה/Strategy/Mapping נרשם ב-AUDIT','בצע שינוי מבוקר והשווה audit row','נשמרים action/entity/old/new/user/time'],
+    ['RAG-012','P1','Observability','INGESTION_EXECUTION','כשל Ingestion ניתן לתחקור','גרום לכשל בשלב ידוע','execution_status/current_step/error_details/timestamps מאפשרים לזהות היכן ולמה נכשל'],
+    ['RAG-013','P1','Category Selection','Retrieval / LLM','בחירת קטגוריה מחזירה נתונים מובנים','הרץ שאילתה חד-משמעית ו-ambiguous','שם קטגוריה + confidence + reason; multiple categories לפי config'],
+    ['RAG-014','P1','Category Mapping','DOCUMENT_CATEGORY_MAPPING','אין כפילויות/שגיאות בשיוך מסמך לקטגוריות','שייך/הסר/שייך מחדש ובדוק mapping','מיפוי עקבי; retrieval משקף את השיוך הפעיל בלבד']
+  ];
+  for (const [ID,priority,domain,Endpoint,scenario,steps,expected] of ragSpecTests) {
+    state.tests.push({ID,priority,mode:'assisted','תחום':domain,Endpoint,'תרחיש בדיקה':scenario,'תנאים מקדימים':'מימוש/גישה לרכיבי RAG + Test Documents/Categories + Observability מתאימה','צעדים / קלט':steps,'Expected Result':expected,'שאלה פתוחה / נדרש אישור':ID==='RAG-010'?'לקבוע סף Quality מוסכם: Top-3 / Top-5 / metric אחר':'','מקור / הערה':'אפיון תשתית RAG גנרית — Target Design; לא בהכרח Runtime Contract נוכחי'});
   }
   state.operations=sw.operations;
   renderAll(); populateEndpoints();
@@ -413,7 +441,7 @@ async function runTest(id,{bulk=false}={}){
       case 'BND-014': body={bucketName:'qa-bucket',fileName:'a'.repeat(1025)}; r=await proxy({method:'POST',path:'/v1/files/download',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
       case 'BND-015': {const dt=new Date().toISOString(); body={startDate:dt,endDate:dt}; r=await proxy({method:'POST',path:'/v1/statistics/active-users',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`;} break;
       case 'BND-016': body={startDate:'2026-09-14T00:00:00Z',endDate:'2026-09-15T00:00:00Z'}; r=await proxy({method:'POST',path:'/v1/statistics/active-users',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
-      default: return result(id,'BLOCKED','אין אוטומציה ייעודית עדיין','התסריט נשאר זמין לביצוע ידני/דרך API Runner.');
+      default: return result(id,bulk?'N/A':'BLOCKED','אין אוטומציה ייעודית עדיין','התסריט נשאר זמין לביצוע ידני/מסייע. בהרצה כוללת הוא אינו נספר ככשל.');
     }
     return result(id,state.demo?'DEMO':(pass?'PASS':'FAIL'),actual,state.demo?'סימולציה בלבד — לא נשלחה בקשה אמיתית ל-TSH.':(t['Expected Result']||''));
   }catch(e){ const missing=/חסרים שדות|חסר /.test(e.message||''); return result(id,(bulk&&missing)?'N/A':'BLOCKED',e.message,'לא בוצעה קביעה עסקית.'); }
@@ -429,6 +457,12 @@ async function runBoundaryPack(){
   const ids=state.tests.filter(t=>t.ID.startsWith('BND-')&&t.mode==='auto').map(t=>t.ID); $('runSummary').innerHTML='';
   for(const id of ids){ const r=await runTest(id,{bulk:true}); if(r)$('runSummary').innerHTML += `<div class="run-item"><b>${id}</b><span class="${statusClass(r.status)}">${r.status}</span><span>${esc(r.actual)}</span></div>`; }
   showToast('Boundary Pack הסתיים.','success');
+}
+
+async function runRagSpecPack(){
+  const ids=state.tests.filter(t=>t.ID.startsWith('RAG-')).map(t=>t.ID); $('runSummary').innerHTML='';
+  for(const id of ids){ const r=await runTest(id,{bulk:true}); if(r)$('runSummary').insertAdjacentHTML('beforeend',`<div class="run-item"><b>${esc(id)}</b><span class="${statusClass(r.status)}">${esc(r.status)}</span><span>${esc(r.actual)}</span></div>`); }
+  showToast('RAG Spec Pack הסתיים. בדיקות שאין להן Observability/Test Data מסומנות N/A.','info',5000);
 }
 
 async function runAllTests(){
@@ -490,7 +524,7 @@ async function happyFlow(){
 
 function runUiSelfTest(){
   const checks=[]; const check=(name,ok,detail='')=>checks.push({name,ok:!!ok,detail});
-  const buttonIds=['demoBtn','healthBtn','markTokenBtn','readinessBtn','copyQuestionsBtn','runAllTests','runSafeP0','runBoundaryPack','runHappyFlow','uiSelfTestBtn','clearResults','flowRunBtn','apiRunBtn','copyCurlBtn','aiRunBtn','exportJson','exportCsv','exportStpBtn','exportStdBtn','dialogRunBtn','dialogCopyCurlBtn'];
+  const buttonIds=['demoBtn','healthBtn','markTokenBtn','readinessBtn','copyQuestionsBtn','runAllTests','runSafeP0','runBoundaryPack','runRagSpecPack','runHappyFlow','uiSelfTestBtn','clearResults','flowRunBtn','apiRunBtn','copyCurlBtn','aiRunBtn','exportJson','exportCsv','exportStpBtn','exportStdBtn','dialogRunBtn','dialogCopyCurlBtn'];
   buttonIds.forEach(id=>{const el=$(id);check(`כפתור ${id}`,!!el && (typeof el.onclick==='function'||id==='dialogCopyCurlBtn'),!el?'לא נמצא':typeof el.onclick);});
   document.querySelectorAll('.tab').forEach(tab=>check(`Tab ${tab.dataset.tab}`,!!$(tab.dataset.tab)&&typeof tab.onclick==='function','Target section + click handler'));
   document.querySelectorAll('[data-manual-status]').forEach(b=>check(`Manual status ${b.dataset.manualStatus}`,typeof b.onclick==='function','click handler'));
@@ -498,6 +532,8 @@ function runUiSelfTest(){
   check('כפתור סגירת Dialog',document.querySelector('#testDialog form[method="dialog"] button[value="cancel"]')!=null,'native dialog close');
   check('קטלוג בדיקות נטען',state.tests.length>0,`${state.tests.length} tests`); check('Swagger operations נטענו',state.operations.length>0,`${state.operations.length} operations`);
   check('P0-002 ברור',plainTestExplanation({ID:'P0-002'}).includes('gcloud'),'הסבר פשוט קיים');
+  check('הנחיות Setup מקופלות',document.querySelector('details.setup-help')!=null,'native details/summary');
+  check('RAG Spec נטען',!!state.context?.ragSpec && state.tests.some(t=>t.ID==='RAG-001'),'Spec cards + RAG test pack');
   check('Demo אינו PASS אמיתי',true,'ב־Demo תוצאות אוטומטיות מסומנות DEMO');
   const failed=checks.filter(x=>!x.ok); state.uiSelfTest={time:now(),checks};
   $('runSummary').innerHTML=`<div class="ui-test-list">${checks.map(x=>`<div class="ui-test-item ${x.ok?'ok':'fail'}"><b>${x.ok?'✓':'✕'} ${esc(x.name)}</b>${x.detail?` — ${esc(x.detail)}`:''}</div>`).join('')}</div>`;
@@ -523,6 +559,16 @@ function renderContext(){
 }
 
 
+function renderRagSpec(){
+  const spec=state.context?.ragSpec; if(!spec)return;
+  if($('ragSpecBadge')) $('ragSpecBadge').textContent=spec.status||'Spec';
+  if($('ragPipelines')) $('ragPipelines').innerHTML=(spec.pipelines||[]).map(p=>`<div class="pipeline-card"><h3>${esc(p.name)}</h3><div class="pipeline-steps">${(p.steps||[]).map((s,i)=>`<div class="pipeline-step"><span>${i+1}</span>${esc(s)}</div>`).join('')}</div>${p.note?`<p>${esc(p.note)}</p>`:''}</div>`).join('');
+  if($('ragRules')) $('ragRules').innerHTML=`<table class="qa-table"><thead><tr><th>Priority</th><th>כלל</th><th>מה בודקים</th></tr></thead><tbody>${(spec.rules||[]).map(r=>`<tr><td class="${String(r.priority).toLowerCase()}">${esc(r.priority)}</td><td>${esc(r.rule)}</td><td>${esc(r.qa)}</td></tr>`).join('')}</tbody></table>`;
+  if($('ragTables')) $('ragTables').innerHTML=`<table class="qa-table"><thead><tr><th>טבלה</th><th>מטרה</th><th>QA</th></tr></thead><tbody>${(spec.tables||[]).map(r=>`<tr><td dir="ltr"><b>${esc(r.name)}</b></td><td>${esc(r.purpose)}</td><td>${esc(r.qa)}</td></tr>`).join('')}</tbody></table>`;
+  if($('ragQuality')) $('ragQuality').innerHTML=(spec.quality||[]).map(x=>`<div class="context-card"><h3>${esc(x.title)}</h3><p>${esc(x.detail)}</p></div>`).join('');
+  if($('ragApiScope')) $('ragApiScope').innerHTML=`<table class="qa-table"><thead><tr><th>קבוצת API</th><th>פעולות שצוינו</th><th>Status</th></tr></thead><tbody>${(spec.apis||[]).map(x=>`<tr><td><b>${esc(x.group)}</b></td><td>${esc(x.items)}</td><td class="status-question">${esc(x.status)}</td></tr>`).join('')}</tbody></table>`;
+}
+
 function renderStpStd(){
   if(!$('stpStrategy') || !$('stdDesign')) return;
   const byPriority={P0:0,P1:0,P2:0};
@@ -536,6 +582,7 @@ function renderStpStd(){
     ['P1 – חשוב','Validation, Boundaries, Error Handling, Pagination, Files/Chunks, Feedback','להריץ אחרי P0 ולפני סגירת גרסה'],
     ['P2 – משלים','Robustness, Metadata, תרחישי קצה משלימים','להריץ לפי זמן וסיכון'],
     ['GenAI / RAG','Grounding, Sources, Hallucination, Prompt Injection, SSE/Thought Leakage','שילוב אוטומציה + הערכת QA/SME'],
+    ['RAG Generic Spec','Ingestion, Category RBAC, Filtered Retrieval, Re-Ingestion, Config/Audit, Top-K Quality','Target Design: לאשר מול Runtime/Observability לפני PASS סופי'],
     ['State / Persistence','Create, History, Delete, Session/Memory consistency','API + אימות DB/Log כשיינתן access'],
   ];
   $('stpStrategy').innerHTML=`<table class="qa-table"><thead><tr><th>שכבה</th><th>מה נבדק</th><th>גישה</th></tr></thead><tbody>${strategy.map(r=>`<tr>${r.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
@@ -562,13 +609,14 @@ function renderStpStd(){
     ['Hallucination / מקור שגוי','RAG Quality','Sources, chunks, grounding, manual SME rating'],
     ['קלטי קצה','Boundary / Validation','Boundary Pack + max/min/empty/invalid values'],
     ['Streaming שבור','SSE','event order, done/error, disconnect, malformed event'],
+    ['RAG Spec / Category RBAC','Ingestion + Retrieval Target Design','RAG-001…RAG-014; לא מסיקים שהמימוש קיים רק כי הוא מופיע באפיון'],
     ['מידע סטטיסטי רגיש','Statistics / RBAC','Access control + response data review']
   ];
   if($('stdTraceability')) $('stdTraceability').innerHTML=`<table class="qa-table"><thead><tr><th>סיכון</th><th>אזור בדיקה</th><th>כיסוי ב־STD</th></tr></thead><tbody>${trace.map(r=>`<tr>${r.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
 }
 
 function stpMarkdown(){
-  return `# STP – תוכנית בדיקות GenAI Router\n\n## מטרה\nלוודא שה-Router עובד תקין בסביבת TSH, מנהל שיחות ו-state בצורה עקבית, אוכף הרשאות ומחזיר תשובות GenAI/RAG אמינות ובטוחות.\n\n## Scope\nAPI, Authentication, Conversations, History, SSE Messages, Delete, Files/Chunks, Feedback, Statistics, Boundaries, Authorization, RAG, Prompt Injection ו-State.\n\n## מחוץ ל-Scope כרגע\nProduction; עומסים ללא SLA; DB מלא ללא גישה; איכות עסקית סופית ללא Golden Dataset/SME.\n\n## סביבת בדיקה\nTSH/NON-PROD. Identity Token באמצעות gcloud auth print-identity-token ונשלח ב-X-Serverless-Authorization.\n\n## Entry Criteria\n- TSH Base URL\n- משתמש ענן והרשאת Router\n- Identity Token תקין\n- Swagger/Contract זמין\n- Test Data בסיסי\n\n## Exit Criteria\n- כל P0 עברו או אושרה חריגה\n- אין תקלת אבטחה קריטית פתוחה\n- P1/P2 תועדו\n- פערי Contract החוסמים החלטה סומנו/נסגרו\n- הופק Test Run Report\n\n## סיכונים\nToken קצר חיים; תלות ברשת/הרשאות; Contract חלקי; תלות ב-DB/Logs; צורך ב-SME לבדיקות איכות AI.\n`;
+  return `# STP – תוכנית בדיקות GenAI Router\n\n## מטרה\nלוודא שה-Router עובד תקין בסביבת TSH, מנהל שיחות ו-state בצורה עקבית, אוכף הרשאות ומחזיר תשובות GenAI/RAG אמינות ובטוחות.\n\n## Scope\nAPI, Authentication, Conversations, History, SSE Messages, Delete, Files/Chunks, Feedback, Statistics, Boundaries, Authorization, RAG, Prompt Injection ו-State. בנוסף נכללות בדיקות Target Design של אפיון ה-RAG הגנרי (Ingestion/Retrieval), המסומנות בנפרד ואינן הוכחה למימוש נוכחי.\n\n## מחוץ ל-Scope כרגע\nProduction; עומסים ללא SLA; DB מלא ללא גישה; איכות עסקית סופית ללא Golden Dataset/SME.\n\n## סביבת בדיקה\nTSH/NON-PROD. Identity Token באמצעות gcloud auth print-identity-token ונשלח ב-X-Serverless-Authorization.\n\n## Entry Criteria\n- TSH Base URL\n- משתמש ענן והרשאת Router\n- Identity Token תקין\n- Swagger/Contract זמין\n- Test Data בסיסי\n\n## Exit Criteria\n- כל P0 עברו או אושרה חריגה\n- אין תקלת אבטחה קריטית פתוחה\n- P1/P2 תועדו\n- פערי Contract החוסמים החלטה סומנו/נסגרו\n- הופק Test Run Report\n\n## סיכונים\nToken קצר חיים; תלות ברשת/הרשאות; Contract חלקי; תלות ב-DB/Logs; צורך ב-SME לבדיקות איכות AI; אפיון ה-RAG הוא Target Design וסעיף ה-API שלו עדיין מסומן להשלמה.\n`;
 }
 function stdMarkdown(){
   const lines=[`# STD – תכנון ותיאור בדיקות GenAI Router`,``,`סה״כ תסריטים: ${state.tests.length}`,``,'## Test Cases'];
@@ -580,7 +628,7 @@ function exportStd(){exportBlob('STD-GenAI-Router-he.md','text/markdown;charset=
 
 function renderKpis(){ $('kpiTotal').textContent=state.tests.length; $('kpiAuto').textContent=state.tests.filter(t=>t.mode!=='manual').length; $('kpiPass').textContent=Object.values(state.results).filter(r=>r.status==='PASS').length; $('kpiFail').textContent=Object.values(state.results).filter(r=>r.status==='FAIL').length; if($('kpiNA'))$('kpiNA').textContent=Object.values(state.results).filter(r=>r.status==='N/A').length; if($('kpiDemo'))$('kpiDemo').textContent=Object.values(state.results).filter(r=>r.status==='DEMO').length; $('kpiOpen').textContent=state.questions.filter(q=>(q.Status||'Open')==='Open').length; }
 function renderReport(){ const rs=Object.values(state.results); $('reportTable').innerHTML=rs.length?`<table class="qa-table"><thead><tr><th>ID</th><th>Status</th><th>Mode</th><th>Actual</th><th>Details</th><th>Evidence</th><th>Time</th></tr></thead><tbody>${rs.map(r=>`<tr><td>${r.id}</td><td class="${statusClass(r.status)}">${r.status}</td><td>${esc(r.evidence?.mode||'—')}</td><td>${esc(r.actual)}</td><td>${esc(r.details)}</td><td>${r.evidence?'Request/Response שמור':'—'}</td><td dir="ltr">${r.time}</td></tr>`).join('')}</tbody></table>`:'אין תוצאות עדיין.'; }
-function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderContract();renderContext();renderStpStd();readiness();}
+function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderContract();renderContext();renderRagSpec();renderStpStd();readiness();}
 
 function populateEndpoints(){ const s=$('endpointSelect'); s.innerHTML=state.operations.map((o,i)=>`<option value="${i}">${o.method} ${o.path} — ${esc(o.operationId)}</option>`).join(''); s.onchange=syncApiTemplate; syncApiTemplate(); }
 function syncApiTemplate(){ const o=state.operations[+$('endpointSelect').value||0]; if(!o)return; $('apiMethod').value=o.method; $('apiBody').value=JSON.stringify(requestBody(o.path,o.method),null,2); }
@@ -597,7 +645,7 @@ function demo(){state.demo=!state.demo;$('demoBtn').textContent=state.demo?'Demo
 function wire(){
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tabpage').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active');});
   $('searchTests').oninput=renderCatalog;$('priorityFilter').onchange=renderCatalog;$('modeFilter').onchange=renderCatalog;
-  $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('markTokenBtn').onclick=()=>{markTokenNow();showToast('זמן הפקת Token סומן.','success');};$('readinessBtn').onclick=()=>{const ok=readiness();showToast(ok?'הסביבה מוכנה להרצה.':'עדיין חסרים נתונים — ראה כרטיסי המוכנות. ',ok?'success':'warning');};$('copyQuestionsBtn').onclick=copyQuestions;$('runAllTests').onclick=runAllTests;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runHappyFlow').onclick=happyFlow;$('uiSelfTestBtn').onclick=runUiSelfTest;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('copyCurlBtn').onclick=copyCurl;$('aiRunBtn').onclick=aiRun;
+  $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('markTokenBtn').onclick=()=>{markTokenNow();showToast('זמן הפקת Token סומן.','success');};$('readinessBtn').onclick=()=>{const ok=readiness();showToast(ok?'הסביבה מוכנה להרצה.':'עדיין חסרים נתונים — ראה כרטיסי המוכנות. ',ok?'success':'warning');};$('copyQuestionsBtn').onclick=copyQuestions;$('runAllTests').onclick=runAllTests;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runRagSpecPack').onclick=runRagSpecPack;$('runHappyFlow').onclick=happyFlow;$('uiSelfTestBtn').onclick=runUiSelfTest;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('copyCurlBtn').onclick=copyCurl;$('aiRunBtn').onclick=aiRun;
   $('clearResults').onclick=()=>{state.results={};state.lastExchange=null;$('runSummary').innerHTML='';renderAll();showToast('תוצאות ההרצה אופסו.','success');};
   $('exportJson').onclick=exportJson;$('exportCsv').onclick=exportCsv; if($('exportStpBtn')) $('exportStpBtn').onclick=exportStp; if($('exportStdBtn')) $('exportStdBtn').onclick=exportStd;
   ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',readiness)); $('executionMode').addEventListener('change',readiness); $('authHeader').addEventListener('change',readiness); $('cloudAccessConfirmed').addEventListener('change',readiness); $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));

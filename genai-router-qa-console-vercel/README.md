@@ -1,4 +1,4 @@
-# GenAI Router QA Console v1.5
+# GenAI Router QA Console v1.6
 
 Update highlights:
 - Default QA user: `aviorha@taxes.gov.il`
@@ -22,3 +22,12 @@ Still required before real execution: exact TSH Base URL and confirmation that t
 - Happy Flow now reports visible errors and switches to its results tab.
 - Added UI Self Test and button feedback toasts.
 - Fixed topbar contrast.
+
+
+## v1.6
+- Collapsible TSH / Google CLI safety guidance.
+- Added RAG Generic Spec tab, explicitly marked as Target Design.
+- Added 14 assisted RAG spec test cases (authorization, filtered retrieval, ingestion state, re-ingestion, versioning, config, audit, Top-K quality).
+- Added RAG Spec Pack; unavailable/instrumentation-dependent tests become N/A in bulk runs.
+- Added SQL/observability tables and RAG quality flow from the supplied specification.
+- API section from the source is explicitly marked incomplete because the source itself ends it with 'להשלים!!'.
