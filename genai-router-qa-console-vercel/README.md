@@ -1,4 +1,4 @@
-# GenAI Router QA Console v1.3
+# GenAI Router QA Console v1.4
 
 Update highlights:
 - Default QA user: `aviorha@taxes.gov.il`
@@ -9,3 +9,7 @@ Update highlights:
 - Token stays session-only and is not exported to reports
 
 Still required before real execution: exact TSH Base URL and confirmation that the cloud user is authorized to invoke the Router.
+
+
+## v1.4
+נוספו STP ו-STD בעברית בתוך האתר, כולל תכנית בדיקות, תנאי כניסה/יציאה, אסטרטגיית בדיקות, Traceability וייצוא Markdown.

@@ -13,7 +13,7 @@
       <p>כלי QA ל־Router 1.0.6 — Swagger + TSH + ארכיטקטורה + Postman</p>
     </div>
     <div class="top-actions">
-      <span class="badge version">v1.3</span>
+      <span class="badge version">v1.4</span>
       <span id="connectionBadge" class="badge neutral">לא מחובר</span>
       <button id="demoBtn" class="btn ghost">Demo Mode</button>
     </div>
@@ -49,6 +49,8 @@
     <nav class="tabs">
       <button data-tab="dashboard" class="tab active">Dashboard</button>
       <button data-tab="catalog" class="tab">תסריטים + Boundaries</button>
+      <button data-tab="stp" class="tab">STP – תוכנית בדיקות</button>
+      <button data-tab="std" class="tab">STD – תכנון בדיקות</button>
       <button data-tab="flow" class="tab">Auto Flow</button>
       <button data-tab="api" class="tab">API Runner</button>
       <button data-tab="ai" class="tab">GenAI / RAG</button>
@@ -99,6 +101,59 @@
           <select id="modeFilter"><option value="">כל המצבים</option><option value="auto">אוטומטי</option><option value="assisted">מסייע</option><option value="manual">ידני</option></select>
         </div>
         <div id="testsTableWrap" class="table-wrap"></div>
+      </div>
+    </section>
+
+
+    <section id="stp" class="tabpage">
+      <div class="card">
+        <div class="section-head">
+          <div><h2>STP – תוכנית בדיקות מערכת</h2><p>מסמך־על שמסביר <b>מה בודקים, למה, איפה, באיזו שיטה ומתי אפשר להכריז שהבדיקות הושלמו</b>.</p></div>
+          <button id="exportStpBtn" class="btn ghost">הורד STP בעברית</button>
+        </div>
+        <div class="context-grid">
+          <div class="context-card"><h3>מטרת הבדיקות</h3><p>לוודא שה־GenAI Router עובד תקין בסביבת TSH, שומר על הרשאות ובידוד מידע, מנהל שיחות ו־state נכון, ומחזיר תשובות GenAI/RAG אמינות ובטוחות.</p></div>
+          <div class="context-card"><h3>Scope – בתוך הבדיקה</h3><p>API, Authentication, Conversations, History, Messages/SSE, Delete, Files/Chunks, Feedback, Statistics, Boundaries, הרשאות, Prompt Injection, RAG ו־State.</p></div>
+          <div class="context-card"><h3>מחוץ ל־Scope כרגע</h3><p>Production, עומסים מלאים ללא SLA, אימות DB מלא ללא גישה לטבלאות, ואיכות עסקית סופית ללא Golden Dataset/SME.</p></div>
+          <div class="context-card"><h3>סביבת בדיקה</h3><p>TSH / NON-PROD. הזדהות באמצעות Identity Token שמופק ב־gcloud ונשלח ב־X-Serverless-Authorization. תוקף משוער של Token: שעה.</p></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>אסטרטגיית בדיקות</h2>
+        <div id="stpStrategy" class="table-wrap"></div>
+      </div>
+      <div class="card">
+        <h2>תנאי כניסה ויציאה</h2>
+        <div class="result-grid">
+          <div><h3>Entry Criteria – אפשר להתחיל כש...</h3><ul><li>יש TSH Base URL.</li><li>יש משתמש ענן והרשאה ל־Router.</li><li>ניתן להפיק Identity Token תקין.</li><li>Swagger/Contract זמין.</li><li>קיימים App ID, User ID ו־Case ID לבדיקה.</li></ul></div>
+          <div><h3>Exit Criteria – אפשר לסיים כש...</h3><ul><li>כל בדיקות P0 הקריטיות עברו או שיש חריגה מאושרת ומתועדת.</li><li>אין תקלת אבטחה קריטית פתוחה.</li><li>תוצאות P1/P2 תועדו והסיכונים ידועים.</li><li>פערי Contract שחוסמים PASS/FAIL נסגרו או סומנו במפורש.</li><li>דוח הרצה הופק ונשמר.</li></ul></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>סיכונים ותלויות</h2>
+        <ul><li>Token קצר־חיים עלול לפוג באמצע ריצה.</li><li>גישה ל־TSH תלויה ברשת ובהרשאות.</li><li>חלק מה־Expected Results עדיין אינם מוגדרים פורמלית ב־Swagger.</li><li>בדיקות State/Delete דורשות גישה או אישור על AlloyDB/לוגים.</li><li>בדיקות GenAI דורשות מקור אמת או SME כדי להכריע איכות עסקית.</li></ul>
+      </div>
+    </section>
+
+    <section id="std" class="tabpage">
+      <div class="card">
+        <div class="section-head">
+          <div><h2>STD – תכנון ותיאור הבדיקות</h2><p>המסמך המפורט שמתרגם את ה־STP ל־<b>מה בדיוק נבדוק ואיך</b>. קטלוג התסריטים באתר הוא למעשה הליבה של ה־STD.</p></div>
+          <button id="exportStdBtn" class="btn ghost">הורד STD בעברית</button>
+        </div>
+        <div id="stdSummary" class="kpis"></div>
+      </div>
+      <div class="card">
+        <h2>מבנה Test Design</h2>
+        <div id="stdDesign" class="table-wrap"></div>
+      </div>
+      <div class="card">
+        <h2>כלל כתיבה לכל Test Case</h2>
+        <p>כל תסריט צריך לכלול: <b>ID, עדיפות, תחום, Endpoint, תנאים מקדימים, קלט/צעדים, Expected Result, נתוני בדיקה ותוצאה בפועל</b>. כאשר ה־Expected אינו ידוע – לא מנחשים; מסמנים QUESTION/BLOCKED ומקשרים לפער Contract.</p>
+      </div>
+      <div class="card">
+        <h2>Traceability – קישור בין סיכון לבדיקה</h2>
+        <div id="stdTraceability" class="table-wrap"></div>
       </div>
     </section>
 
@@ -203,7 +258,7 @@
       </div>
     </form>
   </dialog>
-  <footer>GenAI Router QA Console · Swagger 1.0.6 · UI v1.3</footer>
+  <footer>GenAI Router QA Console · Swagger 1.0.6 · UI v1.4</footer>
   <script src="/app.js" type="module"></script>
 </body>
 </html>

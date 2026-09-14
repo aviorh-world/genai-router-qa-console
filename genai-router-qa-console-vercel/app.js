@@ -388,9 +388,65 @@ function renderContext(){
   if($('referenceLinks')) $('referenceLinks').innerHTML=c.references.map(x=>`<a class="reference-card" href="${esc(x.url)}" target="_blank" rel="noopener noreferrer"><span><b>${esc(x.label)}</b><br><small>${esc(x.type)}</small></span><span>↗</span></a>`).join('');
 }
 
+
+function renderStpStd(){
+  if(!$('stpStrategy') || !$('stdDesign')) return;
+  const byPriority={P0:0,P1:0,P2:0};
+  for(const t of state.tests) byPriority[t.priority]=(byPriority[t.priority]||0)+1;
+  const auto=state.tests.filter(t=>t.mode==='auto').length;
+  const assisted=state.tests.filter(t=>t.mode==='assisted').length;
+  const manual=state.tests.filter(t=>t.mode==='manual').length;
+
+  const strategy=[
+    ['P0 – קריטי','Happy Flow, Authentication, Authorization, State, אבטחה, תקלות שחוסמות שימוש','להריץ ראשון; כשל משמעותי עוצר/מסכן Release'],
+    ['P1 – חשוב','Validation, Boundaries, Error Handling, Pagination, Files/Chunks, Feedback','להריץ אחרי P0 ולפני סגירת גרסה'],
+    ['P2 – משלים','Robustness, Metadata, תרחישי קצה משלימים','להריץ לפי זמן וסיכון'],
+    ['GenAI / RAG','Grounding, Sources, Hallucination, Prompt Injection, SSE/Thought Leakage','שילוב אוטומציה + הערכת QA/SME'],
+    ['State / Persistence','Create, History, Delete, Session/Memory consistency','API + אימות DB/Log כשיינתן access'],
+  ];
+  $('stpStrategy').innerHTML=`<table class="qa-table"><thead><tr><th>שכבה</th><th>מה נבדק</th><th>גישה</th></tr></thead><tbody>${strategy.map(r=>`<tr>${r.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+
+  if($('stdSummary')) $('stdSummary').innerHTML=`
+    <div class="kpi"><b>${state.tests.length}</b><span>סה״כ תסריטים</span></div>
+    <div class="kpi"><b>${byPriority.P0||0}</b><span>P0</span></div>
+    <div class="kpi"><b>${byPriority.P1||0}</b><span>P1</span></div>
+    <div class="kpi"><b>${byPriority.P2||0}</b><span>P2</span></div>
+    <div class="kpi"><b>${auto}/${assisted}/${manual}</b><span>אוטומטי / מסייע / ידני</span></div>`;
+
+  const domains={};
+  for(const t of state.tests){
+    const d=t['תחום']||'אחר';
+    domains[d]=domains[d]||{count:0,p0:0,ids:[]}; domains[d].count++; if(t.priority==='P0') domains[d].p0++; if(domains[d].ids.length<5) domains[d].ids.push(t.ID);
+  }
+  $('stdDesign').innerHTML=`<table class="qa-table"><thead><tr><th>תחום בדיקה</th><th>מספר תסריטים</th><th>P0</th><th>דוגמאות Test IDs</th></tr></thead><tbody>${Object.entries(domains).sort((a,b)=>b[1].count-a[1].count).map(([d,v])=>`<tr><td>${esc(d)}</td><td>${v.count}</td><td>${v.p0}</td><td dir="ltr">${esc(v.ids.join(', '))}</td></tr>`).join('')}</tbody></table>`;
+
+  const trace=[
+    ['גישה לא מורשית / Token','Authentication + Authorization','P0/P1 auth tests + User B/Token B'],
+    ['זליגת מידע בין משתמשים/תיקים','Cross-user / IDOR / Memory','Conversation, Files/Chunks, Memory tests'],
+    ['State לא עקבי','Create / History / Delete','Happy Flow + DB/Log verification'],
+    ['Prompt Injection / מידע רגיש','Model Armor + GenAI Security','Prompt injection, secrets/system prompt, thought leakage'],
+    ['Hallucination / מקור שגוי','RAG Quality','Sources, chunks, grounding, manual SME rating'],
+    ['קלטי קצה','Boundary / Validation','Boundary Pack + max/min/empty/invalid values'],
+    ['Streaming שבור','SSE','event order, done/error, disconnect, malformed event'],
+    ['מידע סטטיסטי רגיש','Statistics / RBAC','Access control + response data review']
+  ];
+  if($('stdTraceability')) $('stdTraceability').innerHTML=`<table class="qa-table"><thead><tr><th>סיכון</th><th>אזור בדיקה</th><th>כיסוי ב־STD</th></tr></thead><tbody>${trace.map(r=>`<tr>${r.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+
+function stpMarkdown(){
+  return `# STP – תוכנית בדיקות GenAI Router\n\n## מטרה\nלוודא שה-Router עובד תקין בסביבת TSH, מנהל שיחות ו-state בצורה עקבית, אוכף הרשאות ומחזיר תשובות GenAI/RAG אמינות ובטוחות.\n\n## Scope\nAPI, Authentication, Conversations, History, SSE Messages, Delete, Files/Chunks, Feedback, Statistics, Boundaries, Authorization, RAG, Prompt Injection ו-State.\n\n## מחוץ ל-Scope כרגע\nProduction; עומסים ללא SLA; DB מלא ללא גישה; איכות עסקית סופית ללא Golden Dataset/SME.\n\n## סביבת בדיקה\nTSH/NON-PROD. Identity Token באמצעות gcloud auth print-identity-token ונשלח ב-X-Serverless-Authorization.\n\n## Entry Criteria\n- TSH Base URL\n- משתמש ענן והרשאת Router\n- Identity Token תקין\n- Swagger/Contract זמין\n- Test Data בסיסי\n\n## Exit Criteria\n- כל P0 עברו או אושרה חריגה\n- אין תקלת אבטחה קריטית פתוחה\n- P1/P2 תועדו\n- פערי Contract החוסמים החלטה סומנו/נסגרו\n- הופק Test Run Report\n\n## סיכונים\nToken קצר חיים; תלות ברשת/הרשאות; Contract חלקי; תלות ב-DB/Logs; צורך ב-SME לבדיקות איכות AI.\n`;
+}
+function stdMarkdown(){
+  const lines=[`# STD – תכנון ותיאור בדיקות GenAI Router`,``,`סה״כ תסריטים: ${state.tests.length}`,``,'## Test Cases'];
+  for(const t of state.tests){ lines.push(`### ${t.ID} – ${t['תרחיש בדיקה']||''}`,`- עדיפות: ${t.priority}` ,`- תחום: ${t['תחום']||''}`,`- Endpoint: ${t.Endpoint||''}`,`- תנאים מקדימים: ${t['תנאים מקדימים']||''}`,`- צעדים/קלט: ${t['צעדים / קלט']||''}`,`- Expected: ${t['Expected Result']||''}`,`- מצב: ${modeLabel(t.mode)}`,``); }
+  return lines.join('\n');
+}
+function exportStp(){exportBlob('STP-GenAI-Router-he.md','text/markdown;charset=utf-8','\ufeff'+stpMarkdown());}
+function exportStd(){exportBlob('STD-GenAI-Router-he.md','text/markdown;charset=utf-8','\ufeff'+stdMarkdown());}
+
 function renderKpis(){ $('kpiTotal').textContent=state.tests.length; $('kpiAuto').textContent=state.tests.filter(t=>t.mode!=='manual').length; $('kpiPass').textContent=Object.values(state.results).filter(r=>r.status==='PASS').length; $('kpiFail').textContent=Object.values(state.results).filter(r=>r.status==='FAIL').length; $('kpiOpen').textContent=state.questions.filter(q=>(q.Status||'Open')==='Open').length; }
 function renderReport(){ const rs=Object.values(state.results); $('reportTable').innerHTML=rs.length?`<table class="qa-table"><thead><tr><th>ID</th><th>Status</th><th>Actual</th><th>Details</th><th>Time</th></tr></thead><tbody>${rs.map(r=>`<tr><td>${r.id}</td><td class="${statusClass(r.status)}">${r.status}</td><td>${esc(r.actual)}</td><td>${esc(r.details)}</td><td dir="ltr">${r.time}</td></tr>`).join('')}</tbody></table>`:'אין תוצאות עדיין.'; }
-function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderContract();renderContext();readiness();}
+function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderContract();renderContext();renderStpStd();readiness();}
 
 function populateEndpoints(){ const s=$('endpointSelect'); s.innerHTML=state.operations.map((o,i)=>`<option value="${i}">${o.method} ${o.path} — ${esc(o.operationId)}</option>`).join(''); s.onchange=syncApiTemplate; syncApiTemplate(); }
 function syncApiTemplate(){ const o=state.operations[+$('endpointSelect').value||0]; if(!o)return; $('apiMethod').value=o.method; $('apiBody').value=JSON.stringify(requestBody(o.path,o.method),null,2); }
@@ -409,7 +465,7 @@ function wire(){
   $('searchTests').oninput=renderCatalog;$('priorityFilter').onchange=renderCatalog;$('modeFilter').onchange=renderCatalog;
   $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('markTokenBtn').onclick=markTokenNow;$('readinessBtn').onclick=readiness;$('copyQuestionsBtn').onclick=copyQuestions;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runHappyFlow').onclick=happyFlow;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('copyCurlBtn').onclick=copyCurl;$('aiRunBtn').onclick=aiRun;
   $('clearResults').onclick=()=>{state.results={};$('runSummary').innerHTML='';renderAll();};
-  $('exportJson').onclick=exportJson;$('exportCsv').onclick=exportCsv;
+  $('exportJson').onclick=exportJson;$('exportCsv').onclick=exportCsv; if($('exportStpBtn')) $('exportStpBtn').onclick=exportStp; if($('exportStdBtn')) $('exportStdBtn').onclick=exportStd;
   ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',readiness)); $('executionMode').addEventListener('change',readiness); $('authHeader').addEventListener('change',readiness); $('cloudAccessConfirmed').addEventListener('change',readiness); $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));
   document.querySelectorAll('[data-rating]').forEach(b=>b.onclick=()=>{state.aiRating={rating:b.dataset.rating,note:$('aiNote').value,time:now()};$('aiRating').textContent=`נבחר: ${b.dataset.rating}`;});
 }
