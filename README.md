@@ -61,3 +61,6 @@ The runner now has two explicit environments:
 - Sandbox: `https://chat-router-942568278050.me-west1.run.app`, `gcloud auth print-identity-token`, `X-Serverless-Authorization`, default `userId=Ofir`.
 - NonProd / TSH: `https://t-sh-apic.taxes.gov.il/ita-chat-router-api`, `gcloud auth print-access-token`, default `userId=aviorha@ita.gov.il`. The auth header is editable in the runner.
 The full URL is always visible and editable. Tokens are displayed unmasked. Bearer is added automatically.
+
+## API Runner proxy hotfix
+API Runner requests are now sent Browser → `/api/proxy` → selected target environment, avoiding browser CORS/preflight failures against Cloud Run/APIC. The full target URL remains visible/editable in the UI. Sandbox default userId is now `aviorha@ita.gov.il`. The proxy allowlist includes the Sandbox Router, Sandbox direct RAG service, and TSH APIC host; additional hosts can still be added with `TSH_ALLOWED_HOSTS`.

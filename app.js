@@ -1294,7 +1294,7 @@ const API_ENVIRONMENTS={
   sandbox:{
     label:'Sandbox',
     baseUrl:'https://chat-router-942568278050.me-west1.run.app',
-    userId:'Ofir',
+    userId:'aviorha@ita.gov.il',
     appId:'Desktop',
     authHeader:'X-Serverless-Authorization',
     tokenCommand:'gcloud auth print-identity-token',
@@ -1330,15 +1330,32 @@ function setApiEnvironment(name){
 async function apiEnvironmentRequest({method,url,body,stream=false}){
   const token=apiRunnerToken(), authHeader=apiRunnerAuthHeader();
   if(!token)throw new Error(`חסר Token עבור ${apiEnv().label}. הפקודה: ${apiEnv().tokenCommand}`);
-  const headers={'Accept':'application/json, text/event-stream, */*'};
-  headers[authHeader]=token.startsWith('Bearer ')?token:`Bearer ${token}`;
-  let payload;
-  if(body!==undefined&&body!==null&&method.toUpperCase()!=='GET'){headers['Content-Type']='application/json';payload=JSON.stringify(body);}
   const started=Date.now();
-  const res=await fetch(url,{method:method.toUpperCase(),headers,body:payload});
+  let res;
+  try{
+    res=await fetch('/api/proxy',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        url,
+        method:method.toUpperCase(),
+        token,
+        authHeader,
+        body:(body!==undefined&&body!==null&&method.toUpperCase()!=='GET')?body:undefined,
+        accept:'application/json, text/event-stream, */*'
+      })
+    });
+  }catch(e){
+    throw new Error(`NETWORK/PROXY: ${e.message||'Failed to fetch'}`);
+  }
   const ct=res.headers.get('content-type')||'';
-  if(stream||ct.includes('text/event-stream'))return {status:res.status,stream:res.body,headers:res.headers,latencyMs:Date.now()-started,contentType:ct};
+  // The proxy preserves SSE as a stream when the target streams.
+  if(stream&&ct.includes('text/event-stream'))return {status:res.status,stream:res.body,headers:res.headers,latencyMs:Date.now()-started,contentType:ct};
   const txt=await res.text();let parsed=txt;try{parsed=JSON.parse(txt)}catch{}
+  if(!res.ok && parsed?.error){
+    const detail=parsed.detail?` · ${parsed.detail}`:'';
+    throw new Error(`PROXY ${res.status}: ${parsed.error}${detail}`);
+  }
   return {status:res.status,body:parsed,raw:txt,latencyMs:Date.now()-started,contentType:ct};
 }
 
@@ -1473,7 +1490,12 @@ async function apiRun(){
       if(o.path==='/v1/conversations/new'&&r.body?.conversationId&&$('conversationId'))$('conversationId').value=r.body.conversationId;
     }
     showToast('API Runner הסתיים.','success');
-  }catch(e){$('apiResponse').textContent=e.message;$('apiMeta').textContent='BLOCKED';showToast('API Runner: '+e.message,'error',5000);}
+  }catch(e){
+    const msg=e.message||String(e);
+    $('apiResponse').textContent=msg;
+    $('apiMeta').textContent=/NETWORK|PROXY|Failed to fetch/i.test(msg)?'NETWORK / PROXY':'BLOCKED';
+    showToast('API Runner: '+msg,'error',5000);
+  }
 }
 
 async function aiRun(){ try{const c=requireFields(['conversationId','appId','userId']); const body={conversationId:c.conversationId,userId:c.userId,appId:c.appId,...(c.caseId?{caseId:c.caseId}:{}),content:$('aiPrompt').value.trim()}; $('aiStream').textContent=''; const r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); const txt=await readStream(r.stream,(ch,full)=>{$('aiStream').textContent=full.slice(-15000);renderSseEvents(full);}); renderSseEvents(txt); const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid; showToast('GenAI/RAG request הסתיים.','success');}catch(e){$('aiStream').textContent=e.message;showToast('GenAI/RAG: '+e.message,'error',5000);} }
