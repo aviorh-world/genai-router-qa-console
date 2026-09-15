@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<title>GenAI Router QA Console</title>
+<link href="/styles.css" rel="stylesheet"/>
+</head>
+<body>
+<header class="topbar">
+<div>
+<h1>GenAI Router QA Console</h1>
+<p>כלי QA ל־Router 1.0.6 — Swagger + TSH + ארכיטקטורה + Postman</p>
+</div>
+<div class="top-actions">
+<span class="badge version">0.02</span>
+<span class="badge neutral" id="connectionBadge">לא מחובר</span>
+<a class="btn ghost" href="https://app.swaggerhub.com/apis/ofir-kpmg/Router/1.0.6" target="_blank" rel="noopener">SwaggerHub ↗</a>
+<button class="btn ghost" id="demoBtn">Demo Mode</button>
+</div>
+</header>
+<div class="demo-warning" hidden="" id="demoWarning">⚠️ מצב הדגמה פעיל — שום בקשה לא נשלחת ל־TSH. תוצאות סימולציה יסומנו <b>DEMO</b> ולא PASS.</div>
+<div aria-live="polite" class="toast-host" id="toastHost"></div>
+<main>
+<section class="card setup">
+<div class="section-head">
+<div>
+<h2>1. חיבור לסביבת הבדיקה</h2>
+<p>כדי להתחיל צריך בעיקר Base URL, Identity Token ומשתמש בדיקה. שאר האפשרויות נמצאות תחת "אפשרויות מתקדמות".</p>
+</div>
+<div class="actions-row">
+<button class="btn" id="healthBtn">בדיקת חיבור</button>
+<button class="btn ghost" id="markTokenBtn">Token הופק עכשיו</button>
+</div>
+</div>
+<div class="grid cols-3 setup-essential">
+<label>TSH Base URL<input autocomplete="off" id="baseUrl" placeholder="כתובת Router בסביבת TSH"/></label>
+<label>Identity Token<input autocomplete="off" id="token" placeholder="gcloud auth print-identity-token" type="password"/><small class="field-help" id="tokenExpiry">לא סומן זמן הפקה</small></label>
+<label>User ID<input id="userId" inputmode="email" placeholder="האימייל השע״מי שלך" value="aviorha@taxes.gov.il"/></label>
+<label>App ID<input id="appId" placeholder="Desktop" value="Desktop"/></label>
+<label>Case ID<input id="caseId" placeholder="9 ספרות · כרגע אינו blocker" value="123456789"/></label>
+</div>
+<details class="setup-help advanced-settings">
+<summary>⚙️ אפשרויות מתקדמות</summary>
+<div class="setup-help-body">
+<div class="grid cols-3">
+<label>Execution Mode<select id="executionMode"><option value="direct">Browser Direct → Router</option><option value="proxy">Vercel Proxy (רק אם היעד ציבורי)</option><option value="postman">Postman / cURL generator בלבד</option></select></label>
+<label>Auth Header<select id="authHeader"><option value="X-Serverless-Authorization">X-Serverless-Authorization</option><option value="Authorization">Authorization (fallback)</option></select></label>
+<label>User ID B (אופציונלי)<input id="userIdB" placeholder="לבדיקות הרשאה"/></label>
+<label>Token B (אופציונלי)<input autocomplete="off" id="tokenB" placeholder="Token של משתמש B" type="password"/></label>
+<label>Conversation ID<input id="conversationId" placeholder="מתמלא אוטומטית"/></label>
+<label>Message ID<input id="messageId" placeholder="מתמלא אוטומטית"/></label>
+<label>AI Investigation Access Code<input autocomplete="off" id="aiAccessCode" placeholder="נדרש רק ל-AI עמוק" type="password"/><small class="field-help">נשאר בדפדפן בלבד ולא נשלח למודל.</small></label>
+</div>
+<label class="checkline"><input id="cloudAccessConfirmed" type="checkbox"/> <span>וידאתי שיש לי משתמש ענן והרשאה להפעיל את שירות ה־Router</span></label>
+<label class="checkline ai-optin"><input id="aiRemoteEnabled" type="checkbox"/> <span>אפשר AI Investigation עמוק דרך השרת. רק Evidence מצונזר נשלח למודל; Token לעולם לא נשלח.</span></label>
+</div>
+</details>
+<details class="setup-help">
+<summary>ℹ️ הנחיות TSH / Google CLI / בטיחות</summary>
+<div class="setup-help-body">
+<div class="notice">⚠️ השתמש רק ב־credentials של TSH/QA. לא ב־Production. אם ה־TSH פנימי, Vercel לא בהכרח יוכל להגיע אליו — השתמש ב־Browser Direct או העתק בקשה ל־Postman.</div>
+<div class="notice"><b>Google CLI:</b> אם צריך התחברות לחשבון: <code>gcloud init</code> או <code>gcloud init --no-launch-browser</code>. להפקת Identity Token: <code>gcloud auth print-identity-token</code>. לפי המדריך יש לשלוח: <code>X-Serverless-Authorization: Bearer &lt;TOKEN&gt;</code>.</div>
+</div>
+</details>
+<div class="readiness-head">
+<div><b>מוכנות להרצה אמיתית</b><span>האתר בודק מה חסר לפני שמתחילים.</span></div>
+<div class="actions-row"><button class="btn" id="readinessBtn">בדוק מוכנות</button></div>
+</div>
+<div class="readiness-grid" id="readinessGrid"></div>
+</section>
+<nav class="tabs main-tabs">
+<button class="tab active" data-tab="dashboard">Dashboard</button>
+<button class="tab" data-tab="catalog">בדיקות</button>
+<button class="tab" data-tab="guide">מדריך מערכת</button>
+<button class="tab" data-tab="flow">Auto Flow</button>
+<button class="tab" data-tab="api">API Runner</button>
+<button class="tab" data-tab="ai">GenAI / RAG</button>
+<button class="tab" data-tab="qaDocs">מסמכי QA</button>
+<button class="tab" data-tab="report">דוח</button>
+</nav>
+<section class="tabpage active" id="dashboard">
+<div class="card start-card">
+<div class="section-head"><div><h2>מה צריך כדי להתחיל</h2><p>החסמים להתנעה כרגע: Base URL מדויק, Token תקין והרשאת משתמש ענן; App ID ו־Case ID כבר קיבלו ברירות מחדל.</p></div><span class="badge question" id="startBadge">ממתין לנתונים</span></div>
+<div class="blocking-summary" id="blockingSummary"></div>
+</div>
+<div class="kpis">
+<div class="kpi"><b id="kpiTotal">108</b><span>תסריטים</span></div>
+<div class="kpi"><b id="kpiAuto">0</b><span>אוטומטיים/מסייעים</span></div>
+<div class="kpi"><b id="kpiPass">0</b><span>PASS</span></div>
+<div class="kpi"><b id="kpiFail">0</b><span>FAIL</span></div>
+<div class="kpi"><b id="kpiBlocked">0</b><span>BLOCKED</span></div>
+<div class="kpi"><b id="kpiQuestion">0</b><span>QUESTION</span></div>
+<div class="kpi"><b id="kpiNA">0</b><span>N/A</span></div>
+<div class="kpi"><b id="kpiDemo">0</b><span>DEMO</span></div>
+<div class="kpi"><b id="kpiOpen">37</b><span>שאלות פתוחות</span></div>
+</div>
+<div class="card">
+<div class="section-head"><div><h2>הרצה מהירה</h2><p>אפשר להריץ את כל הבדיקות בלחיצה אחת. בדיקה שחסר לה קלט/הרשאה/מידע תסומן N/A במקום להציג FAIL מטעה.</p></div></div>
+<div class="actions-row">
+<button class="btn primary" id="runAllTests">▶ הרץ את כל הטסטים</button>
+<button class="btn" id="runSafeP0">▶ Run Safe P0</button>
+<button class="btn" id="runBoundaryPack">▶ Run Boundary Pack</button>
+<button class="btn" id="runRagSpecPack">▶ RAG Spec Pack</button>
+<button class="btn" id="runHappyFlow">▶ Conversation Happy Flow</button>
+<button class="btn ghost" id="uiSelfTestBtn">Console Self-Test</button>
+<button class="btn ghost" id="clearResults">איפוס תוצאות</button>
+</div>
+<div class="bulk-progress" hidden="" id="bulkProgress"><div class="bulk-progress-bar" id="bulkProgressBar"></div><span id="bulkProgressText"></span></div>
+<div class="run-summary" id="runSummary"></div>
+</div>
+<div class="card run-history-card"><div class="section-head"><div><h2>Run History</h2><p>נשמרת מקומית רק תמונת מצב מסכמת של הרצות, ללא Token וללא Request/Response.</p></div><button class="btn ghost" id="clearRunHistoryBtn">נקה היסטוריה</button></div><div class="table-wrap" id="runHistoryTable"></div></div>
+<div class="card"><div class="section-head"><div><h2>מפת חבילות הבדיקות</h2><p>הדשבורד מפריד בין רכיב שנבדק, סוג הבדיקה וכלי ה־QA עצמו. Console Self-Test אינו בדיקת מוצר ואינו מעיד על תקינות ה־Router API.</p></div><span class="badge neutral">Coverage Map</span></div><div class="context-grid"><div class="context-card"><h3>Router / API</h3><p>Authentication · Conversations · Messages/SSE · State · Files/Chunks · Statistics</p></div><div class="context-card"><h3>AI Components</h3><p><button class="term-link" data-glossary="Routing">Routing</button> · Q&amp;A/RAG · שיחה כללית · <button class="term-link" data-glossary="Text2SQL">Text2SQL</button>. לפי תרשים ה־Serving, אלה מסלולי הניתוב המרכזיים שנבדוק.</p></div><div class="context-card"><h3>AI Quality</h3><p>Golden Regression · Retrieval · Grounding · Answer Correctness</p></div><div class="context-card"><h3>Cross-Cutting</h3><p>Security · Boundary/Negative · E2E/Happy Flow</p></div><div class="context-card"><h3>QA Tool — לא המוצר</h3><p><b>Console Self-Test</b>: בודק טאבים, כפתורים והודעות באתר הבדיקות עצמו בלבד.</p></div></div></div>
+<div class="card">
+<h2>מה האתר לא יכול לקבוע לבד</h2>
+<ul>
+<li>DB / State Management בלי גישה לטבלאות ולוגיקה מוסכמת.</li>
+<li>איכות GenAI בלי Golden Dataset או אישור SME.</li>
+<li>Cross-user / Cross-case בלי משתמשי בדיקה/Token נוספים.</li>
+<li>Performance בלי SLA מוסכם ו־Observability בלי גישה ללוגים.</li><li>האם כל ה־Target Design של ה־RAG הגנרי כבר ממומש ב־TSH — דורש walkthrough/ראיות Runtime.</li>
+</ul>
+</div>
+</section>
+<section class="tabpage" id="catalog">
+<div class="card">
+<div class="filters">
+<input id="searchTests" placeholder="חיפוש לפי ID / Endpoint / תרחיש"/>
+<select id="priorityFilter"><option value="">כל הרמות</option><option>P0</option><option>P1</option><option>P2</option></select>
+<select id="modeFilter"><option value="">כל המצבים</option><option value="auto">אוטומטי</option><option value="assisted">מסייע</option><option value="manual">ידני</option></select>
+<select id="statusFilter"><option value="">כל התוצאות</option><option>PASS</option><option>FAIL</option><option>BLOCKED</option><option>QUESTION</option><option>N/A</option><option>DEMO</option><option value="NOT_RUN">Not Run</option></select>
+</div>
+<div class="table-wrap" id="testsTableWrap"></div>
+</div>
+</section><section class="tabpage" id="guide">
+<div class="card guide-hero">
+<div class="section-head">
+<div>
+<h2>מדריך כללי למערכת ולבדיקות</h2>
+<p>המקום להבין בפשטות מה האתר עושה, איך נראית זרימה תקינה, מה מצופה מכל Endpoint, ומה עדיין דורש תשובה מהצוות.</p>
+</div>
+<span class="badge pass">QA Guide</span>
+</div>
+<div class="subtabs" role="tablist">
+<button class="subtab active" data-subtab="guideStart">איך משתמשים</button>
+<button class="subtab" data-subtab="guideEndpoints">Endpoints</button>
+<button class="subtab" data-subtab="guideAiQa">AI ל־QA</button>
+<button class="subtab" data-subtab="guideGlossary">מילון AI</button>
+<button class="subtab" data-subtab="guideArchitecture">RAG / ארכיטקטורה</button>
+<button class="subtab" data-subtab="guideGaps">פערים ושאלות</button>
+</div>
+</div>
+<div class="subpage active" data-subpage="guideStart">
+<div class="card">
+<h2>מה האתר הזה עושה?</h2>
+<div class="guide-grid">
+<div class="guide-step"><span>1</span><div><b>מחברים ל־TSH</b><p>מזינים Base URL ו־Identity Token ובודקים שה־Router נגיש.</p></div></div>
+<div class="guide-step"><span>2</span><div><b>מריצים בדיקות</b><p>אפשר להריץ טסט יחיד, Pack, Happy Flow או את כל הבדיקות.</p></div></div>
+<div class="guide-step"><span>3</span><div><b>בודקים Evidence</b><p>בכל טסט אמיתי אפשר לראות Request, Response, HTTP status ו־latency ולהעתיק cURL.</p></div></div>
+<div class="guide-step"><span>4</span><div><b>מפרשים תוצאה</b><p>PASS/FAIL הם תוצאה אמיתית; N/A אומר שחסר תנאי; DEMO הוא סימולציה בלבד; QUESTION/BLOCKED דורשים בירור.</p></div></div>
+</div>
+</div>
+<div class="card">
+<h2>הזרימות המרכזיות</h2>
+<div class="pipeline-grid guide-pipelines">
+<div class="pipeline-card"><h3>Authentication</h3><div class="pipeline-steps"><div class="pipeline-step"><span>1</span>gcloud auth print-identity-token</div><div class="pipeline-step"><span>2</span>X-Serverless-Authorization: Bearer TOKEN</div><div class="pipeline-step"><span>3</span>בקשה מוגנת ל־Router</div><div class="pipeline-step"><span>4</span>2xx = גישה תקינה; 401/403 = חסימה</div></div></div>
+<div class="pipeline-card"><h3>Conversation Happy Flow</h3><div class="pipeline-steps"><div class="pipeline-step"><span>1</span>Create Conversation</div><div class="pipeline-step"><span>2</span>History – השיחה מופיעה</div><div class="pipeline-step"><span>3</span>Send Message – SSE</div><div class="pipeline-step"><span>4</span>Get Conversation</div><div class="pipeline-step"><span>5</span>Delete + Verify</div></div></div>
+<div class="pipeline-card"><h3>RAG – ברמת האפיון</h3><div class="pipeline-steps"><div class="pipeline-step"><span>1</span>זיהוי משתמש והרשאות</div><div class="pipeline-step"><span>2</span>בחירת קטגוריות רלוונטיות</div><div class="pipeline-step"><span>3</span>Semantic Search על מסמכים מורשים</div><div class="pipeline-step"><span>4</span>Top-K Chunks</div><div class="pipeline-step"><span>5</span>תשובה + Sources</div></div><p>זה Target Design; לא מניחים שכל שלב כבר ממומש ב־TSH בלי ראיית Runtime.</p></div>
+</div>
+</div>
+<div class="card">
+<h2>סטטוסים באתר</h2>
+<div class="status-guide">
+<div><b class="status-pass">PASS</b><span>התוצאה בפועל תאמה ל־Expected.</span></div>
+<div><b class="status-fail">FAIL</b><span>התוצאה בפועל לא תאמה ל־Expected.</span></div>
+<div><b class="status-na">N/A</b><span>הבדיקה לא רלוונטית/לא ניתנת להרצה כרגע בגלל נתון חסר.</span></div>
+<div><b class="status-demo">DEMO</b><span>סימולציה מקומית בלבד; לא נשלחה בקשה ל־TSH.</span></div>
+<div><b class="status-question">QUESTION</b><span>אין Expected מוסכם או נדרש בירור.</span></div>
+<div><b class="status-blocked">BLOCKED</b><span>הבדיקה אמורה לרוץ אך חסומה טכנית/הרשאתית.</span></div>
+</div>
+</div>
+<div class="card">
+<h2>מה כבר ידוע מהצוות</h2>
+<div class="context-grid" id="knownFacts"></div>
+</div>
+</div>
+<div class="subpage" data-subpage="guideEndpoints">
+<div class="card endpoint-intro">
+<div class="section-head"><div><h2>הקדמה — איך בודקים API במערכת הזאת?</h2><p>כל Endpoint הוא פעולה שהמערכת מאפשרת לבצע. הבדיקה אינה רק “האם חזר 200”, אלא האם הבקשה התקבלה נכון, האם התוכן שהוחזר נכון, האם ה־state השתנה כשצריך, והאם שגיאות והרשאות מטופלות בצורה בטוחה.</p></div><a class="btn ghost" href="/data/swagger.yaml" target="_blank" rel="noopener">פתח Swagger YAML</a></div>
+<div class="context-grid">
+<div class="context-card"><h3>Health</h3><p>בודקים שהשירות חי ונגיש. זו בדיקת זמינות/תקשורת, לא איכות AI.</p></div>
+<div class="context-card"><h3>Conversation</h3><p>בודקים Create / Get / History / Delete, מזהים, הרשאות ושינויי State בפועל.</p></div>
+<div class="context-card"><h3>Messages / SSE</h3><p>בודקים שליחת שאלה, Streaming, סדר אירועים, done/error, Sources ותשובת AI.</p></div>
+<div class="context-card"><h3>Files / Chunks</h3><p>בודקים שהמקור וה־Chunk הנכונים נשלפים, ושאין גישה למסמך שאינו מורשה.</p></div>
+<div class="context-card"><h3>Feedback</h3><p>בודקים Validation, שמירת משוב וקישורו ל־Message הנכון.</p></div>
+<div class="context-card"><h3>Statistics</h3><p>בודקים פילטרים, טווחי זמן, חישובים, הרשאות וחשיפת מידע.</p></div>
+</div>
+<div class="spec-callout"><b>כלל אצבע:</b> לכל Endpoint שואלים 5 שאלות: Happy Path? קלט שגוי? הרשאה לא נכונה? State/Side Effect? ומה ה־Evidence שמוכיח את התוצאה?</div>
+</div>
+<div class="card">
+<div class="section-head"><div><h2>מדריך Endpoints</h2><p>פירוט מילולי לכל פעולה: מה היא עושה, מה מצופה בהצלחה ומה חשוב ל־QA.</p></div><span class="badge neutral">23 operations</span></div>
+<div class="endpoint-guide" id="endpointGuide"></div>
+</div>
+</div>
+<div class="subpage" data-subpage="guideAiQa">
+<div class="card">
+<div class="section-head"><div><h2>AI ל־QA — מה משתנה לעומת מערכת רגילה?</h2><p>המטרה היא לא להפוך אותך ל־Data Scientist, אלא לתת לך את עקרונות הבדיקה שחוזרים כמעט בכל מערכת GenAI/RAG.</p></div><span class="badge neutral">QA Primer</span></div>
+<div class="context-grid" id="aiQaLessons"></div>
+</div>
+<div class="card"><h2>איך בודקים תשובת RAG בפועל?</h2><div class="pipeline-steps"><div class="pipeline-step"><span>1</span>שואלים שאלה שה־Expected שלה ידוע מראש</div><div class="pipeline-step"><span>2</span>בודקים את תשובת ה־AI מול תשובת הזהב — לא לפי ניסוח זהה אלא לפי העובדות</div><div class="pipeline-step"><span>3</span>בודקים את <button class="term-link" data-glossary="Source">Source</button> וה־<button class="term-link" data-glossary="Chunk">Chunk</button> שעליהם התשובה מבוססת</div><div class="pipeline-step"><span>4</span>בודקים שאין עובדות שלא נתמכות במקור — <button class="term-link" data-glossary="Hallucination">Hallucination</button></div><div class="pipeline-step"><span>5</span>שומרים תוצאה מול אותה גרסת Model / Prompt / Index כדי שאפשר יהיה להשוות רגרסיה</div></div></div>
+<div class="card"><h2>איך מסווגים כשל AI?</h2><div class="failure-grid"><div class="failure-card retrieval"><h3><button class="term-link" data-glossary="Retrieval Failure">Retrieval Failure</button></h3><p>המידע הנכון לא נמצא, Source/Chunk שגוי או רלוונטי דורג נמוך מדי.</p></div><div class="failure-card generation"><h3><button class="term-link" data-glossary="Generation Failure">Generation Failure</button></h3><p>ה־Chunk נכון, אבל ה־LLM ניסח תשובה שגויה/חסרה.</p></div><div class="failure-card grounding"><h3><button class="term-link" data-glossary="Grounding Failure">Grounding Failure</button></h3><p>התשובה מוסיפה או משנה טענה שאינה נתמכת ב־Context.</p></div><div class="failure-card security"><h3><button class="term-link" data-glossary="Authorization/Security Failure">Authorization/Security Failure</button></h3><p>המערכת חשפה מידע/Source/Chunk שאסור למשתמש לראות או עקפה Guardrail.</p></div><div class="failure-card"><h3><button class="term-link" data-glossary="Routing Failure">Routing Failure</button></h3><p>ה־Router זיהה Intent לא נכון או שלח את השאלה לרכיב הלא נכון, למשל RAG במקום Text2SQL.</p></div></div></div>
+<div class="card"><h2>Release Sanity מומלץ</h2><div class="pipeline-steps"><div class="pipeline-step"><span>1</span>מייבאים <button class="term-link" data-glossary="Golden Dataset">Golden Dataset</button> מאושר</div><div class="pipeline-step"><span>2</span>מתעדים Build + Model + Prompt + Index + Config</div><div class="pipeline-step"><span>3</span>מריצים את כל השאלות ומושכים Sources/Chunks</div><div class="pipeline-step"><span>4</span>עוברים רק על <button class="term-link" data-glossary="Review Queue">Review Queue</button></div><div class="pipeline-step"><span>5</span>משווים ל־<button class="term-link" data-glossary="Baseline">Baseline</button> ומפיקים Evidence לבאגים</div></div></div>
+</div>
+<div class="subpage" data-subpage="guideGlossary">
+<div class="card">
+<div class="section-head"><div><h2>מילון AI ל־QA</h2><p>מושגים שמופיעים באתר, בתרחישי הבדיקה ובאפיון. לחץ על מושג כדי לפתוח הסבר; קישור ממונח באתר יפתח אותו אוטומטית.</p></div><input id="glossarySearch" placeholder="חיפוש מושג..."/></div>
+<div class="glossary-grid" id="glossaryGrid"></div>
+</div>
+</div>
+<div class="subpage" data-subpage="guideArchitecture">
+<div class="card">
+<div class="section-head"><div><h2>RAG / ארכיטקטורה</h2><p>החלק הזה מסביר מה ידוע על המערכת מאחורי ה־API ומה המשמעות ל־QA. אפיון ה־RAG הוא Target Design ולא הוכחת Runtime.</p></div><span class="badge question" id="ragSpecBadge">Spec / Target Design</span></div>
+<details class="guide-details"><summary>שלמות ומגבלות המקור</summary><div class="spec-callout"><b>המסמך נקרא עד סופו.</b> סעיף <b>API נדרשים</b> במסמך עצמו מסתיים ב־"להשלים!!", ולכן APIs לניהול RAG מוצגים כאן כטיוטה ולא כ־Contract סופי.</div></details>
+</div>
+<div class="card"><h2>זרימות RAG מהאפיון</h2><div class="pipeline-grid" id="ragPipelines"></div></div>
+<div class="card"><h2>כללי Business / QA</h2><div class="table-wrap" id="ragRules"></div></div>
+<div class="card"><h2>מפת מערכת → מה זה אומר ל־QA</h2><div class="table-wrap" id="architectureTable"></div></div>
+<details class="card guide-details" open><summary>Text2SQL — איך הרכיב עובד ומה בודקים?</summary>
+<p>הרכיב מקבל שאלה בשפה טבעית, בונה Context לפי מאגרים/דומיינים, מייצר SQL באמצעות Gemini, מבצע BigQuery dry-run ויכול לתקן SQL לא תקין עד 3 ניסיונות. כאשר <code>shouldFetchData=true</code> הוא גם מריץ את השאילתה ומחזיר נתונים; תוצאה גדולה יכולה להישמר ב־GCS.</p>
+<div class="pipeline-steps"><div class="pipeline-step"><span>1</span>Question → בחירת <button class="term-link" data-glossary="Domain Selection">מאגר/Domain</button></div><div class="pipeline-step"><span>2</span>LLM → <button class="term-link" data-glossary="Generated SQL">Generated SQL</button></div><div class="pipeline-step"><span>3</span><button class="term-link" data-glossary="Dry Run">BigQuery Dry Run</button> + Validation / Retry</div><div class="pipeline-step"><span>4</span>Query Execution → Data או GCS אם התוצאה גדולה</div><div class="pipeline-step"><span>5</span>SQL/Data → תשובה אנושית</div></div>
+<p><b>Endpoints מתועדים:</b> <code>POST /applications/queryanddata</code> לשאלה→SQL/נתונים, ו־<code>POST /applications/sql2text</code> ל־SQL→הסבר ללא הרצת BigQuery.</p><p><b>Authentication:</b> התיעוד מציין <code>x-text2sql-api-key</code> וכן JWT filter בשכבה שמעל. לפני אוטומציה יש לקבל Base URL ופרטי Auth של סביבת הבדיקה.</p>
+<p><b>QA:</b> לא מספיק שה־SQL חוקי. צריך לבדוק שהוא נכון לוגית, משתמש בטבלאות/פילטרים/joins הנכונים, מחזיר את הנתונים הנכונים, אינו חושף מידע אסור, ושהתשובה הסופית תואמת לנתונים.</p>
+</details>
+<div class="card"><h2>בקרת איכות RAG</h2><div class="context-grid" id="ragQuality"></div></div>
+<details class="card guide-details"><summary>טבלאות ו־Observability</summary><p class="muted">השמות מגיעים מהאפיון. קיום טבלה באפיון לא אומר של־QA יש גישה אליה בפועל.</p><div class="table-wrap" id="ragTables"></div></details>
+<details class="card guide-details"><summary>API ניהול RAG – טיוטה</summary><div class="table-wrap" id="ragApiScope"></div></details>
+<details class="card guide-details"><summary>בדיקות ארכיטקטורה מומלצות</summary><div class="table-wrap" id="candidateTests"></div></details>
+<details class="card guide-details"><summary>קישורי פרויקט ורכיבי מקור</summary><div class="reference-grid" id="referenceLinks"></div></details>
+</div>
+<div class="subpage" data-subpage="guideGaps">
+<div class="card"><div class="section-head"><div><h2>פערים ושאלות פתוחות</h2><p>איחדנו כאן את פערי ה־Contract והשאלות לצוות. פער הוא משהו שחסר ב־Contract; שאלה פתוחה היא מה שצריך לקבל עליו תשובה כדי לקבוע Expected או להשלים בדיקה.</p></div></div></div>
+<div class="card"><h2>פערי Contract</h2><div class="table-wrap" id="contractTable"></div></div>
+<div class="card"><h2>שאלות פתוחות</h2><div class="table-wrap" id="questionsTable"></div></div>
+<div class="card"><h2>מה עדיין חסר כדי להריץ/לאמת</h2><div class="context-grid" id="pendingFacts"></div></div>
+</div>
+</section>
+
+
+<section class="tabpage" id="flow">
+<div class="card">
+<div class="section-head"><div><h2>Conversation Happy Flow</h2><p>Create → History → Send Message (SSE) → Get Conversation → Delete → Verify deletion.</p></div><button class="btn primary" id="flowRunBtn">▶ הרץ Flow</button></div>
+<label>שאלה ל־AI<textarea id="flowQuestion" rows="3">מה אפשר להסיק מהמסמכים הרלוונטיים לשאלה זו?</textarea></label>
+<div class="flow-steps" id="flowSteps"></div>
+</div>
+</section>
+<section class="tabpage" id="api">
+<div class="card">
+<div class="section-head"><div><h2>API Runner</h2><p>הרצה חופשית של כל Endpoint מה־Swagger, או יצירת cURL ל־Postman/סביבה פנימית.</p></div><div class="actions-row"><button class="btn primary" id="apiRunBtn">Run</button><button class="btn ghost" id="copyCurlBtn">העתק cURL</button></div></div>
+<div class="grid cols-2">
+<label>Endpoint<select id="endpointSelect"></select></label>
+<label>Method<input id="apiMethod" readonly=""/></label>
+</div>
+<label>Request JSON<textarea id="apiBody" rows="10" spellcheck="false">{}</textarea></label>
+<div class="result-grid">
+<div><h3>Response</h3><pre id="apiResponse">—</pre></div>
+<div><h3>Meta</h3><pre id="apiMeta">—</pre></div>
+</div>
+</div>
+</section>
+<section class="tabpage" id="ai">
+<div class="card">
+<div class="section-head"><div><h2>GenAI / RAG</h2><p>בדיקה ידנית של תשובה בודדת או Sanity/Regression מול <button class="term-link" data-glossary="Golden Dataset">Golden Dataset</button>.</p></div></div>
+<div class="subtabs" role="tablist">
+<button class="subtab active" data-subtab="aiInspector">Inspector</button>
+<button class="subtab" data-subtab="aiGolden">Golden Sanity</button>
+</div>
+</div>
+<div class="subpage active" data-subpage="aiInspector">
+<div class="card">
+<div class="section-head"><div><h2>GenAI / RAG Inspector</h2><p>הרץ שאלה, ראה את אירועי ה־SSE, בדוק Sources/Chunks וסמן איכות ידנית.</p></div><button class="btn primary" id="aiRunBtn">▶ שאל</button></div>
+<label>Prompt<textarea id="aiPrompt" rows="4">ענה על סמך מסמכי המקור בלבד. אם אין מספיק מידע, אמור שאין מספיק מידע.</textarea></label>
+<div class="result-grid">
+<div><h3>Streaming / Answer</h3><pre id="aiStream">—</pre><h3>אירועי SSE שזוהו</h3><div class="event-list" id="aiEvents">—</div></div>
+<div><h3>הערכת QA</h3>
+<div class="rating-buttons">
+<button class="btn ghost" data-rating="Correct">Correct</button>
+<button class="btn ghost" data-rating="Partially Correct">Partially Correct</button>
+<button class="btn ghost" data-rating="Wrong">Wrong</button>
+<button class="btn ghost" data-rating="Hallucination">Hallucination</button>
+<button class="btn ghost" data-rating="Wrong Source">Wrong Source</button>
+</div>
+<label>הערה<textarea id="aiNote" rows="6"></textarea></label>
+<div class="notice" id="aiRating">טרם דורג</div>
+</div>
+</div>
+</div>
+</div>
+<div class="subpage" data-subpage="aiGolden">
+<div class="card golden-intro">
+<div class="section-head"><div><h2>Golden Release Sanity / Regression</h2><p>מריצים את <button class="term-link" data-glossary="Golden Dataset">שאלות הזהב</button> מול גרסה חדשה, שומרים Metadata, בודקים Source/Chunk, ומשווים לריצה קודמת.</p></div><div class="actions-row"><button class="btn primary" id="goldenRunAllBtn">▶ הרץ Release Sanity</button><button class="btn ghost" id="goldenExportBtn">ייצוא Dataset + Runs</button><button class="btn ghost" id="goldenImportBtn">ייבוא JSON</button></div></div>
+<div class="notice info"><b>חשוב:</b> Similarity והציונים האוטומטיים הם Signals בלבד. PASS עסקי דורש בדיקה שהעובדות נכונות ושה־Source/Chunk באמת תומכים בתשובה. <button class="term-link" data-glossary="Review Queue">מה נכנס ל־Review Queue?</button></div>
+<input id="goldenImportFile" type="file" accept="application/json,.json" hidden/>
+</div>
+
+<div class="card release-card">
+<div class="section-head"><div><h2>1. פרטי גרסה / Run Metadata</h2><p>המידע הזה נשמר עם התוצאות כדי שנדע מה השתנה בין גרסאות.</p></div><span class="badge neutral">Release Context</span></div>
+<div class="grid cols-3">
+<label>Run / Release Label<input id="goldenRunLabel" placeholder="למשל build-1.4.2 / release-2026-09-15"/></label>
+<label>Environment<input id="goldenEnvironment" value="TSH" placeholder="TSH / QA"/></label>
+<label>Build / Commit<input id="goldenBuild" placeholder="build number / commit SHA"/></label>
+<label>Model Version<input id="goldenModel" placeholder="למשל Gemini ..."/></label>
+<label>Prompt Version<input id="goldenPromptVersion" placeholder="prompt-v3"/></label>
+<label>Index / Corpus Version<input id="goldenIndexVersion" placeholder="index-v12 / corpus date"/></label>
+<label>RAG / Config Version<input id="goldenConfigVersion" placeholder="config-v5 / ingestion strategy"/></label>
+<label>Tester<input id="goldenTester" placeholder="שם הבודק — לא נשמר בשרת"/></label>
+<label class="span-2">הערות לגרסה<input id="goldenRunNotes" placeholder="מה השתנה בגרסה הזו?"/></label>
+</div>
+<details class="guide-details"><summary>הגדרות הרצה מתקדמות</summary><div class="grid cols-3"><label class="checkbox-label"><input id="goldenIsolate" type="checkbox" checked/> כל שאלה בשיחה חדשה</label><label class="checkbox-label"><input id="goldenCleanup" type="checkbox" checked/> למחוק שיחת בדיקה אחרי ההרצה</label><label class="checkbox-label"><input id="goldenFetchChunks" type="checkbox" checked/> לשלוף אוטומטית את ה־Chunks מה־Sources</label></div><p class="muted">בידוד שיחות מונע זליגת Context. שליפת Chunks מאפשרת להפריד בין <button class="term-link" data-glossary="Retrieval Failure">Retrieval Failure</button> לבין <button class="term-link" data-glossary="Generation Failure">Generation Failure</button>.</p></details>
+</div>
+
+<div class="card">
+<h2>2. Dataset — הוספת / עריכת שאלת זהב</h2>
+<div class="grid cols-2 golden-form">
+<label>ID<input id="goldenId" placeholder="GOLD-001"/></label>
+<label>תגיות<input id="goldenTags" placeholder="tax, no-answer, security"/></label>
+<label class="span-2">שאלה<textarea id="goldenQuestion" rows="3" placeholder="השאלה שתישלח ל־AI"></textarea></label>
+<label class="span-2">תשובת זהב<textarea id="goldenExpected" rows="4" placeholder="העובדות שחייבות להיות בתשובה. אין צורך לניסוח זהה."></textarea></label>
+<label>מילות/ביטויי חובה<input id="goldenMustInclude" placeholder="הפרד בפסיקים"/></label>
+<label>מקור צפוי<input id="goldenExpectedSource" placeholder="שם קובץ / document id / chunk ידוע (אופציונלי)"/></label>
+<label class="span-2">הערות<textarea id="goldenNotes" rows="2" placeholder="למשל: שאלה שאושרה ע״י מומחה תוכן"></textarea></label>
+</div>
+<div class="actions-row"><button class="btn primary" id="goldenSaveBtn">שמור שאלה</button><button class="btn ghost" id="goldenResetBtn">נקה טופס</button><button class="btn danger" id="goldenClearBtn">מחק Dataset מקומי</button></div>
+</div>
+<div class="card"><div class="section-head"><div><h2>שאלות זהב</h2><p>נשמרות מקומית בדפדפן בלבד. ה־Token אינו נשמר.</p></div><span class="badge neutral" id="goldenCount">0 שאלות</span></div><div class="table-wrap" id="goldenTable"></div></div>
+
+<div class="card">
+<div class="section-head"><div><h2>3. תוצאות Release Sanity</h2><p>המערכת מפרידה בין <button class="term-link" data-glossary="Retrieval Quality">Retrieval</button>, <button class="term-link" data-glossary="Answer Correctness">Answer</button> ו־<button class="term-link" data-glossary="Grounding">Grounding</button>. הציונים הם Heuristic בלבד.</p></div><span class="badge neutral" id="goldenRunBadge">אין Run שמור</span></div>
+<div class="kpis" id="goldenRunSummary"></div>
+<div class="table-wrap" id="goldenResults"></div>
+</div>
+
+<div class="card review-card">
+<div class="section-head"><div><h2>4. Review Queue</h2><p>כאן מופיעים רק מקרים שדורשים עין אנושית: Source לא צפוי, Chunk חסר, Answer/Grounding חלשים, שגיאה או FAIL.</p></div><span class="badge question" id="goldenReviewCount">0 לבדיקה</span></div>
+<div class="table-wrap" id="goldenReviewQueue"></div>
+</div>
+
+<div class="card">
+<div class="section-head"><div><h2>5. השוואת Releases</h2><p>בחר שתי ריצות כדי לראות שיפור/רגרסיה, שינוי במקור ושינוי בציוני האיכות.</p></div><div class="compare-controls"><select id="goldenCompareBase"></select><span>מול</span><select id="goldenCompareCurrent"></select><button class="btn ghost" id="goldenCompareBtn">השווה</button></div></div>
+<div class="kpis" id="goldenCompareSummary"></div>
+<div class="table-wrap" id="goldenCompareTable"></div>
+<details class="guide-details"><summary>היסטוריית ריצות שמורות</summary><div class="table-wrap" id="goldenRunsTable"></div></details>
+</div>
+</div>
+</section><section class="tabpage" id="qaDocs">
+<div class="card">
+<div class="section-head"><div><h2>מסמכי QA</h2><p>STP נותן את תוכנית־העל; STD מתאר את תכנון הבדיקות והכיסוי בפועל.</p></div></div>
+<div class="subtabs" role="tablist">
+<button class="subtab active" data-subtab="qaStp">STP – תוכנית בדיקות</button>
+<button class="subtab" data-subtab="qaStd">STD – תכנון בדיקות</button>
+</div>
+</div>
+<div class="subpage active" data-subpage="qaStp">
+<div class="card">
+<div class="section-head">
+<div><h2>STP – תוכנית בדיקות מערכת</h2><p>מסמך־על שמסביר <b>מה בודקים, למה, איפה, באיזו שיטה ומתי אפשר להכריז שהבדיקות הושלמו</b>.</p></div>
+<button class="btn ghost" id="exportStpBtn">הורד STP בעברית</button>
+</div>
+<div class="context-grid">
+<div class="context-card"><h3>מטרת הבדיקות</h3><p>לוודא שה־GenAI Router עובד תקין בסביבת TSH, שומר על הרשאות ובידוד מידע, מנהל שיחות ו־state נכון, ומחזיר תשובות GenAI/RAG אמינות ובטוחות.</p></div>
+<div class="context-card"><h3>Scope – בתוך הבדיקה</h3><p>API, Authentication, Conversations, History, Messages/SSE, Delete, Files/Chunks, Feedback, Statistics, Boundaries, הרשאות, Prompt Injection, RAG ו־State.</p></div>
+<div class="context-card"><h3>מחוץ ל־Scope כרגע</h3><p>Production, עומסים מלאים ללא SLA, אימות DB מלא ללא גישה לטבלאות, ואיכות עסקית סופית ללא Golden Dataset/SME.</p></div>
+<div class="context-card"><h3>סביבת בדיקה</h3><p>TSH / NON-PROD. הזדהות באמצעות Identity Token שמופק ב־gcloud ונשלח ב־X-Serverless-Authorization. תוקף משוער של Token: שעה.</p></div>
+</div>
+</div>
+<div class="card">
+<h2>אסטרטגיית בדיקות</h2>
+<div class="table-wrap" id="stpStrategy"></div>
+</div>
+<div class="card">
+<h2>תנאי כניסה ויציאה</h2>
+<div class="result-grid">
+<div><h3>Entry Criteria – אפשר להתחיל כש...</h3><ul><li>יש TSH Base URL.</li><li>יש משתמש ענן והרשאה ל־Router.</li><li>ניתן להפיק Identity Token תקין.</li><li>Swagger/Contract זמין.</li><li>קיימים App ID, User ID ו־Case ID לבדיקה.</li></ul></div>
+<div><h3>Exit Criteria – אפשר לסיים כש...</h3><ul><li>כל בדיקות P0 הקריטיות עברו או שיש חריגה מאושרת ומתועדת.</li><li>אין תקלת אבטחה קריטית פתוחה.</li><li>תוצאות P1/P2 תועדו והסיכונים ידועים.</li><li>פערי Contract שחוסמים PASS/FAIL נסגרו או סומנו במפורש.</li><li>דוח הרצה הופק ונשמר.</li></ul></div>
+</div>
+</div>
+<div class="card">
+<h2>סיכונים ותלויות</h2>
+<ul><li>Token קצר־חיים עלול לפוג באמצע ריצה.</li><li>גישה ל־TSH תלויה ברשת ובהרשאות.</li><li>חלק מה־Expected Results עדיין אינם מוגדרים פורמלית ב־Swagger.</li><li>בדיקות State/Delete דורשות גישה או אישור על AlloyDB/לוגים.</li><li>בדיקות GenAI דורשות מקור אמת או SME כדי להכריע איכות עסקית.</li></ul>
+</div>
+</div>
+<div class="subpage" data-subpage="qaStd">
+<div class="card">
+<div class="section-head">
+<div><h2>STD – תכנון ותיאור הבדיקות</h2><p>המסמך המפורט שמתרגם את ה־STP ל־<b>מה בדיוק נבדוק ואיך</b>. קטלוג התסריטים באתר הוא למעשה הליבה של ה־STD.</p></div>
+<button class="btn ghost" id="exportStdBtn">הורד STD בעברית</button>
+</div>
+<div class="kpis" id="stdSummary"></div>
+</div>
+<div class="card">
+<h2>מבנה Test Design</h2>
+<div class="table-wrap" id="stdDesign"></div>
+</div>
+<div class="card">
+<h2>כלל כתיבה לכל Test Case</h2>
+<p>כל תסריט צריך לכלול: <b>ID, עדיפות, תחום, Endpoint, תנאים מקדימים, קלט/צעדים, Expected Result, נתוני בדיקה ותוצאה בפועל</b>. כאשר ה־Expected אינו ידוע – לא מנחשים; מסמנים QUESTION/BLOCKED ומקשרים לפער Contract.</p>
+</div>
+<div class="card">
+<h2>Traceability – קישור בין סיכון לבדיקה</h2>
+<div class="table-wrap" id="stdTraceability"></div>
+</div>
+</div>
+</section>
+
+
+
+
+<section class="tabpage" id="report">
+<div class="card">
+<div class="section-head"><div><h2>Test Run Report</h2><p>ה־Token לעולם לא נכנס לדוח. מכאן אפשר לתחקר FAIL וליצור Bug מוכן ל־Azure.</p></div><div><button class="btn primary" id="runAiSummaryBtn">🤖 תחקר את ההרצה</button> <button class="btn" id="exportJson">Export JSON</button> <button class="btn ghost" id="exportCsv">Export CSV</button></div></div>
+<div class="ai-run-summary" id="aiRunSummary"></div>
+<div class="table-wrap" id="reportTable"></div>
+</div>
+</section>
+</main>
+<dialog class="test-dialog" id="testDialog">
+<form class="dialog-card" method="dialog">
+<div class="section-head"><div><h2 id="dialogTitle">Test</h2><p id="dialogSubtitle"></p></div><button class="btn ghost" value="cancel">✕</button></div>
+<div class="dialog-body" id="dialogBody"></div>
+<div class="dialog-evidence" id="dialogEvidence"></div>
+<div class="investigation-panel" id="dialogInvestigation"></div>
+<label>הערת QA<textarea id="manualNote" placeholder="מה בדקת ומה בפועל קרה?" rows="4"></textarea></label>
+<div class="grid cols-2 bug-classifier"><label>סיווג כשל<select id="manualBugCategory"><option value="">לא סווג</option><option>Retrieval Failure</option><option>Generation Failure</option><option>Grounding Failure</option><option>Authorization/Security Failure</option><option>Routing Failure</option><option>SQL Generation Failure</option><option>Data/Execution Failure</option></select><span class="field-help">רלוונטי בעיקר ל־FAIL. הסבר במילון AI.</span></label><div class="bug-type-help"><button class="term-link" type="button" data-glossary="Failure Taxonomy">הסבר על סיווגי הכשל</button></div></div>
+<div class="actions-row dialog-actions">
+<button class="btn" data-manual-status="PASS" type="button">PASS</button>
+<button class="btn" data-manual-status="FAIL" type="button">FAIL</button>
+<button class="btn" data-manual-status="BLOCKED" type="button">BLOCKED</button>
+<button class="btn" data-manual-status="QUESTION" type="button">QUESTION</button>
+<button class="btn ghost" hidden="" id="dialogCopyCurlBtn" type="button">העתק cURL / Postman</button>
+<button class="btn ghost" id="dialogBugEvidenceBtn" type="button">צור Bug Evidence</button>
+<button class="btn ghost" id="dialogInvestigateBtn" type="button">🤖 Investigate</button>
+<button class="btn ghost" id="dialogGenerateBugBtn" type="button">🐞 Generate Bug</button>
+<button class="btn primary" id="dialogRunBtn" type="button">Run</button>
+</div>
+</form>
+</dialog>
+<dialog class="test-dialog bug-dialog" id="bugDialog">
+<form class="dialog-card" method="dialog">
+<div class="section-head"><div><h2>🐞 Azure Bug Draft</h2><p>נוצר אוטומטית מה־Test Case ומה־Runtime Evidence. מומלץ לעבור עליו לפני פתיחת Bug.</p></div><button class="btn ghost" value="cancel">✕</button></div>
+<label>Title<input id="bugDraftTitle"/></label>
+<label>Description<textarea id="bugDraftBody" rows="18"></textarea></label>
+<div class="actions-row dialog-actions"><button class="btn primary" id="copyBugDraftBtn" type="button">העתק Bug</button><button class="btn" id="downloadBugDraftBtn" type="button">הורד Markdown</button></div>
+</form>
+</dialog>
+<footer>GenAI Router QA Console · Swagger 1.0.6 · גרסה 0.02</footer>
+<script src="/app.js" type="module"></script>
+</body>
+</html>
