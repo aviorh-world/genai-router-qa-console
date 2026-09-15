@@ -15,6 +15,7 @@ const now = () => new Date().toISOString();
 const clone = (v) => v == null ? v : JSON.parse(JSON.stringify(v));
 const RUN_HISTORY_KEY='genai-router-qa-run-history-v002';
 const CASE_ID_KEY='genaiQaCaseIdCounterV1';
+const DEFAULT_TSH_BASE_URL='https://t-sh-apic.taxes.gov.il/ita-chat-router-api';
 function redactForAi(value,key=''){
   if(value==null)return value;
   const sensitive=/(token|authorization|password|secret|api[-_]?key|private[-_]?key)/i;
@@ -631,7 +632,7 @@ function readiness(){
   const tokenAge = state.tokenMarkedAt ? Date.now()-state.tokenMarkedAt : null;
   const tokenFresh = !c.token ? false : tokenAge==null ? true : tokenAge < 60*60*1000;
   const items=[
-    ['TSH Base URL',!!c.baseUrl,'הערך עצמו עדיין חסר; לפי הצוות הוא אצל אנדריי'],
+    ['TSH Base URL',!!c.baseUrl,`כתובת ידועה: ${DEFAULT_TSH_BASE_URL}`],
     ['Identity Token',!!c.token&&tokenFresh,'gcloud auth print-identity-token · אפשר לאמת דרך כפתור בדיקת Token · תוקף ~שעה'],
     ['App ID',!!c.appId,'ברירת מחדל מה-Swagger: Desktop'],
     ['User ID',!!c.userId,'aviorha@taxes.gov.il'],
@@ -641,7 +642,7 @@ function readiness(){
   if($('readinessGrid')) $('readinessGrid').innerHTML=items.map(([n,ok,d])=>`<div class="ready-item ${ok?'ok':'missing'}"><b>${ok?'✓':'○'} ${esc(n)}</b><span>${esc(d)}</span></div>`).join('');
   const executable = c.executionMode!=='postman';
   const core=[
-    ['Connection target',!!c.baseUrl,'TSH Base URL מדויק'],
+    ['Connection target',!!c.baseUrl,DEFAULT_TSH_BASE_URL],
     ['Identity',!!c.token&&tokenFresh&&!!c.userId,'X-Serverless-Authorization + aviorha@taxes.gov.il'],
     ['Test defaults',!!c.appId&&(!c.caseId||validCaseId(c.caseId)),'App ID=Desktop; Case ID יכול להיות ערך בדיקה'],
     ['Execution path',executable,'Browser Direct / Proxy; במצב Postman האתר מייצר בקשות בלבד']
@@ -733,7 +734,7 @@ function saveManual(status){ const id=state.selectedTestId;if(!id)return; const 
 
 function cfg(){
   return {
-    baseUrl:$('baseUrl').value.trim(), token:$('token').value.trim(), appId:$('appId').value.trim(),
+    baseUrl:normalizeBaseUrl($('baseUrl').value.trim()||DEFAULT_TSH_BASE_URL), token:$('token').value.trim(), appId:$('appId').value.trim(),
     userId:$('userId').value.trim(), caseId:$('caseId').value.trim() || null,
     userIdB:$('userIdB').value.trim(), tokenB:$('tokenB').value.trim(),
     conversationId:$('conversationId').value.trim(), messageId:$('messageId').value.trim(),
@@ -864,11 +865,33 @@ function requestBody(path,method,c=cfg()){
   }
 }
 
+function normalizeBaseUrl(baseUrl=''){
+  let raw=String(baseUrl||DEFAULT_TSH_BASE_URL).trim();
+  if(!raw) raw=DEFAULT_TSH_BASE_URL;
+  raw=raw.replace(/\/+$/,'');
+  raw=raw.replace(/\/v1$/i,'');
+  return raw;
+}
+function normalizeApiPath(path=''){
+  let p=String(path||'/').trim();
+  if(!p.startsWith('/')) p='/'+p;
+  p=p.replace(/^\/v1\/v1(?=\/|$)/i,'/v1');
+  return p;
+}
 function targetUrl(baseUrl,path){
-  const b=baseUrl.endsWith('/')?baseUrl:baseUrl+'/';
-  const u=new URL(path.replace(/^\//,''),b);
+  const base=normalizeBaseUrl(baseUrl);
+  const cleanPath=normalizeApiPath(path).replace(/^\/+/, '');
+  const b=base.endsWith('/')?base:base+'/';
+  const u=new URL(cleanPath,b);
   if(u.protocol!=='https:') throw new Error('TSH Base URL חייב להיות HTTPS');
   return u.toString();
+}
+function normalizeBaseUrlField(){
+  const el=$('baseUrl'); if(!el)return;
+  const before=el.value.trim(); const after=normalizeBaseUrl(before||DEFAULT_TSH_BASE_URL);
+  el.value=after;
+  if(before && before!==after) showToast('Base URL נורמל: הוסר /v1 או / מיותר כדי למנוע כפילות ב-Endpoints.','info',4500);
+  readiness();
 }
 async function directRequest({method,path,body,token,stream=false}){
   const c=cfg(); const url=targetUrl(c.baseUrl,path);
@@ -886,7 +909,7 @@ async function directRequest({method,path,body,token,stream=false}){
   return {status:res.status,body:parsed,raw:txt,latencyMs,contentType:ct,isBinary:false};
 }
 async function proxy({method,path,body,token,stream=false}){
-  const c=cfg(); beginExchange({method,path,body,token,mode:state.demo?'DEMO':c.executionMode});
+  const c=cfg(); path=normalizeApiPath(path); beginExchange({method,path,body,token,mode:state.demo?'DEMO':c.executionMode});
   if(state.demo){const r=await demoResponse(method,path,body,stream);finishExchange({status:r.status,body:stream?'[Demo SSE stream]':r.body,latencyMs:r.latencyMs??0,contentType:r.contentType||'',stream});return r;}
   if(!c.baseUrl){finishExchange({error:'חסר TSH Base URL'});throw new Error('יש להזין TSH Base URL');}
   if(c.executionMode==='postman'){finishExchange({error:'Postman mode — לא נשלחה בקשה'});throw new Error('מצב Postman/cURL אינו מריץ בקשות מהדפדפן. השתמש בכפתור "העתק cURL" והרץ בתוך הסביבה הפנימית.');}
@@ -1246,7 +1269,7 @@ function renderStpStd(){
 }
 
 function stpMarkdown(){
-  return `# STP – תוכנית בדיקות GenAI Router\n\n## מטרה\nלוודא שה-Router עובד תקין בסביבת TSH, מנהל שיחות ו-state בצורה עקבית, אוכף הרשאות ומחזיר תשובות GenAI/RAG אמינות ובטוחות.\n\n## Scope\nAPI, Authentication, Conversations, History, SSE Messages, Delete, Files/Chunks, Feedback, Statistics, Boundaries, Authorization, RAG, Prompt Injection ו-State. בנוסף נכללות בדיקות Target Design של אפיון ה-RAG הגנרי (Ingestion/Retrieval), המסומנות בנפרד ואינן הוכחה למימוש נוכחי.\n\n## מחוץ ל-Scope כרגע\nProduction; עומסים ללא SLA; DB מלא ללא גישה; איכות עסקית סופית ללא Golden Dataset/SME.\n\n## סביבת בדיקה\nTSH/NON-PROD. Identity Token באמצעות gcloud auth print-identity-token ונשלח ב-X-Serverless-Authorization.\n\n## Entry Criteria\n- TSH Base URL\n- משתמש ענן והרשאת Router\n- Identity Token תקין\n- Swagger/Contract זמין\n- Test Data בסיסי\n\n## Exit Criteria\n- כל P0 עברו או אושרה חריגה\n- אין תקלת אבטחה קריטית פתוחה\n- P1/P2 תועדו\n- פערי Contract החוסמים החלטה סומנו/נסגרו\n- הופק Test Run Report\n\n## סיכונים\nToken קצר חיים; תלות ברשת/הרשאות; Contract חלקי; תלות ב-DB/Logs; צורך ב-SME לבדיקות איכות AI; אפיון ה-RAG הוא Target Design וסעיף ה-API שלו עדיין מסומן להשלמה.\n`;
+  return `# STP – תוכנית בדיקות GenAI Router\n\n## מטרה\nלוודא שה-Router עובד תקין בסביבת TSH, מנהל שיחות ו-state בצורה עקבית, אוכף הרשאות ומחזיר תשובות GenAI/RAG אמינות ובטוחות.\n\n## Scope\nAPI, Authentication, Conversations, History, SSE Messages, Delete, Files/Chunks, Feedback, Statistics, Boundaries, Authorization, RAG, Prompt Injection ו-State. בנוסף נכללות בדיקות Target Design של אפיון ה-RAG הגנרי (Ingestion/Retrieval), המסומנות בנפרד ואינן הוכחה למימוש נוכחי.\n\n## מחוץ ל-Scope כרגע\nProduction; עומסים ללא SLA; DB מלא ללא גישה; איכות עסקית סופית ללא Golden Dataset/SME.\n\n## סביבת בדיקה\nTSH/NON-PROD. Base URL: https://t-sh-apic.taxes.gov.il/ita-chat-router-api. Identity Token באמצעות gcloud auth print-identity-token ונשלח ב-X-Serverless-Authorization.\n\n## Entry Criteria\n- TSH Base URL: https://t-sh-apic.taxes.gov.il/ita-chat-router-api\n- משתמש ענן והרשאת Router\n- Identity Token תקין\n- Swagger/Contract זמין\n- Test Data בסיסי\n\n## Exit Criteria\n- כל P0 עברו או אושרה חריגה\n- אין תקלת אבטחה קריטית פתוחה\n- P1/P2 תועדו\n- פערי Contract החוסמים החלטה סומנו/נסגרו\n- הופק Test Run Report\n\n## סיכונים\nToken קצר חיים; תלות ברשת/הרשאות; Contract חלקי; תלות ב-DB/Logs; צורך ב-SME לבדיקות איכות AI; אפיון ה-RAG הוא Target Design וסעיף ה-API שלו עדיין מסומן להשלמה.\n`;
 }
 function stdMarkdown(){
   const lines=[`# STD – תכנון ותיאור בדיקות GenAI Router`,``,`סה״כ תסריטים: ${state.tests.length}`,``,'## Test Cases'];
@@ -1279,7 +1302,34 @@ function exportBlob(name,type,text){const a=document.createElement('a');a.href=U
 function exportJson(){exportBlob(`qa-report-${Date.now()}.json`,'application/json',JSON.stringify({generatedAt:now(),environment:cfg().baseUrl,results:Object.values(state.results),investigations:state.investigations,runHistory:state.runHistory,aiRating:state.aiRating,goldenRuns:state.goldenRuns},null,2));}
 function exportCsv(){const rows=[['ID','Status','Actual','Details','Failure Category','Time'],...Object.values(state.results).map(r=>[r.id,r.status,r.actual,r.details,r.bugCategory||'',r.time])];const csv=rows.map(row=>row.map(x=>'"'+String(x??'').replace(/"/g,'""')+'"').join(',')).join('\n');exportBlob(`qa-report-${Date.now()}.csv`,'text/csv;charset=utf-8','\ufeff'+csv);}
 
-async function health(){ if(cfg().executionMode==='postman'){setConn('Postman mode · העתק cURL','question');showToast('במצב Postman האתר לא שולח בקשה.','warning');return;} try{const r=await proxy({method:'GET',path:'/health'}); const ok=r.status===200; state.connectionOk=ok; setConn(state.demo?'Demo Mode · סימולציה בלבד':(ok?`מחובר · HTTP ${r.status}`:`HTTP ${r.status}`),state.demo?'demo':(ok?'pass':'fail')); readiness();showToast(state.demo?'בדיקת חיבור בסימולציית Demo בלבד.':(ok?'החיבור ל־Router הצליח.':`ה־Router החזיר HTTP ${r.status}.`),state.demo?'warning':(ok?'success':'error'));}catch(e){state.connectionOk=false;setConn(e.message,'fail');readiness();showToast('בדיקת חיבור נכשלה: '+e.message,'error',5000);} }
+async function health(){
+  if(cfg().executionMode==='postman'){setConn('Postman mode · העתק cURL','question');showToast('במצב Postman האתר לא שולח בקשה.','warning');return;}
+  try{
+    // Health נבדק במכוון ללא Token כדי להפריד Connectivity מ-Authentication.
+    const r=await proxy({method:'GET',path:'/health',token:''});
+    const ok=r.status>=200&&r.status<300;
+    if(ok){
+      state.connectionOk=true;
+      setConn(state.demo?'Demo Mode · סימולציה בלבד':`מחובר · Health HTTP ${r.status}`,state.demo?'demo':'pass');
+      readiness();
+      showToast(state.demo?'בדיקת חיבור בסימולציית Demo בלבד.':'ה-Router נגיש ו-Health הצליח ללא Token.','success');
+      return;
+    }
+    if(r.status===401||r.status===403){
+      state.connectionOk=false;
+      setConn(`Router נגיש · Health דורש Auth · HTTP ${r.status}`,'question');
+      readiness();
+      showToast(`הגענו ל-Router ללא Token, אך /health דורש Authentication (HTTP ${r.status}). אפשר להמשיך להפקת Token ולבדיקת Token.`, 'warning', 6500);
+      return;
+    }
+    state.connectionOk=false;
+    setConn(`Health HTTP ${r.status}`,'fail');
+    readiness();
+    showToast(`ה-Router החזיר HTTP ${r.status} לבדיקת Health ללא Token. בדוק Evidence/Route.`, 'error', 5500);
+  }catch(e){
+    state.connectionOk=false;setConn(e.message,'fail');readiness();showToast('בדיקת חיבור נכשלה: '+e.message,'error',6000);
+  }
+}
 function demo(){state.demo=!state.demo;$('demoBtn').textContent=state.demo?'Demo: ON':'Demo Mode';$('demoWarning').hidden=!state.demo;setConn(state.demo?'Demo Mode · סימולציה בלבד':'לא מחובר',state.demo?'demo':'neutral');showToast(state.demo?'Demo Mode הופעל: לא נשלחות בקשות אמיתיות.':'Demo Mode כובה.','info');}
 
 function wire(){
@@ -1294,12 +1344,12 @@ function wire(){
   if($('dialogGenerateBugBtn'))$('dialogGenerateBugBtn').onclick=()=>state.selectedTestId&&openBugDraft(state.selectedTestId);
   if($('copyBugDraftBtn'))$('copyBugDraftBtn').onclick=copyBugDraft; if($('downloadBugDraftBtn'))$('downloadBugDraftBtn').onclick=downloadBugDraft;
   $('exportJson').onclick=exportJson;$('exportCsv').onclick=exportCsv; if($('exportStpBtn')) $('exportStpBtn').onclick=exportStp; if($('exportStdBtn')) $('exportStdBtn').onclick=exportStd;
-  ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',()=>{readiness(); if(id==='caseId') updateCaseIdHelp();})); $('executionMode').addEventListener('change',readiness); $('authHeader').addEventListener('change',readiness); $('cloudAccessConfirmed').addEventListener('change',readiness); if($('dialogBugEvidenceBtn'))$('dialogBugEvidenceBtn').onclick=downloadSelectedTestBugEvidence; $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));
+  ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',()=>{readiness(); if(id==='caseId') updateCaseIdHelp();})); $('baseUrl').addEventListener('blur',normalizeBaseUrlField); $('executionMode').addEventListener('change',readiness); $('authHeader').addEventListener('change',readiness); $('cloudAccessConfirmed').addEventListener('change',readiness); if($('dialogBugEvidenceBtn'))$('dialogBugEvidenceBtn').onclick=downloadSelectedTestBugEvidence; $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));
   document.querySelectorAll('[data-rating]').forEach(b=>b.onclick=()=>{state.aiRating={rating:b.dataset.rating,note:$('aiNote').value,time:now()};$('aiRating').textContent=`נבחר: ${b.dataset.rating}`;});
 }
 
 setInterval(updateTokenCountdown,1000);
 loadGoldenDataset();
 loadRunHistory();
-ensureCaseId(); updateCaseIdHelp(); updateTokenCountdown(); readiness();
+if($('baseUrl')&&!$('baseUrl').value.trim())$('baseUrl').value=DEFAULT_TSH_BASE_URL; normalizeBaseUrlField(); ensureCaseId(); updateCaseIdHelp(); updateTokenCountdown(); readiness();
 wire(); Promise.all([loadData(),seedTaxRagGoldenIfEmpty()]).then(()=>{renderGolden();if(new URLSearchParams(location.search).get('selftest')==='1')setTimeout(runUiSelfTest,50);}).catch(e=>{showToast('שגיאת טעינת נתונים: '+e.message,'error',8000);document.body.insertAdjacentHTML('beforeend',`<pre>${esc(e.message)}</pre>`);});

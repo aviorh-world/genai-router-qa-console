@@ -27,7 +27,7 @@
 <div class="section-head">
 <div>
 <h2>1. חיבור לסביבת הבדיקה</h2>
-<p>כדי להתחיל צריך בעיקר Base URL, Identity Token ומשתמש בדיקה. שאר האפשרויות נמצאות תחת "אפשרויות מתקדמות".</p>
+<p>Base URL של TSH כבר מוגדר ל־<code>https://t-sh-apic.taxes.gov.il/ita-chat-router-api</code>. להרצות מוגנות צריך Identity Token ומשתמש בדיקה; שאר האפשרויות נמצאות תחת "אפשרויות מתקדמות".</p>
 </div>
 <div class="actions-row">
 <button class="btn" id="healthBtn">בדיקת חיבור</button>
@@ -36,7 +36,7 @@
 </div>
 </div>
 <div class="grid cols-3 setup-essential">
-<label>TSH Base URL<input autocomplete="off" id="baseUrl" placeholder="כתובת Router בסביבת TSH"/></label>
+<label>TSH Base URL<input autocomplete="off" id="baseUrl" value="https://t-sh-apic.taxes.gov.il/ita-chat-router-api" placeholder="כתובת Router בסביבת TSH"/><small class="field-help">הכתובת שהתקבלה מהצוות. אם תודבק כתובת שמסתיימת ב־/v1, האתר ינרמל אותה אוטומטית.</small></label>
 <label>Identity Token<input autocomplete="off" id="token" placeholder="gcloud auth print-identity-token" type="password"/><small class="field-help" id="tokenExpiry">לא אומת עדיין</small></label>
 <label>User ID<input id="userId" inputmode="email" placeholder="האימייל השע״מי שלך" value="aviorha@taxes.gov.il"/></label>
 <label>App ID<input id="appId" placeholder="Desktop" value="Desktop"/></label>
@@ -83,7 +83,7 @@
 </nav>
 <section class="tabpage active" id="dashboard">
 <div class="card start-card">
-<div class="section-head"><div><h2>מה צריך כדי להתחיל</h2><p>החסמים להתנעה כרגע: Base URL מדויק, Token תקין והרשאת משתמש ענן; App ID ו־Case ID כבר קיבלו ברירות מחדל.</p></div><span class="badge question" id="startBadge">ממתין לנתונים</span></div>
+<div class="section-head"><div><h2>מה צריך כדי להתחיל</h2><p>Base URL כבר ידוע ומוגדר. החסמים העיקריים להרצות מוגנות הם Token תקין והרשאת משתמש ענן; App ID ו־Case ID מקבלים ברירות מחדל.</p></div><span class="badge question" id="startBadge">ממתין לנתונים</span></div>
 <div class="blocking-summary" id="blockingSummary"></div>
 </div>
 <div class="kpis">
@@ -155,7 +155,7 @@
 <div class="card">
 <h2>מה האתר הזה עושה?</h2>
 <div class="guide-grid">
-<div class="guide-step"><span>1</span><div><b>מחברים ל־TSH</b><p>מזינים Base URL ו־Identity Token ובודקים שה־Router נגיש.</p></div></div>
+<div class="guide-step"><span>1</span><div><b>מחברים ל־TSH</b><p>Base URL כבר מוגדר ל־https://t-sh-apic.taxes.gov.il/ita-chat-router-api. אפשר לבצע בדיקת חיבור ללא Token; להרצות מוגנות מוסיפים Identity Token.</p></div></div>
 <div class="guide-step"><span>2</span><div><b>מריצים בדיקות</b><p>אפשר להריץ טסט יחיד, Pack, Happy Flow או את כל הבדיקות.</p></div></div>
 <div class="guide-step"><span>3</span><div><b>בודקים Evidence</b><p>בכל טסט אמיתי אפשר לראות Request, Response, HTTP status ו־latency ולהעתיק cURL.</p></div></div>
 <div class="guide-step"><span>4</span><div><b>מפרשים תוצאה</b><p>PASS/FAIL הם תוצאה אמיתית; N/A אומר שחסר תנאי; DEMO הוא סימולציה בלבד; QUESTION/BLOCKED דורשים בירור.</p></div></div>
@@ -304,8 +304,8 @@
 <input id="goldenImportFile" type="file" accept="application/json,.json" hidden/>
 </div>
 
-<div class="card release-card">
-<div class="section-head"><div><h2>1. פרטי גרסה / Run Metadata</h2><p>המידע הזה נשמר עם התוצאות כדי שנדע מה השתנה בין גרסאות.</p></div><span class="badge neutral">Release Context</span></div>
+<details class="card release-card golden-collapse">
+<summary class="golden-collapse-summary"><div><h2>1. פרטי גרסה / Run Metadata</h2><p>המידע הזה נשמר עם התוצאות כדי שנדע מה השתנה בין גרסאות.</p></div><span class="badge neutral">Release Context</span></summary>
 <div class="grid cols-3">
 <label>Run / Release Label<input id="goldenRunLabel" placeholder="למשל build-1.4.2 / release-2026-09-15"/></label>
 <label>Environment<input id="goldenEnvironment" value="TSH" placeholder="TSH / QA"/></label>
@@ -318,10 +318,10 @@
 <label class="span-2">הערות לגרסה<input id="goldenRunNotes" placeholder="מה השתנה בגרסה הזו?"/></label>
 </div>
 <details class="guide-details"><summary>הגדרות הרצה מתקדמות</summary><div class="grid cols-3"><label class="checkbox-label"><input id="goldenIsolate" type="checkbox" checked/> כל שאלה בשיחה חדשה</label><label class="checkbox-label"><input id="goldenCleanup" type="checkbox" checked/> למחוק שיחת בדיקה אחרי ההרצה</label><label class="checkbox-label"><input id="goldenFetchChunks" type="checkbox" checked/> לשלוף אוטומטית את ה־Chunks מה־Sources</label></div><p class="muted">בידוד שיחות מונע זליגת Context. שליפת Chunks מאפשרת להפריד בין <button class="term-link" data-glossary="Retrieval Failure">Retrieval Failure</button> לבין <button class="term-link" data-glossary="Generation Failure">Generation Failure</button>.</p></details>
-</div>
+</details>
 
-<div class="card">
-<h2>2. Dataset — הוספת / עריכת שאלת זהב</h2>
+<details class="card golden-collapse">
+<summary class="golden-collapse-summary"><div><h2>2. Dataset — הוספת / עריכת שאלת זהב</h2><p>הוספה או עריכה ידנית של שאלה, תשובת זהב ומקור צפוי.</p></div><span class="badge neutral">Dataset editor</span></summary>
 <div class="grid cols-2 golden-form">
 <label>ID<input id="goldenId" placeholder="GOLD-001"/></label>
 <label>תגיות<input id="goldenTags" placeholder="tax, no-answer, security"/></label>
@@ -332,26 +332,27 @@
 <label class="span-2">הערות<textarea id="goldenNotes" rows="2" placeholder="למשל: שאלה שאושרה ע״י מומחה תוכן"></textarea></label>
 </div>
 <div class="actions-row"><button class="btn primary" id="goldenSaveBtn">שמור שאלה</button><button class="btn ghost" id="goldenResetBtn">נקה טופס</button><button class="btn danger" id="goldenClearBtn">מחק Dataset מקומי</button></div>
-</div>
-<div class="card"><div class="section-head"><div><h2>שאלות זהב</h2><p>נשמרות מקומית בדפדפן בלבד. ה־Token אינו נשמר.</p></div><span class="badge neutral" id="goldenCount">0 שאלות</span></div><div class="table-wrap" id="goldenTable"></div></div>
+</details>
+<details class="card golden-collapse">
+<summary class="golden-collapse-summary"><div><h2>שאלות זהב</h2><p>נשמרות מקומית בדפדפן בלבד. ה־Token אינו נשמר.</p></div><span class="badge neutral" id="goldenCount">0 שאלות</span></summary><div class="table-wrap" id="goldenTable"></div></details>
 
-<div class="card">
-<div class="section-head"><div><h2>3. תוצאות Release Sanity</h2><p>המערכת מפרידה בין <button class="term-link" data-glossary="Retrieval Quality">Retrieval</button>, <button class="term-link" data-glossary="Answer Correctness">Answer</button> ו־<button class="term-link" data-glossary="Grounding">Grounding</button>. הציונים הם Heuristic בלבד.</p></div><span class="badge neutral" id="goldenRunBadge">אין Run שמור</span></div>
+<details class="card golden-collapse">
+<summary class="golden-collapse-summary"><div><h2>3. תוצאות Release Sanity</h2><p>המערכת מפרידה בין <button class="term-link" data-glossary="Retrieval Quality">Retrieval</button>, <button class="term-link" data-glossary="Answer Correctness">Answer</button> ו־<button class="term-link" data-glossary="Grounding">Grounding</button>. הציונים הם Heuristic בלבד.</p></div><span class="badge neutral" id="goldenRunBadge">אין Run שמור</span></summary>
 <div class="kpis" id="goldenRunSummary"></div>
 <div class="table-wrap" id="goldenResults"></div>
-</div>
+</details>
 
-<div class="card review-card">
-<div class="section-head"><div><h2>4. Review Queue</h2><p>כאן מופיעים רק מקרים שדורשים עין אנושית: Source לא צפוי, Chunk חסר, Answer/Grounding חלשים, שגיאה או FAIL.</p></div><span class="badge question" id="goldenReviewCount">0 לבדיקה</span></div>
+<details class="card review-card golden-collapse">
+<summary class="golden-collapse-summary"><div><h2>4. Review Queue</h2><p>כאן מופיעים רק מקרים שדורשים עין אנושית: Source לא צפוי, Chunk חסר, Answer/Grounding חלשים, שגיאה או FAIL.</p></div><span class="badge question" id="goldenReviewCount">0 לבדיקה</span></summary>
 <div class="table-wrap" id="goldenReviewQueue"></div>
-</div>
+</details>
 
-<div class="card">
-<div class="section-head"><div><h2>5. השוואת Releases</h2><p>בחר שתי ריצות כדי לראות שיפור/רגרסיה, שינוי במקור ושינוי בציוני האיכות.</p></div><div class="compare-controls"><select id="goldenCompareBase"></select><span>מול</span><select id="goldenCompareCurrent"></select><button class="btn ghost" id="goldenCompareBtn">השווה</button></div></div>
+<details class="card golden-collapse">
+<summary class="golden-collapse-summary"><div><h2>5. השוואת Releases</h2><p>בחר שתי ריצות כדי לראות שיפור/רגרסיה, שינוי במקור ושינוי בציוני האיכות.</p></div><span class="badge neutral">Release compare</span></summary><div class="compare-controls golden-compare-controls"><select id="goldenCompareBase"></select><span>מול</span><select id="goldenCompareCurrent"></select><button class="btn ghost" id="goldenCompareBtn">השווה</button></div>
 <div class="kpis" id="goldenCompareSummary"></div>
 <div class="table-wrap" id="goldenCompareTable"></div>
 <details class="guide-details"><summary>היסטוריית ריצות שמורות</summary><div class="table-wrap" id="goldenRunsTable"></div></details>
-</div>
+</details>
 </div>
 </section><section class="tabpage" id="qaDocs">
 <div class="card">
@@ -381,7 +382,7 @@
 <div class="card">
 <h2>תנאי כניסה ויציאה</h2>
 <div class="result-grid">
-<div><h3>Entry Criteria – אפשר להתחיל כש...</h3><ul><li>יש TSH Base URL.</li><li>יש משתמש ענן והרשאה ל־Router.</li><li>ניתן להפיק Identity Token תקין.</li><li>Swagger/Contract זמין.</li><li>קיימים App ID, User ID ו־Case ID לבדיקה.</li></ul></div>
+<div><h3>Entry Criteria – אפשר להתחיל כש...</h3><ul><li>TSH Base URL: <code>https://t-sh-apic.taxes.gov.il/ita-chat-router-api</code>.</li><li>יש משתמש ענן והרשאה ל־Router.</li><li>ניתן להפיק Identity Token תקין.</li><li>Swagger/Contract זמין.</li><li>קיימים App ID, User ID ו־Case ID לבדיקה.</li></ul></div>
 <div><h3>Exit Criteria – אפשר לסיים כש...</h3><ul><li>כל בדיקות P0 הקריטיות עברו או שיש חריגה מאושרת ומתועדת.</li><li>אין תקלת אבטחה קריטית פתוחה.</li><li>תוצאות P1/P2 תועדו והסיכונים ידועים.</li><li>פערי Contract שחוסמים PASS/FAIL נסגרו או סומנו במפורש.</li><li>דוח הרצה הופק ונשמר.</li></ul></div>
 </div>
 </div>

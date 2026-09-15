@@ -37,3 +37,9 @@ The access code is sent only to the QA server for authorization. It is not added
 - Identity Tokens are not persisted and are redacted from Evidence.
 - The public Vercel UI may not be able to reach an internal TSH endpoint. Use Browser Direct or Postman from the approved network when required.
 - AI analysis is advisory. PASS/FAIL must continue to be based on Runtime Evidence and the agreed Expected Result, not on an LLM guess.
+
+## TSH Router target
+
+- Base URL: `https://t-sh-apic.taxes.gov.il/ita-chat-router-api`
+- API paths from Swagger already start with `/v1`; the console normalizes a pasted Base URL ending in `/v1` to avoid `/v1/v1`.
+- `GET /health` is attempted without an Identity Token first, so connectivity can be separated from authentication when the environment allows it.
