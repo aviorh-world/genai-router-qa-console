@@ -170,3 +170,16 @@
 
 /* Methodological E2E journeys */
 .journey-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.journey-card{appearance:none;text-align:right;background:var(--panel,#101827);border:1px solid var(--border,#334155);border-radius:12px;padding:14px;color:inherit;cursor:pointer;display:grid;gap:9px}.journey-card:hover,.journey-card.active{border-color:#60a5fa;box-shadow:0 0 0 1px rgba(96,165,250,.18)}.journey-card small{opacity:.72}.journey-top{display:flex;justify-content:space-between;gap:10px;align-items:center}.method-table{width:100%;border-collapse:collapse}.method-table th,.method-table td{padding:9px;border-bottom:1px solid var(--border,#334155);vertical-align:top}@media(max-width:800px){.journey-grid{grid-template-columns:1fr}.method-table{min-width:760px}}
+
+/* Auto Flow readability + structured Swagger API Runner */
+.journey-card{background:#f8fafc!important;color:#172033!important;border:1px solid #cbd5e1!important;min-height:150px}
+.journey-card:hover,.journey-card.active{background:#eff6ff!important;border-color:#2563eb!important;box-shadow:0 0 0 2px rgba(37,99,235,.10)!important}
+.journey-card .journey-top b{color:#0f172a;font-size:15px}.journey-card span{color:#334155}.journey-card small{color:#64748b!important;opacity:1!important}
+.api-runner-hero{border-right:5px solid #2563eb}.api-mail-guide{display:grid;gap:6px;background:#eff8ff;border:1px solid #b2ddff;border-radius:10px;padding:12px;margin-top:12px}
+.api-mail-guide code,.api-endpoint-info code{direction:ltr;display:inline-block;word-break:break-all}
+.api-select-grid{align-items:end}.api-endpoint-info{display:grid;grid-template-columns:1.3fr 1fr;gap:12px;margin-top:12px}
+.api-endpoint-info>div{border:1px solid var(--line);border-radius:10px;padding:10px;background:#fafcff}.api-endpoint-info small{display:block;color:var(--muted);margin-bottom:5px}
+.api-fields-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.api-field textarea{min-height:80px}.api-no-fields{grid-column:1/-1;padding:16px;border:1px dashed #cbd5e1;border-radius:10px;color:#64748b}
+.api-advanced{margin-top:15px;border:1px solid var(--line);border-radius:10px;padding:10px}.api-advanced summary{cursor:pointer;font-weight:800}
+.api-request-preview{display:grid;grid-template-columns:1.3fr 1fr;gap:15px}.api-request-preview pre{min-height:120px}
+@media(max-width:900px){.api-fields-grid,.api-endpoint-info,.api-request-preview{grid-template-columns:1fr}.journey-card{min-height:0}}

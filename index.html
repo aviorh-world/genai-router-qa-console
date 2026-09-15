@@ -38,7 +38,7 @@
 <div class="grid cols-3 setup-essential">
 <label>TSH Base URL<input autocomplete="off" id="baseUrl" value="https://t-sh-apic.taxes.gov.il/ita-chat-router-api" placeholder="כתובת Router בסביבת TSH"/><small class="field-help">הכתובת שהתקבלה מהצוות. אם תודבק כתובת שמסתיימת ב־/v1, האתר ינרמל אותה אוטומטית.</small></label>
 <label>Identity Token<input autocomplete="off" id="token" placeholder="gcloud auth print-identity-token" type="password"/><small class="field-help" id="tokenExpiry">לא אומת עדיין</small></label>
-<label>User ID<input id="userId" inputmode="email" placeholder="האימייל השע״מי שלך" value="aviorha@taxes.gov.il"/></label>
+<label>User ID<input id="userId" inputmode="email" placeholder="האימייל השע״מי שלך" placeholder="לדוגמה: name@ita.gov.il" value=""/></label>
 <label>App ID<input id="appId" placeholder="Desktop" value="Desktop"/></label>
 <label>Case ID<div class="field-inline"><input id="caseId" placeholder="9 ספרות · נוצר אוטומטית למעקב" value="123456789"/><button class="mini-btn field-inline-btn" id="generateCaseIdBtn" type="button">חדש</button></div><small class="field-help" id="caseIdHelp">ייווצר אוטומטית Case ID ייחודי לבדיקה, וניתן גם לשנות ידנית.</small></label>
 </div>
@@ -252,17 +252,50 @@
 <div class="card"><div class="section-head"><div><h2 id="activeFlowTitle">Conversation Lifecycle</h2><p id="activeFlowDescription">Create → History → Send → Get → Delete → Verify deletion.</p></div><button class="btn primary" id="flowRunBtn">▶ הרץ Flow</button></div><label>שאלה ל־AI<textarea id="flowQuestion" rows="3">מה אפשר להסיק מהמסמכים הרלוונטיים לשאלה זו?</textarea></label><div class="flow-steps" id="flowSteps"></div></div>
 <div class="card"><details class="guide-details"><summary>מטריצת תרחישים מתודולוגיים</summary><div class="table-wrap"><table class="method-table"><thead><tr><th>Flow</th><th>מטרה</th><th>רצף עיקרי</th><th>Priority</th><th>אוטומציה</th></tr></thead><tbody><tr><td>Conversation Lifecycle</td><td>מחזור חיים מלא של שיחה</td><td>Create → History → Send → Get → Delete → Verify</td><td>P0</td><td>מלאה</td></tr><tr><td>Continue Previous Conversation</td><td>חזרה לשיחה והמשך Context</td><td>Create → Question → Get → Follow-up → Get</td><td>P0</td><td>מלאה</td></tr><tr><td>Multi-Conversation Isolation</td><td>שתי שיחות נפרדות לאותו משתמש</td><td>Create A/B → Send A/B → Get A/B → History</td><td>P0</td><td>מלאה</td></tr><tr><td>Case Isolation</td><td>בידוד בין Cases</td><td>Create Case A/B → Messages → History per Case</td><td>P0 Security</td><td>מלאה</td></tr><tr><td>Golden RAG Journey</td><td>שאלה אמיתית מול Golden Dataset</td><td>Create → Golden Question → Answer/Sources → Review</td><td>P0 GenAI</td><td>חצי-אוטומטית</td></tr></tbody></table></div></details></div></section>
 <section class="tabpage" id="api">
+<div class="card api-runner-hero">
+  <div class="section-head"><div><h2>API Runner · Swagger 1.0.6</h2><p>כל 23 פעולות ה־Router בצורה מובנית. בחר פעולה, מלא רק את השדות הרלוונטיים ושלח.</p></div>
+  <div class="actions-row"><button class="btn primary" id="apiRunBtn">▶ שלח בקשה</button><button class="btn ghost" id="copyCurlBtn">העתק cURL</button></div></div>
+  <div class="api-mail-guide">
+    <b>חיבור לפי הנחיית הצוות</b>
+    <span>Base: <code>https://t-sh-apic.taxes.gov.il/ita-chat-router-api</code></span>
+    <span>Authorization: <code>Bearer &lt;token&gt;</code> · Content-Type: <code>application/json</code></span>
+    <span>את ה־Token מפיקים מחוץ לאתר: <code>gcloud auth print-identity-token</code> ומדביקים בשדה Identity Token בהגדרות.</span>
+  </div>
+</div>
+
 <div class="card">
-<div class="section-head"><div><h2>API Runner</h2><p>הרצה חופשית של כל Endpoint מה־Swagger, או יצירת cURL ל־Postman/סביבה פנימית.</p></div><div class="actions-row"><button class="btn primary" id="apiRunBtn">Run</button><button class="btn ghost" id="copyCurlBtn">העתק cURL</button></div></div>
-<div class="grid cols-2">
-<label>Endpoint<select id="endpointSelect"></select></label>
-<label>Method<input id="apiMethod" readonly=""/></label>
+  <div class="grid cols-2 api-select-grid">
+    <label>Endpoint מה־Swagger<select id="endpointSelect"></select></label>
+    <label>Method<input id="apiMethod" readonly=""/></label>
+  </div>
+  <div class="api-endpoint-info">
+    <div><small>כתובת מלאה</small><code id="apiFullUrl">—</code></div>
+    <div><small>Operation</small><b id="apiOperationSummary">—</b></div>
+  </div>
 </div>
-<label>Request JSON<textarea id="apiBody" rows="10" spellcheck="false">{}</textarea></label>
-<div class="result-grid">
-<div><h3>Response</h3><pre id="apiResponse">—</pre></div>
-<div><h3>Meta</h3><pre id="apiMeta">—</pre></div>
+
+<div class="card">
+  <div class="section-head"><div><h2>שדות הבקשה</h2><p>השדות משתנים אוטומטית לפי ה־Endpoint. ערכים שכבר הוזנו ב־Setup נטענים אוטומטית.</p></div></div>
+  <div id="apiStructuredFields" class="api-fields-grid"></div>
+  <details class="api-advanced">
+    <summary>JSON מתקדם / עריכה ידנית</summary>
+    <label>Request JSON<textarea id="apiBody" rows="10" spellcheck="false">{}</textarea></label>
+  </details>
 </div>
+
+<div class="card">
+  <div class="api-request-preview">
+    <div><h3>Request Preview</h3><pre id="apiRequestPreview">—</pre></div>
+    <div><h3>Headers</h3><pre id="apiHeadersPreview">Content-Type: application/json
+Authorization: Bearer [TOKEN]</pre></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="result-grid">
+    <div><h3>Response</h3><pre id="apiResponse">—</pre></div>
+    <div><h3>Meta</h3><pre id="apiMeta">—</pre></div>
+  </div>
 </div>
 </section>
 <section class="tabpage" id="ai">

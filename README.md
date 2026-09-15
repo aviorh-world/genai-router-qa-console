@@ -47,3 +47,11 @@ The access code is sent only to the QA server for authorization. It is not added
 
 ## Methodological E2E Flows
 Auto Flow includes Conversation Lifecycle, Continue Previous Conversation, Multi-Conversation Isolation, Case Isolation, and Golden RAG Journey. State is propagated automatically between steps.
+
+
+## Structured API Runner
+API Runner now exposes all Swagger operations through a structured endpoint selector, endpoint-specific fields, full URL, request/header preview, advanced JSON, direct execution and cURL. Authorization preview follows the team instruction: `Authorization: Bearer <token>` and `Content-Type: application/json`.
+
+
+## API Runner update
+API Runner defaults to POST /v1/conversations/new, uses Authorization: Bearer <token>, and exposes structured fields for all Swagger 1.0.6 operations. Health remains GET /health because that is the method defined by Swagger 1.0.6.

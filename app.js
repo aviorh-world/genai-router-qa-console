@@ -63,7 +63,7 @@ function activateTab(name){
 function plainTestExplanation(t){
   const overrides={
     'P0-001':'בדיקה שהאתר מצליח להגיע ל־Router האמיתי בסביבת TSH. זו בדיקת תקשורת/סביבה, לא בדיקה של איכות ה־AI.',
-    'P0-002':'בדיקה חיובית של ההזדהות: האתר שולח בקשה מוגנת ל־POST /v1/conversations/history עם Identity Token אמיתי ב־X-Serverless-Authorization. בלי Token שהופק ב־gcloud אין PASS אמיתי. במצב Demo מתקבלת רק סימולציה והיא מסומנת DEMO.',
+    'P0-002':'בדיקה חיובית של ההזדהות: האתר שולח בקשה מוגנת ל־POST /v1/conversations/history עם Identity Token אמיתי ב־Authorization. בלי Token שהופק ב־gcloud אין PASS אמיתי. במצב Demo מתקבלת רק סימולציה והיא מסומנת DEMO.',
     'P0-003':'בדיקה שלילית: אותה גישה מוגנת נשלחת בלי Token בכלל. אנחנו מצפים שהשרת יחסום אותה ולא יחזיר מידע עסקי.',
     'P0-004':'בדיקה שלילית: שולחים Token מזויף/לא תקין ומוודאים שהשרת חוסם את הבקשה.',
     'P0-005':'פותחים Conversation חדש עם נתוני הבדיקה ומוודאים שהשרת מחזיר conversationId אמיתי.',
@@ -139,7 +139,7 @@ function classifyGoldenReason(r={}){
 }
 
 const CONTRACT_GAPS = [
-  {severity:'MEDIUM',area:'Authentication',gap:'ב־Swagger לא מוגדר securityScheme. ה-Identity Token מופק ב-gcloud auth print-identity-token ונשלח ב-X-Serverless-Authorization: Bearer <TOKEN>.',impact:'דרך ההזדהות ידועה כעת, אך עדיין חסרים תיעוד פורמלי ב-Swagger וקודי שגיאה מוסכמים.'},
+  {severity:'MEDIUM',area:'Authentication',gap:'ב־Swagger לא מוגדר securityScheme. ה-Identity Token מופק ב-gcloud auth print-identity-token ונשלח ב-Authorization: Bearer <TOKEN>.',impact:'דרך ההזדהות ידועה כעת, אך עדיין חסרים תיעוד פורמלי ב-Swagger וקודי שגיאה מוסכמים.'},
   {severity:'HIGH',area:'Environment / Network',gap:'ה־servers ב־Swagger אינו מצביע על TSH. הצוות ציין שנדרשת תקשורת TSH↔NON-PROD והרשאה לשירות.',impact:'Vercel ציבורי עלול לא להגיע ליעד; יש להריץ Browser Direct או Postman מתוך הרשת המתאימה.'},
   {severity:'MEDIUM',area:'Case ID',gap:'הצוות הבהיר ש-Case ID אינו קריטי להתנעה ויכול להיות ערך בדיקה; Swagger מגדיר 9 ספרות ו-nullable אך לא required.',impact:'Test Data כבר לא blocker, אך missing/null עדיין דורשים אישור Runtime.'},
   {severity:'HIGH',area:'History / Messages',gap:'הדרישה העסקית היא 20 הודעות אחרונות, אבל הכמות והסדר אינם Contract מפורש ב-Get Conversation.',impact:'לא ניתן לקבוע PASS/FAIL חד־משמעי לסדר ולגבול בלי walkthrough.'},
@@ -635,7 +635,7 @@ function readiness(){
     ['TSH Base URL',!!c.baseUrl,`כתובת ידועה: ${DEFAULT_TSH_BASE_URL}`],
     ['Identity Token',!!c.token&&tokenFresh,'gcloud auth print-identity-token · אפשר לאמת דרך כפתור בדיקת Token · תוקף ~שעה'],
     ['App ID',!!c.appId,'ברירת מחדל מה-Swagger: Desktop'],
-    ['User ID',!!c.userId,'aviorha@taxes.gov.il'],
+    ['User ID',!!c.userId,'name@ita.gov.il'],
     ['Case ID',!c.caseId||validCaseId(c.caseId),'לא blocker; אם נשלח — 9 ספרות'],
     ['Cloud Access',c.cloudAccessConfirmed||state.connectionOk,'משתמש ענן + הרשאה לשירות Router']
   ];
@@ -643,7 +643,7 @@ function readiness(){
   const executable = c.executionMode!=='postman';
   const core=[
     ['Connection target',!!c.baseUrl,DEFAULT_TSH_BASE_URL],
-    ['Identity',!!c.token&&tokenFresh&&!!c.userId,'X-Serverless-Authorization + aviorha@taxes.gov.il'],
+    ['Identity',!!c.token&&tokenFresh&&!!c.userId,'Authorization: Bearer <TOKEN> + userId @ita.gov.il'],
     ['Test defaults',!!c.appId&&(!c.caseId||validCaseId(c.caseId)),'App ID=Desktop; Case ID יכול להיות ערך בדיקה'],
     ['Execution path',executable,'Browser Direct / Proxy; במצב Postman האתר מייצר בקשות בלבד']
   ];
@@ -738,7 +738,7 @@ function cfg(){
     userId:$('userId').value.trim(), caseId:$('caseId').value.trim() || null,
     userIdB:$('userIdB').value.trim(), tokenB:$('tokenB').value.trim(),
     conversationId:$('conversationId').value.trim(), messageId:$('messageId').value.trim(),
-    executionMode:$('executionMode')?.value || 'direct', authHeader:$('authHeader')?.value || 'X-Serverless-Authorization', cloudAccessConfirmed:!!$('cloudAccessConfirmed')?.checked
+    executionMode:$('executionMode')?.value || 'direct', authHeader:$('authHeader')?.value || 'Authorization', cloudAccessConfirmed:!!$('cloudAccessConfirmed')?.checked
   };
 }
 function requireFields(names){ const c=cfg(); const missing=names.filter(n=>!c[n]); if(missing.length) throw new Error('חסרים שדות: '+missing.join(', ')); return c; }
@@ -927,7 +927,7 @@ async function proxy({method,path,body,token,stream=false}){
 function buildCurl(method,path,body){
   const c=cfg(); const base=c.baseUrl||'<TSH_BASE_URL>'; let url;
   try{url=targetUrl(base,path)}catch{url=`${base.replace(/\/$/,'')}${path}`;}
-  const parts=[`curl -i -X ${method.toUpperCase()} '${url}'`,`  -H '${c.authHeader}: Bearer <IDENTITY_TOKEN>'`,`  -H 'Accept: application/json, text/event-stream, */*'`];
+  const parts=[`curl -i -X ${method.toUpperCase()} '${url}'`,`  -H 'Authorization: Bearer <IDENTITY_TOKEN>'`,`  -H 'Accept: application/json, text/event-stream, */*'`];
   if(body!==undefined && body!==null && method.toUpperCase()!=='GET'){
     parts.push(`  -H 'Content-Type: application/json'`);
     const json=JSON.stringify(body).replace(/'/g,"'\\''");
@@ -1256,7 +1256,7 @@ function renderStpStd(){
 }
 
 function stpMarkdown(){
-  return `# STP – תוכנית בדיקות GenAI Router\n\n## מטרה\nלוודא שה-Router עובד תקין בסביבת TSH, מנהל שיחות ו-state בצורה עקבית, אוכף הרשאות ומחזיר תשובות GenAI/RAG אמינות ובטוחות.\n\n## Scope\nAPI, Authentication, Conversations, History, SSE Messages, Delete, Files/Chunks, Feedback, Statistics, Boundaries, Authorization, RAG, Prompt Injection ו-State. בנוסף נכללות בדיקות Target Design של אפיון ה-RAG הגנרי (Ingestion/Retrieval), המסומנות בנפרד ואינן הוכחה למימוש נוכחי.\n\n## מחוץ ל-Scope כרגע\nProduction; עומסים ללא SLA; DB מלא ללא גישה; איכות עסקית סופית ללא Golden Dataset/SME.\n\n## סביבת בדיקה\nTSH/NON-PROD. Base URL: https://t-sh-apic.taxes.gov.il/ita-chat-router-api. Identity Token באמצעות gcloud auth print-identity-token ונשלח ב-X-Serverless-Authorization.\n\n## Entry Criteria\n- TSH Base URL: https://t-sh-apic.taxes.gov.il/ita-chat-router-api\n- משתמש ענן והרשאת Router\n- Identity Token תקין\n- Swagger/Contract זמין\n- Test Data בסיסי\n\n## Exit Criteria\n- כל P0 עברו או אושרה חריגה\n- אין תקלת אבטחה קריטית פתוחה\n- P1/P2 תועדו\n- פערי Contract החוסמים החלטה סומנו/נסגרו\n- הופק Test Run Report\n\n## סיכונים\nToken קצר חיים; תלות ברשת/הרשאות; Contract חלקי; תלות ב-DB/Logs; צורך ב-SME לבדיקות איכות AI; אפיון ה-RAG הוא Target Design וסעיף ה-API שלו עדיין מסומן להשלמה.\n`;
+  return `# STP – תוכנית בדיקות GenAI Router\n\n## מטרה\nלוודא שה-Router עובד תקין בסביבת TSH, מנהל שיחות ו-state בצורה עקבית, אוכף הרשאות ומחזיר תשובות GenAI/RAG אמינות ובטוחות.\n\n## Scope\nAPI, Authentication, Conversations, History, SSE Messages, Delete, Files/Chunks, Feedback, Statistics, Boundaries, Authorization, RAG, Prompt Injection ו-State. בנוסף נכללות בדיקות Target Design של אפיון ה-RAG הגנרי (Ingestion/Retrieval), המסומנות בנפרד ואינן הוכחה למימוש נוכחי.\n\n## מחוץ ל-Scope כרגע\nProduction; עומסים ללא SLA; DB מלא ללא גישה; איכות עסקית סופית ללא Golden Dataset/SME.\n\n## סביבת בדיקה\nTSH/NON-PROD. Base URL: https://t-sh-apic.taxes.gov.il/ita-chat-router-api. Identity Token באמצעות gcloud auth print-identity-token ונשלח ב-Authorization.\n\n## Entry Criteria\n- TSH Base URL: https://t-sh-apic.taxes.gov.il/ita-chat-router-api\n- משתמש ענן והרשאת Router\n- Identity Token תקין\n- Swagger/Contract זמין\n- Test Data בסיסי\n\n## Exit Criteria\n- כל P0 עברו או אושרה חריגה\n- אין תקלת אבטחה קריטית פתוחה\n- P1/P2 תועדו\n- פערי Contract החוסמים החלטה סומנו/נסגרו\n- הופק Test Run Report\n\n## סיכונים\nToken קצר חיים; תלות ברשת/הרשאות; Contract חלקי; תלות ב-DB/Logs; צורך ב-SME לבדיקות איכות AI; אפיון ה-RAG הוא Target Design וסעיף ה-API שלו עדיין מסומן להשלמה.\n`;
 }
 function stdMarkdown(){
   const lines=[`# STD – תכנון ותיאור בדיקות GenAI Router`,``,`סה״כ תסריטים: ${state.tests.length}`,``,'## Test Cases'];
@@ -1280,9 +1280,120 @@ function renderReport(){
 }
 function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderRunHistory();renderContract();renderContext();renderRagSpec();renderStpStd();renderEndpointGuide();renderAiQaLessons();renderGlossary($('glossarySearch')?.value||'');renderGolden();wireGlossaryLinks();readiness();}
 
-function populateEndpoints(){ const s=$('endpointSelect'); s.innerHTML=state.operations.map((o,i)=>`<option value="${i}">${o.method} ${o.path} — ${esc(o.operationId)}</option>`).join(''); s.onchange=syncApiTemplate; syncApiTemplate(); }
-function syncApiTemplate(){ const o=state.operations[+$('endpointSelect').value||0]; if(!o)return; $('apiMethod').value=o.method; $('apiBody').value=JSON.stringify(requestBody(o.path,o.method),null,2); }
-async function apiRun(){ try{const o=state.operations[+$('endpointSelect').value||0]; let b; try{b=JSON.parse($('apiBody').value||'{}')}catch{throw new Error('Request JSON אינו תקין');} if(cfg().executionMode==='postman'){const curl=buildCurl(o.method,o.path,o.method==='GET'?undefined:b);$('apiResponse').textContent=curl;$('apiMeta').textContent='POSTMAN / cURL MODE — לא נשלחה בקשה';return;} const isStream=o.path==='/v1/conversations/messages'; const r=await proxy({method:o.method,path:o.path,body:(o.method==='GET'?undefined:b),stream:isStream}); if(isStream){$('apiResponse').textContent=''; const txt=await readStream(r.stream,(c,f)=>$('apiResponse').textContent=f.slice(-10000)); $('apiMeta').textContent=`HTTP ${r.status}\nSSE`; const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid;} else {$('apiResponse').textContent=typeof r.body==='string'?r.body:JSON.stringify(r.body,null,2);$('apiMeta').textContent=`HTTP ${r.status}\n${r.latencyMs??''} ms\n${r.contentType??''}`;} showToast('API Runner הסתיים.','success');}catch(e){$('apiResponse').textContent=e.message;$('apiMeta').textContent='BLOCKED';showToast('API Runner: '+e.message,'error',5000);} }
+const API_FIELD_META={
+  appId:{label:'App ID',type:'text',help:'האפליקציה היוזמת. לפי הדוגמה: Desktop'},
+  userId:{label:'User ID',type:'email',help:'האימייל של המשתמש המורשה. דוגמת הצוות: Ofir.adi@ita.gov.il'},
+  caseId:{label:'Case ID',type:'text',help:'9 ספרות. Nullable בחלק מהפעולות.'},
+  conversationId:{label:'Conversation ID',type:'text',help:'UUID שמתקבל מפתיחת שיחה.'},
+  content:{label:'Content / Question',type:'textarea',help:'תוכן ההודעה ל־Router.'},
+  limit:{label:'Limit',type:'number',help:'1–100'},
+  offset:{label:'Offset',type:'number',help:'0–100'},
+  messageId:{label:'Message ID',type:'text',help:'UUID של הודעת Assistant.'},
+  feedbackType:{label:'Feedback Type',type:'select',options:['thumbs_up','thumbs_down','text']},
+  feedbackText:{label:'Feedback Text',type:'textarea',help:'נדרש כאשר feedbackType=text.'},
+  bucketName:{label:'Bucket Name',type:'text'},
+  fileName:{label:'File Name',type:'text'},
+  documentBucket:{label:'Document Bucket',type:'text',help:'שם ה-Bucket לפי Swagger.'},
+  documentFileName:{label:'Document File Name',type:'text',help:'שם הקובץ המלא לפי Swagger.'},
+  chunkId:{label:'Chunk ID',type:'number'},
+  startDate:{label:'Start Date',type:'datetime-local'},
+  endDate:{label:'End Date',type:'datetime-local'},
+  statisticsUserId:{label:'User ID לסינון סטטיסטיקה',type:'email',help:'אופציונלי.'}
+};
+const API_BODY_FIELDS={
+  'POST /v1/conversations/new':['appId','userId','caseId'],
+  'POST /v1/conversations/history':['appId','userId','caseId','limit','offset'],
+  'POST /v1/conversations/id':['conversationId','userId'],
+  'DELETE /v1/conversations/id':['conversationId','userId'],
+  'POST /v1/conversations/messages':['conversationId','userId','appId','caseId','content'],
+  'POST /v1/messages/send/feedback':['messageId','feedbackType','feedbackText'],
+  'POST /v1/files/download':['bucketName','fileName'],
+  'POST /v1/conversations/fetch/chunks/text':['documentBucket','documentFileName','chunkId']
+};
+function apiKey(o){return `${o.method} ${o.path}`;}
+function apiDefaultValue(name){
+  const c=cfg(), map={appId:c.appId,userId:c.userId,caseId:c.caseId||'',conversationId:c.conversationId||'',messageId:c.messageId||'',content:'בדיקת QA',limit:20,offset:0,feedbackType:'thumbs_up',feedbackText:'',bucketName:'',fileName:'',documentBucket:'',documentFileName:'',chunkId:0};
+  if(name==='startDate')return new Date(Date.now()-86400000).toISOString().slice(0,16);
+  if(name==='endDate')return new Date().toISOString().slice(0,16);
+  if(name==='statisticsUserId')return c.userId||'';
+  return map[name]??'';
+}
+function apiFieldsFor(o){
+  const explicit=API_BODY_FIELDS[apiKey(o)];
+  if(explicit)return explicit;
+  if(o.path==='/v1/statistics/conversations/count-by-user'||o.path==='/v1/statistics/tokens/by-user')return ['startDate','endDate','statisticsUserId'];
+  if(o.path.includes('/statistics/'))return [];
+  return [];
+}
+function renderApiField(name){
+  const m=API_FIELD_META[name]||{label:name,type:'text'}, val=apiDefaultValue(name);
+  let control;
+  if(m.type==='textarea')control=`<textarea data-api-field="${name}" rows="3">${esc(val)}</textarea>`;
+  else if(m.type==='select')control=`<select data-api-field="${name}">${m.options.map(x=>`<option value="${x}" ${x===val?'selected':''}>${x}</option>`).join('')}</select>`;
+  else control=`<input data-api-field="${name}" type="${m.type||'text'}" value="${esc(val)}"/>`;
+  return `<label class="api-field">${esc(m.label)}${control}${m.help?`<span class="field-help">${esc(m.help)}</span>`:''}</label>`;
+}
+function structuredApiBody(){
+  const o=state.operations[+$('endpointSelect').value||0]; if(!o)return {};
+  const fields=apiFieldsFor(o), body={};
+  fields.forEach(name=>{
+    const el=document.querySelector(`[data-api-field="${name}"]`); if(!el)return;
+    let v=el.value;
+    if(name==='limit'||name==='offset'||name==='chunkId')v=v===''?undefined:Number(v);
+    if(name==='statisticsUserId'){if(v)body.userId=v;return;}
+    if(name==='startDate'||name==='endDate'){if(v)body[name]=new Date(v).toISOString();return;}
+    if(v!==''&&v!==undefined)body[name]=v;
+  });
+  if(apiKey(o)==='POST /v1/conversations/fetch/chunks/text'){
+    return {chunks:[{documentBucket:body.documentBucket||'',documentFileName:body.documentFileName||'',chunkId:body.chunkId??0}]};
+  }
+  return body;
+}
+function syncStructuredToJson(){
+  const o=state.operations[+$('endpointSelect').value||0]; if(!o)return;
+  const body=structuredApiBody();
+  $('apiBody').value=JSON.stringify(body,null,2);
+  renderApiPreview();
+}
+function renderApiPreview(){
+  const o=state.operations[+$('endpointSelect').value||0]; if(!o)return;
+  let body={};try{body=JSON.parse($('apiBody').value||'{}')}catch{}
+  let url='—';try{url=targetUrl(cfg().baseUrl,o.path)}catch{}
+  if($('apiFullUrl'))$('apiFullUrl').textContent=url;
+  if($('apiOperationSummary'))$('apiOperationSummary').textContent=`${o.operationId||''} · ${o.summary||''}`;
+  const req={method:o.method,url,body:o.method==='GET'?undefined:body};
+  if($('apiRequestPreview'))$('apiRequestPreview').textContent=JSON.stringify(req,null,2);
+  if($('apiHeadersPreview'))$('apiHeadersPreview').textContent=`Content-Type: application/json\nAuthorization: Bearer ${cfg().token?'[TOKEN LOADED]':'[TOKEN MISSING]'}`;
+}
+function populateEndpoints(){
+  const s=$('endpointSelect');
+  s.innerHTML=state.operations.map((o,i)=>`<option value="${i}">${o.method} ${o.path} — ${esc(o.summary||o.operationId)}</option>`).join('');
+  const createIndex=state.operations.findIndex(o=>o.method==='POST'&&o.path==='/v1/conversations/new');
+  if(createIndex>=0)s.value=String(createIndex);
+  s.onchange=syncApiTemplate; syncApiTemplate();
+}
+function syncApiTemplate(){
+  const o=state.operations[+$('endpointSelect').value||0]; if(!o)return;
+  $('apiMethod').value=o.method;
+  const fields=apiFieldsFor(o);
+  $('apiStructuredFields').innerHTML=fields.length?fields.map(renderApiField).join(''):`<div class="api-no-fields">ל־Endpoint הזה אין Request Body מוגדר ב־Swagger.</div>`;
+  document.querySelectorAll('[data-api-field]').forEach(el=>{el.oninput=syncStructuredToJson;el.onchange=syncStructuredToJson;});
+  syncStructuredToJson();
+}
+async function apiRun(){
+  try{
+    const o=state.operations[+$('endpointSelect').value||0]; let b;
+    try{b=JSON.parse($('apiBody').value||'{}')}catch{throw new Error('Request JSON אינו תקין');}
+    renderApiPreview();
+    if(cfg().executionMode==='postman'){const curl=buildCurl(o.method,o.path,o.method==='GET'?undefined:b);$('apiResponse').textContent=curl;$('apiMeta').textContent='POSTMAN / cURL MODE — לא נשלחה בקשה';return;}
+    const isStream=o.path==='/v1/conversations/messages';
+    const r=await proxy({method:o.method,path:o.path,body:(o.method==='GET'?undefined:b),stream:isStream});
+    if(isStream){$('apiResponse').textContent='';const txt=await readStream(r.stream,(c,f)=>$('apiResponse').textContent=f.slice(-10000));$('apiMeta').textContent=`HTTP ${r.status}\nSSE`;const mid=extractMessageIdFromText(txt);if(mid)$('messageId').value=mid;}
+    else{$('apiResponse').textContent=typeof r.body==='string'?r.body:JSON.stringify(r.body,null,2);$('apiMeta').textContent=`HTTP ${r.status}\n${r.latencyMs??''} ms\n${r.contentType??''}`;}
+    showToast('API Runner הסתיים.','success');
+  }catch(e){$('apiResponse').textContent=e.message;$('apiMeta').textContent='BLOCKED';showToast('API Runner: '+e.message,'error',5000);}
+}
+
 async function aiRun(){ try{const c=requireFields(['conversationId','appId','userId']); const body={conversationId:c.conversationId,userId:c.userId,appId:c.appId,...(c.caseId?{caseId:c.caseId}:{}),content:$('aiPrompt').value.trim()}; $('aiStream').textContent=''; const r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); const txt=await readStream(r.stream,(ch,full)=>{$('aiStream').textContent=full.slice(-15000);renderSseEvents(full);}); renderSseEvents(txt); const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid; showToast('GenAI/RAG request הסתיים.','success');}catch(e){$('aiStream').textContent=e.message;showToast('GenAI/RAG: '+e.message,'error',5000);} }
 
 function exportBlob(name,type,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
