@@ -33,8 +33,8 @@
     },
     {
       "title": "Base URL",
-      "value": "קיים אצל אנדריי - הערך עצמו עדיין לא הוזן כאן",
-      "detail": "ברגע שמתקבל ה-Base URL המדויק אפשר להתחיל להריץ בקשות אמיתיות."
+      "value": "https://t-sh-apic.taxes.gov.il/ita-chat-router-api",
+      "detail": "כתובת ה-On-Prem של Router בסביבת TSH שנמסרה ע״י הצוות. ה-API paths מוסיפים /v1 לפי ה-Swagger; האתר מנרמל /v1 כפול."
     },
     {
       "title": "מסלולי Router",
@@ -48,11 +48,6 @@
     }
   ],
   "pending": [
-    {
-      "priority": "BLOCKER",
-      "title": "TSH Base URL מדויק",
-      "detail": "הצוות ציין שהוא כבר נמסר לאנדריי, אך הערך עצמו לא הופיע בחומרים שסופקו."
-    },
     {
       "priority": "BLOCKER",
       "title": "אימות הרשאת משתמש הענן",
