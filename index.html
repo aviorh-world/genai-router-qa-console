@@ -78,6 +78,19 @@
 <summary>ℹ️ הנחיות Connection Profile / Google CLI</summary>
 <div class="setup-help-body">
 <div class="notice" id="environmentGuideNotice">—</div>
+
+<details class="mobile-token-helper">
+<summary>📱 הפקת Token מהנייד</summary>
+<div class="mobile-token-helper-body">
+  <div class="mobile-token-actions">
+    <a class="btn ghost compact-btn" href="https://shell.cloud.google.com/?show=terminal" target="_blank" rel="noopener noreferrer">פתח Google Cloud Shell ↗</a>
+    <button class="btn ghost compact-btn" id="copyMobileTokenCommandBtn" type="button">העתק פקודה</button>
+  </div>
+  <code class="mobile-token-command" id="mobileTokenCommand" dir="ltr">—</code>
+  <small class="field-help" id="mobileTokenHelp">—</small>
+</div>
+</details>
+
 <div class="notice">⚠️ Token נשמר בנפרד לכל Environment ב־session של הדפדפן. מעבר בין Sandbox ל־NonProd מחליף Base URL, Token, Auth Header ו־Execution Mode יחד כדי למנוע ערבוב credentials.</div>
 </div>
 </details>

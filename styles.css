@@ -232,3 +232,12 @@
 .api-url-tools{display:flex;align-items:center;justify-content:flex-end;gap:7px;color:#64748b;font-size:10px;margin-top:5px}.tiny-btn{min-height:28px!important;padding:4px 8px!important;font-size:10px!important}
 .api-auth-override{display:grid;grid-template-columns:2fr 1fr;gap:8px;border:1px dashed #cbd5e1;background:#fbfdff;border-radius:7px;padding:8px;margin-top:8px}
 @media(max-width:800px){.global-env-panel,.global-env-main,.global-env-summary{align-items:stretch;flex-direction:column}.global-env-summary{gap:2px}.api-inherited-profile{flex-wrap:wrap}.api-url-tools{align-items:flex-start;flex-wrap:wrap}.api-auth-override{grid-template-columns:1fr}}
+
+/* Minimal mobile Google Cloud Shell token helper */
+.mobile-token-helper{margin-top:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fbfdff}
+.mobile-token-helper>summary{cursor:pointer;padding:8px 10px;font-size:11px;font-weight:800;color:#334155}
+.mobile-token-helper-body{padding:0 10px 10px}
+.mobile-token-actions{display:flex;gap:6px;align-items:center;margin-bottom:7px}
+.mobile-token-command{display:block;direction:ltr;text-align:left;white-space:pre-wrap;word-break:break-all;padding:8px 9px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;font-size:10px;line-height:1.45}
+.mobile-token-helper .field-help{display:block;margin-top:6px;font-size:10px;line-height:1.45}
+@media(max-width:800px){.mobile-token-actions{flex-wrap:wrap}.mobile-token-actions .btn{flex:1;min-width:135px}}

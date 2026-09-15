@@ -70,3 +70,11 @@ API Runner requests are now sent Browser → `/api/proxy` → selected target en
 The console now has one global Environment selector used by automated tests, Auto Flow, GenAI/RAG and API Runner. Sandbox uses `https://chat-router-942568278050.me-west1.run.app/ita-chat-router-api`, Identity Token, `X-Serverless-Authorization`, and defaults to Vercel Proxy. NonProd / TSH uses `https://t-sh-apic.taxes.gov.il/ita-chat-router-api`, Access Token, `Authorization`, and defaults to Browser Direct. Tokens are kept separately per environment in browser session storage. API Runner inherits the global profile; per-request URL and optional auth override remain available.
 
 Case ID note: Swagger 1.0.6 defines exactly 9 digits, while the newer Sandbox email example contains 10 digits. The console therefore shows the contradiction and does not locally block numeric Case IDs.
+
+## Mobile token helper
+The global Connection Profile help now includes a collapsed mobile helper:
+- Direct link to Google Cloud Shell terminal.
+- One-click copy of the active environment's download command.
+- Sandbox: `gcloud auth print-identity-token > ~/sandbox-token.txt && cloudshell download ~/sandbox-token.txt`
+- NonProd: `gcloud auth print-access-token > ~/nonprod-token.txt && cloudshell download ~/nonprod-token.txt`
+The UI reminds the tester to paste only the token; `Bearer ` is added automatically.

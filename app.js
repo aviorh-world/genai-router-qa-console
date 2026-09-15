@@ -37,6 +37,28 @@ const ENV_PROFILES={
     guide:'Sandbox: הפק Identity Token באמצעות gcloud auth print-identity-token. הוא נשלח כ-X-Serverless-Authorization: Bearer <TOKEN>. נדרשת הרשאת Cloud Run Invoker.'
   }
 };
+function mobileTokenDownloadCommand(env=activeEnvironment){
+  if(env==='sandbox'){
+    return 'gcloud auth print-identity-token > ~/sandbox-token.txt && cloudshell download ~/sandbox-token.txt';
+  }
+  return 'gcloud auth print-access-token > ~/nonprod-token.txt && cloudshell download ~/nonprod-token.txt';
+}
+function updateMobileTokenHelper(){
+  const cmd=mobileTokenDownloadCommand();
+  if($('mobileTokenCommand'))$('mobileTokenCommand').textContent=cmd;
+  if($('mobileTokenHelp')){
+    $('mobileTokenHelp').textContent=`${envProfile().label}: הפקודה שומרת את ה־Token לקובץ ומורידה אותו לטלפון. פתח את הקובץ → Select all → Copy → הדבק בשדה Token. אין להוסיף Bearer; האתר מוסיף אותו אוטומטית.`;
+  }
+}
+async function copyMobileTokenCommand(){
+  const txt=mobileTokenDownloadCommand();
+  try{
+    await navigator.clipboard.writeText(txt);
+    showToast('פקודת ה־Token הועתקה.','success');
+  }catch{
+    prompt('העתק את הפקודה',txt);
+  }
+}
 let activeEnvironment=localStorage.getItem(ENVIRONMENT_KEY)||'nonprod';
 if(!ENV_PROFILES[activeEnvironment])activeEnvironment='nonprod';
 const DEFAULT_TSH_BASE_URL=ENV_PROFILES.nonprod.baseUrl;
@@ -74,6 +96,7 @@ function setGlobalEnvironment(name,{initial=false}={}){
   if($('executionModeHelp'))$('executionModeHelp').textContent=name==='sandbox'?'Sandbox משתמש כברירת מחדל ב־Vercel Proxy כדי להימנע מ־CORS.':'NonProd משתמש כברירת מחדל ב־Browser Direct; ניתן לשנות ידנית.';
   if($('environmentGuideNotice'))$('environmentGuideNotice').innerHTML=`<b>${esc(d.label)}:</b> ${esc(d.guide)} <br/><code>${esc(d.baseUrl)}</code>`;
   if($('environmentIntro'))$('environmentIntro').textContent=`Environment פעיל: ${d.label}. כל הבדיקות, Auto Flow ו־API Runner משתמשים באותו Profile.`;
+  updateMobileTokenHelper();
   if($('apiInheritedEnv'))$('apiInheritedEnv').textContent=d.label;
   if($('goldenEnvironment'))$('goldenEnvironment').value=d.label;
   if($('apiEnvHint'))$('apiEnvHint').textContent=`Inherited: ${d.baseUrl} · ${d.authHeader} · ${d.tokenCommand}`;
@@ -1564,6 +1587,7 @@ function wire(){
   $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('validateTokenBtn').onclick=validateToken;$('markTokenBtn').onclick=()=>{markTokenNow();showToast('Token סומן ידנית כחדש.','success');};$('generateCaseIdBtn').onclick=()=>{ensureCaseId(true);showToast('נוצר Case ID חדש לבדיקה.','success');};$('readinessBtn').onclick=()=>{const ok=readiness();showToast(ok?'הסביבה מוכנה להרצה.':'עדיין חסרים נתונים — ראה כרטיסי המוכנות. ',ok?'success':'warning');};$('runAllTests').onclick=runAllTests;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runRagSpecPack').onclick=runRagSpecPack;$('runHappyFlow').onclick=happyFlow;$('uiSelfTestBtn').onclick=runUiSelfTest;$('flowRunBtn').onclick=happyFlow;renderMethodFlows();prepareMethodFlow();$('apiRunBtn').onclick=apiRun;
   $('copyCurlBtn').onclick=async()=>{const txt=apiCurl();try{await navigator.clipboard.writeText(txt);showToast('cURL הועתק.','success');}catch{prompt('העתק cURL',txt);}};
   $('globalEnvNonprodBtn').onclick=()=>setGlobalEnvironment('nonprod');$('globalEnvSandboxBtn').onclick=()=>setGlobalEnvironment('sandbox');
+  if($('copyMobileTokenCommandBtn'))$('copyMobileTokenCommandBtn').onclick=copyMobileTokenCommand;
   $('apiFullUrl').oninput=e=>{const o=apiOp();if(o)apiEditedUrls[`${activeEnvironment}|${apiOpKey(o)}`]=e.target.value.trim();};
   $('apiResetUrlBtn').onclick=()=>{const o=apiOp();if(!o)return;delete apiEditedUrls[`${activeEnvironment}|${apiOpKey(o)}`];$('apiFullUrl').value=apiDefaultUrl(o);showToast('URL הוחזר לברירת המחדל של הסביבה.','success');};
   $('apiOverrideBtn').onclick=()=>{const panel=$('apiOverridePanel');panel.hidden=!panel.hidden;$('apiOverrideBtn').textContent=panel.hidden?'Override Auth':'Close Override';};
