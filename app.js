@@ -26,6 +26,28 @@ function redactForAi(value,key=''){
 }
 function loadRunHistory(){try{const x=JSON.parse(localStorage.getItem(RUN_HISTORY_KEY)||'[]');state.runHistory=Array.isArray(x)?x.slice(0,20):[];}catch{state.runHistory=[];}}
 function persistRunHistory(){try{localStorage.setItem(RUN_HISTORY_KEY,JSON.stringify(state.runHistory.slice(0,20)));}catch{}}
+function nextCaseId(){
+  let current=0;
+  try{current=parseInt(localStorage.getItem(CASE_ID_KEY)||'0',10)||0;}catch{}
+  if(current<100000000) current=parseInt(String(Date.now()).slice(-9),10);
+  current+=1;
+  if(current>999999999) current=100000000;
+  try{localStorage.setItem(CASE_ID_KEY,String(current));}catch{}
+  return String(current).padStart(9,'0').slice(-9);
+}
+function updateCaseIdHelp(){
+  const el=$('caseIdHelp'), input=$('caseId');
+  if(!el||!input) return;
+  const v=input.value.trim();
+  if(!v){el.textContent='לא הוזן Case ID. בלחיצה על "חדש" יווצר מזהה בדיקה ייחודי.';return;}
+  el.textContent=validCaseId(v)?'Case ID בדיקה תקין למעקב. אפשר לשנות ידנית או ליצור חדש.':'Case ID צריך להיות 9 ספרות אם מחליטים לשלוח אותו.';
+}
+function ensureCaseId(force=false){
+  const el=$('caseId'); if(!el) return;
+  const current=el.value.trim();
+  if(force || !validCaseId(current) || current==='123456789') el.value=nextCaseId();
+  updateCaseIdHelp();
+}
 function showToast(message,kind='info',ms=3200){
   const host=$('toastHost'); if(!host){console.log(`[${kind}]`,message);return;}
   const el=document.createElement('div'); el.className=`toast ${kind}`; el.textContent=message; host.appendChild(el);
@@ -498,11 +520,14 @@ async function investigateTest(id){
 function bugDraftFor(id){
   const t=state.tests.find(x=>x.ID===id),r=state.results[id];if(!t||!r)return null;
   const inv=state.investigations[id]||localInvestigation(id);const ev=r.evidence||{},resp=ev.response||{};
+  const c=cfg(); const openedAt=now();
   const http=resp.status!=null?`HTTP ${resp.status}`:'';const title=`[${testLabel(t)}] ${t['תרחיש בדיקה']||'QA failure'}${http?` — ${http}`:` — ${r.status}`}`;
   const steps=(t['צעדים / קלט']||'הרץ את ה-Test Case לפי ה-STD').split(/\n|;/).map(x=>x.trim()).filter(Boolean);
   const body=[
-    `## Environment\n${cfg().baseUrl||'TSH / QA'}`,
-    `## Test Case\n${testLabel(t)} (${t.ID}) — ${t['תרחיש בדיקה']||''}`,
+    `## Bug Meta\nOpened At: ${openedAt}\nSource: QA Console v0.02\nTest Status: ${r.status}`,
+    `## Environment\n${c.baseUrl||'TSH / QA'}`,
+    `## Tracking\nTest Case: ${testLabel(t)} (${t.ID})\nApp ID: ${c.appId||'—'}\nCase ID: ${c.caseId||'—'}`,
+    `## Scenario\n${t['תרחיש בדיקה']||''}`,
     `## Endpoint\n${t.Endpoint||ev.request?.path||'—'}`,
     `## Steps to reproduce\n${(steps.length?steps:['הרץ את ה-Test Case']).map((x,i)=>`${i+1}. ${x}`).join('\n')}`,
     `## Expected Result\n${t['Expected Result']||'—'}`,
@@ -566,7 +591,7 @@ function readiness(){
   const tokenFresh = !c.token ? false : tokenAge==null ? true : tokenAge < 60*60*1000;
   const items=[
     ['TSH Base URL',!!c.baseUrl,'הערך עצמו עדיין חסר; לפי הצוות הוא אצל אנדריי'],
-    ['Identity Token',!!c.token&&tokenFresh,'gcloud auth print-identity-token · תוקף ~שעה'],
+    ['Identity Token',!!c.token&&tokenFresh,'gcloud auth print-identity-token · אפשר לאמת דרך כפתור בדיקת Token · תוקף ~שעה'],
     ['App ID',!!c.appId,'ברירת מחדל מה-Swagger: Desktop'],
     ['User ID',!!c.userId,'aviorha@taxes.gov.il'],
     ['Case ID',!c.caseId||validCaseId(c.caseId),'לא blocker; אם נשלח — 9 ספרות'],
@@ -585,15 +610,42 @@ function readiness(){
   updateTokenCountdown();
   return all;
 }
-function markTokenNow(){ state.tokenMarkedAt=Date.now(); updateTokenCountdown(); readiness(); }
+function markTokenNow(){ state.tokenMarkedAt=Date.now(); state.tokenStatus='manual'; state.tokenValidationHttp=null; updateTokenCountdown(); readiness(); }
 function updateTokenCountdown(){
   const el=$('tokenExpiry'); if(!el) return;
-  if(!state.tokenMarkedAt){el.textContent='לא סומן זמן הפקה';el.className='field-help';return;}
+  if(!state.tokenMarkedAt){el.textContent='לא אומת עדיין. אפשר לסמן ידנית או לבצע "בדיקת Token".';el.className='field-help';return;}
   const remain=60*60*1000-(Date.now()-state.tokenMarkedAt);
-  if(remain<=0){el.textContent='Token כנראה פג תוקף — הפק חדש';el.className='field-help token-expired';return;}
+  const prefix=state.tokenStatus==='valid' ? `Token אומת בהצלחה${state.tokenValidationHttp?` · HTTP ${state.tokenValidationHttp}`:''}` :
+    state.tokenStatus==='invalid' ? `Token לא אומת${state.tokenValidationHttp?` · HTTP ${state.tokenValidationHttp}`:''}` :
+    'Token סומן ידנית כחדש';
+  if(remain<=0){el.textContent=`${prefix} · התוקף המשוער חלף — הפק Token חדש`;el.className='field-help token-expired';return;}
   const m=Math.floor(remain/60000), sec=Math.floor((remain%60000)/1000);
-  el.textContent=`תוקף משוער: עוד ${m}:${String(sec).padStart(2,'0')} דקות`;
-  el.className='field-help'+(remain<10*60*1000?' token-warn':'');
+  const cls=state.tokenStatus==='valid' ? ' token-ok' : state.tokenStatus==='invalid' ? ' token-invalid' : (remain<10*60*1000?' token-warn':'');
+  el.textContent=`${prefix} · תוקף משוער: עוד ${m}:${String(sec).padStart(2,'0')} דקות`;
+  el.className='field-help'+cls;
+}
+async function validateToken(){
+  const c=cfg();
+  if(c.executionMode==='postman'){showToast('במצב Postman אי אפשר לאמת Token מהדפדפן. העתק cURL והרץ בסביבה הפנימית.', 'warning', 5000); return;}
+  if(!c.baseUrl || !c.token || !c.appId || !c.userId){showToast('כדי לאמת Token יש למלא Base URL, Token, App ID ו-User ID.', 'warning', 5000); return;}
+  try{
+    const body={appId:c.appId,userId:c.userId,...(c.caseId?{caseId:c.caseId}:{}),limit:1,offset:0};
+    const r=await proxy({method:'POST',path:'/v1/conversations/history',body});
+    state.tokenValidationHttp=r.status;
+    if(r.status>=200 && r.status<300){
+      state.tokenMarkedAt=Date.now(); state.tokenStatus='valid'; updateTokenCountdown(); readiness();
+      showToast(`Token אומת בהצלחה מול Router (HTTP ${r.status}).`, 'success');
+    }else if(r.status===401 || r.status===403){
+      state.tokenStatus='invalid'; updateTokenCountdown(); readiness();
+      showToast(`Token לא תקין / לא מורשה (HTTP ${r.status}).`, 'error', 5000);
+    }else{
+      state.tokenMarkedAt=Date.now(); state.tokenStatus='manual'; updateTokenCountdown(); readiness();
+      showToast(`התקבל HTTP ${r.status}. לא בטוח אם הבעיה ב-Token או ב-API — בדוק Evidence.`, 'warning', 6000);
+    }
+  }catch(e){
+    state.tokenStatus='invalid'; state.tokenValidationHttp=null; updateTokenCountdown();
+    showToast('בדיקת Token נכשלה: '+e.message, 'error', 6000);
+  }
 }
 function renderContract(){
   if(!$('contractTable')) return;
@@ -1025,7 +1077,7 @@ async function happyFlow(){
 
 function runUiSelfTest(){
   const checks=[]; const check=(name,ok,detail='')=>checks.push({name,ok:!!ok,detail});
-  const buttonIds=['demoBtn','healthBtn','markTokenBtn','readinessBtn','runAllTests','runSafeP0','runBoundaryPack','runRagSpecPack','runHappyFlow','uiSelfTestBtn','clearResults','flowRunBtn','apiRunBtn','copyCurlBtn','aiRunBtn','goldenRunAllBtn','goldenSaveBtn','goldenResetBtn','goldenExportBtn','goldenImportBtn','goldenClearBtn','goldenCompareBtn','dialogBugEvidenceBtn','dialogInvestigateBtn','dialogGenerateBugBtn','runAiSummaryBtn','clearRunHistoryBtn','copyBugDraftBtn','downloadBugDraftBtn','exportJson','exportCsv','exportStpBtn','exportStdBtn','dialogRunBtn','dialogCopyCurlBtn'];
+  const buttonIds=['demoBtn','healthBtn','validateTokenBtn','markTokenBtn','generateCaseIdBtn','readinessBtn','runAllTests','runSafeP0','runBoundaryPack','runRagSpecPack','runHappyFlow','uiSelfTestBtn','clearResults','flowRunBtn','apiRunBtn','copyCurlBtn','aiRunBtn','goldenRunAllBtn','goldenSaveBtn','goldenResetBtn','goldenExportBtn','goldenImportBtn','goldenClearBtn','goldenCompareBtn','dialogBugEvidenceBtn','dialogInvestigateBtn','dialogGenerateBugBtn','runAiSummaryBtn','clearRunHistoryBtn','copyBugDraftBtn','downloadBugDraftBtn','exportJson','exportCsv','exportStpBtn','exportStdBtn','dialogRunBtn','dialogCopyCurlBtn'];
   buttonIds.forEach(id=>{const el=$(id);check(`כפתור ${id}`,!!el && (typeof el.onclick==='function'||id==='dialogCopyCurlBtn'),!el?'לא נמצא':typeof el.onclick);});
   document.querySelectorAll('.tab').forEach(tab=>check(`Tab ${tab.dataset.tab}`,!!$(tab.dataset.tab)&&typeof tab.onclick==='function','Target section + click handler'));
   document.querySelectorAll('[data-manual-status]').forEach(b=>check(`Manual status ${b.dataset.manualStatus}`,typeof b.onclick==='function','click handler'));
@@ -1156,7 +1208,7 @@ function demo(){state.demo=!state.demo;$('demoBtn').textContent=state.demo?'Demo
 function wire(){
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tabpage').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active');}); document.querySelectorAll('.subtab').forEach(b=>b.onclick=()=>{const root=b.closest('.tabpage'); if(!root)return; root.querySelectorAll('.subtab').forEach(x=>x.classList.remove('active')); root.querySelectorAll('.subpage').forEach(x=>x.classList.remove('active')); b.classList.add('active'); const page=root.querySelector(`[data-subpage=\"${b.dataset.subtab}\"]`); if(page)page.classList.add('active');});
   $('searchTests').oninput=renderCatalog;$('priorityFilter').onchange=renderCatalog;$('modeFilter').onchange=renderCatalog;if($('statusFilter'))$('statusFilter').onchange=renderCatalog;
-  $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('markTokenBtn').onclick=()=>{markTokenNow();showToast('זמן הפקת Token סומן.','success');};$('readinessBtn').onclick=()=>{const ok=readiness();showToast(ok?'הסביבה מוכנה להרצה.':'עדיין חסרים נתונים — ראה כרטיסי המוכנות. ',ok?'success':'warning');};$('runAllTests').onclick=runAllTests;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runRagSpecPack').onclick=runRagSpecPack;$('runHappyFlow').onclick=happyFlow;$('uiSelfTestBtn').onclick=runUiSelfTest;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('copyCurlBtn').onclick=copyCurl;$('aiRunBtn').onclick=aiRun;
+  $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('validateTokenBtn').onclick=validateToken;$('markTokenBtn').onclick=()=>{markTokenNow();showToast('Token סומן ידנית כחדש.','success');};$('generateCaseIdBtn').onclick=()=>{ensureCaseId(true);showToast('נוצר Case ID חדש לבדיקה.','success');};$('readinessBtn').onclick=()=>{const ok=readiness();showToast(ok?'הסביבה מוכנה להרצה.':'עדיין חסרים נתונים — ראה כרטיסי המוכנות. ',ok?'success':'warning');};$('runAllTests').onclick=runAllTests;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runRagSpecPack').onclick=runRagSpecPack;$('runHappyFlow').onclick=happyFlow;$('uiSelfTestBtn').onclick=runUiSelfTest;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('copyCurlBtn').onclick=copyCurl;$('aiRunBtn').onclick=aiRun;
   if($('goldenSaveBtn'))$('goldenSaveBtn').onclick=goldenSave;if($('goldenResetBtn'))$('goldenResetBtn').onclick=goldenFormReset;if($('goldenRunAllBtn'))$('goldenRunAllBtn').onclick=runGoldenAll;if($('goldenExportBtn'))$('goldenExportBtn').onclick=exportGolden;if($('goldenImportBtn'))$('goldenImportBtn').onclick=()=>$('goldenImportFile').click();if($('goldenImportFile'))$('goldenImportFile').onchange=e=>{const f=e.target.files?.[0];if(f)importGoldenFile(f);e.target.value='';};if($('goldenClearBtn'))$('goldenClearBtn').onclick=()=>{if(confirm('למחוק את כל שאלות הזהב, התוצאות והיסטוריית הריצות המקומית?')){state.goldenDataset=[];state.goldenResults={};state.goldenRuns=[];state.currentGoldenRunId=null;saveGoldenDataset();goldenFormReset();renderGolden();}};if($('goldenCompareBtn'))$('goldenCompareBtn').onclick=compareGoldenRuns;if($('glossarySearch'))$('glossarySearch').oninput=e=>renderGlossary(e.target.value);wireGlossaryLinks();
   $('clearResults').onclick=()=>{state.results={};state.investigations={};state.lastExchange=null;$('runSummary').innerHTML='';if($('aiRunSummary'))$('aiRunSummary').innerHTML='';renderAll();showToast('תוצאות ההרצה אופסו.','success');};
   if($('clearRunHistoryBtn'))$('clearRunHistoryBtn').onclick=()=>{state.runHistory=[];persistRunHistory();renderRunHistory();showToast('היסטוריית ההרצות המקומית נמחקה.','success');};
@@ -1165,11 +1217,12 @@ function wire(){
   if($('dialogGenerateBugBtn'))$('dialogGenerateBugBtn').onclick=()=>state.selectedTestId&&openBugDraft(state.selectedTestId);
   if($('copyBugDraftBtn'))$('copyBugDraftBtn').onclick=copyBugDraft; if($('downloadBugDraftBtn'))$('downloadBugDraftBtn').onclick=downloadBugDraft;
   $('exportJson').onclick=exportJson;$('exportCsv').onclick=exportCsv; if($('exportStpBtn')) $('exportStpBtn').onclick=exportStp; if($('exportStdBtn')) $('exportStdBtn').onclick=exportStd;
-  ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',readiness)); $('executionMode').addEventListener('change',readiness); $('authHeader').addEventListener('change',readiness); $('cloudAccessConfirmed').addEventListener('change',readiness); if($('dialogBugEvidenceBtn'))$('dialogBugEvidenceBtn').onclick=downloadSelectedTestBugEvidence; $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));
+  ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',()=>{readiness(); if(id==='caseId') updateCaseIdHelp();})); $('executionMode').addEventListener('change',readiness); $('authHeader').addEventListener('change',readiness); $('cloudAccessConfirmed').addEventListener('change',readiness); if($('dialogBugEvidenceBtn'))$('dialogBugEvidenceBtn').onclick=downloadSelectedTestBugEvidence; $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));
   document.querySelectorAll('[data-rating]').forEach(b=>b.onclick=()=>{state.aiRating={rating:b.dataset.rating,note:$('aiNote').value,time:now()};$('aiRating').textContent=`נבחר: ${b.dataset.rating}`;});
 }
 
 setInterval(updateTokenCountdown,1000);
 loadGoldenDataset();
 loadRunHistory();
+ensureCaseId(); updateCaseIdHelp(); updateTokenCountdown(); readiness();
 wire(); loadData().then(()=>{renderGolden();if(new URLSearchParams(location.search).get('selftest')==='1')setTimeout(runUiSelfTest,50);}).catch(e=>{showToast('שגיאת טעינת נתונים: '+e.message,'error',8000);document.body.insertAdjacentHTML('beforeend',`<pre>${esc(e.message)}</pre>`);});

@@ -31,15 +31,16 @@
 </div>
 <div class="actions-row">
 <button class="btn" id="healthBtn">בדיקת חיבור</button>
-<button class="btn ghost" id="markTokenBtn">Token הופק עכשיו</button>
+<button class="btn" id="validateTokenBtn">בדיקת Token</button>
+<button class="btn ghost" id="markTokenBtn">סמן Token כחדש</button>
 </div>
 </div>
 <div class="grid cols-3 setup-essential">
 <label>TSH Base URL<input autocomplete="off" id="baseUrl" placeholder="כתובת Router בסביבת TSH"/></label>
-<label>Identity Token<input autocomplete="off" id="token" placeholder="gcloud auth print-identity-token" type="password"/><small class="field-help" id="tokenExpiry">לא סומן זמן הפקה</small></label>
+<label>Identity Token<input autocomplete="off" id="token" placeholder="gcloud auth print-identity-token" type="password"/><small class="field-help" id="tokenExpiry">לא אומת עדיין</small></label>
 <label>User ID<input id="userId" inputmode="email" placeholder="האימייל השע״מי שלך" value="aviorha@taxes.gov.il"/></label>
 <label>App ID<input id="appId" placeholder="Desktop" value="Desktop"/></label>
-<label>Case ID<input id="caseId" placeholder="9 ספרות · כרגע אינו blocker" value="123456789"/></label>
+<label>Case ID<div class="field-inline"><input id="caseId" placeholder="9 ספרות · נוצר אוטומטית למעקב" value="123456789"/><button class="mini-btn field-inline-btn" id="generateCaseIdBtn" type="button">חדש</button></div><small class="field-help" id="caseIdHelp">ייווצר אוטומטית Case ID ייחודי לבדיקה, וניתן גם לשנות ידנית.</small></label>
 </div>
 <details class="setup-help advanced-settings">
 <summary>⚙️ אפשרויות מתקדמות</summary>
@@ -278,7 +279,7 @@
 <div class="subpage active" data-subpage="aiInspector">
 <div class="card">
 <div class="section-head"><div><h2>GenAI / RAG Inspector</h2><p>הרץ שאלה, ראה את אירועי ה־SSE, בדוק Sources/Chunks וסמן איכות ידנית.</p></div><button class="btn primary" id="aiRunBtn">▶ שאל</button></div>
-<label>Prompt<textarea id="aiPrompt" rows="4">ענה על סמך מסמכי המקור בלבד. אם אין מספיק מידע, אמור שאין מספיק מידע.</textarea></label>
+<label>Prompt<textarea class="rtl-textarea" dir="rtl" id="aiPrompt" rows="4">ענה על סמך מסמכי המקור בלבד. אם אין מספיק מידע, אמור שאין מספיק מידע.</textarea></label>
 <div class="result-grid">
 <div><h3>Streaming / Answer</h3><pre id="aiStream">—</pre><h3>אירועי SSE שזוהו</h3><div class="event-list" id="aiEvents">—</div></div>
 <div><h3>הערכת QA</h3>
