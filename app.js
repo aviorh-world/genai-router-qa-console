@@ -593,7 +593,7 @@ function readiness(){
     ['TSH Base URL',!!c.baseUrl,'הערך עצמו עדיין חסר; לפי הצוות הוא אצל אנדריי'],
     ['Identity Token',!!c.token&&tokenFresh,'gcloud auth print-identity-token · אפשר לאמת דרך כפתור בדיקת Token · תוקף ~שעה'],
     ['App ID',!!c.appId,'ברירת מחדל מה-Swagger: Desktop'],
-    ['User ID',!!c.userId,'aviorha@taxes.gov.il'],
+    ['User ID',!!c.userId,'Aviorha@ita.gov.il'],
     ['Case ID',!c.caseId||validCaseId(c.caseId),'לא blocker; אם נשלח — 9 ספרות'],
     ['Cloud Access',c.cloudAccessConfirmed||state.connectionOk,'משתמש ענן + הרשאה לשירות Router']
   ];
@@ -601,7 +601,7 @@ function readiness(){
   const executable = c.executionMode!=='postman';
   const core=[
     ['Connection target',!!c.baseUrl,'TSH Base URL מדויק'],
-    ['Identity',!!c.token&&tokenFresh&&!!c.userId,'X-Serverless-Authorization + aviorha@taxes.gov.il'],
+    ['Identity',!!c.token&&tokenFresh&&!!c.userId,'X-Serverless-Authorization + Aviorha@ita.gov.il'],
     ['Test defaults',!!c.appId&&(!c.caseId||validCaseId(c.caseId)),'App ID=Desktop; Case ID יכול להיות ערך בדיקה'],
     ['Execution path',executable,'Browser Direct / Proxy; במצב Postman האתר מייצר בקשות בלבד']
   ];
@@ -978,7 +978,7 @@ async function runTest(id,{bulk=false}={}){
       case 'P2-007': return result(id,'QUESTION','הרץ שאלה בעברית דרך GenAI Inspector ואז Get Conversation','בדיקת Round-trip דורשת תוכן עברי ידוע והשוואה.');
       case 'P2-011': return unavailableResult(id,'הזן טווח ללא נתונים דרך API Runner','Endpoint סטטיסטיקה נבחר לפי צורך.',bulk);
       case 'BND-001': body=requestBody('/v1/conversations/new','POST'); body.appId=''; r=await proxy({method:'POST',path:'/v1/conversations/new',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
-      case 'BND-002': body=requestBody('/v1/conversations/new','POST'); body.userId='a'.repeat(120)+'@taxes.gov.il'; r=await proxy({method:'POST',path:'/v1/conversations/new',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
+      case 'BND-002': body=requestBody('/v1/conversations/new','POST'); body.userId='a'.repeat(120)+'@ita.gov.il'; r=await proxy({method:'POST',path:'/v1/conversations/new',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
       case 'BND-003': body=requestBody('/v1/conversations/history','POST'); body.limit=1; r=await proxy({method:'POST',path:'/v1/conversations/history',body}); pass=r.status>=200&&r.status<300; actual=`HTTP ${r.status}`; break;
       case 'BND-004': body=requestBody('/v1/conversations/history','POST'); body.limit=0; r=await proxy({method:'POST',path:'/v1/conversations/history',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
       case 'BND-005': body=requestBody('/v1/conversations/history','POST'); body.offset=101; r=await proxy({method:'POST',path:'/v1/conversations/history',body}); pass=r.status>=400&&r.status<500; actual=`HTTP ${r.status}`; break;
