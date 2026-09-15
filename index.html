@@ -38,7 +38,7 @@
 <div class="grid cols-3 setup-essential">
 <label>TSH Base URL<input autocomplete="off" id="baseUrl" placeholder="כתובת Router בסביבת TSH"/></label>
 <label>Identity Token<input autocomplete="off" id="token" placeholder="gcloud auth print-identity-token" type="password"/><small class="field-help" id="tokenExpiry">לא אומת עדיין</small></label>
-<label>User ID<input id="userId" inputmode="email" placeholder="האימייל השע״מי שלך" value="Aviorha@ita.gov.il"/></label>
+<label>User ID<input id="userId" inputmode="email" placeholder="האימייל השע״מי שלך" value="aviorha@taxes.gov.il"/></label>
 <label>App ID<input id="appId" placeholder="Desktop" value="Desktop"/></label>
 <label>Case ID<div class="field-inline"><input id="caseId" placeholder="9 ספרות · נוצר אוטומטית למעקב" value="123456789"/><button class="mini-btn field-inline-btn" id="generateCaseIdBtn" type="button">חדש</button></div><small class="field-help" id="caseIdHelp">ייווצר אוטומטית Case ID ייחודי לבדיקה, וניתן גם לשנות ידנית.</small></label>
 </div>
@@ -298,7 +298,8 @@
 </div>
 <div class="subpage" data-subpage="aiGolden">
 <div class="card golden-intro">
-<div class="section-head"><div><h2>Golden Release Sanity / Regression</h2><p>מריצים את <button class="term-link" data-glossary="Golden Dataset">שאלות הזהב</button> מול גרסה חדשה, שומרים Metadata, בודקים Source/Chunk, ומשווים לריצה קודמת.</p></div><div class="actions-row"><button class="btn primary" id="goldenRunAllBtn">▶ הרץ Release Sanity</button><button class="btn ghost" id="goldenExportBtn">ייצוא Dataset + Runs</button><button class="btn ghost" id="goldenImportBtn">ייבוא JSON</button></div></div>
+<div class="section-head"><div><h2>Golden Release Sanity / Regression</h2><p>מריצים את <button class="term-link" data-glossary="Golden Dataset">שאלות הזהב</button> מול גרסה חדשה, שומרים Metadata, בודקים Source/Chunk, ומשווים לריצה קודמת.</p><p class="muted">מקור מובנה: <b>TaxRAG Evaluator v1.1</b> — 27 שאלות ותשובות זהב מתוך הגיליון <b>תשובות_זהב_גרסה1</b>.</p></div><div class="actions-row"><button class="btn primary" id="goldenRunAllBtn">▶ הרץ Release Sanity</button><button class="btn ghost" id="goldenLoadTaxRagBtn">טען/מזג TaxRAG v1.1</button><a class="btn ghost" href="http://136.113.176.140:8080/" target="_blank" rel="noopener noreferrer">פתח TaxRAG Evaluator ↗</a><a class="btn ghost" href="/data/TaxRAG-Evaluator-v1.1-31082026-RONEN.xlsx" download>הורד Excel מקור</a><button class="btn ghost" id="goldenExportBtn">ייצוא Dataset + Runs</button><button class="btn ghost" id="goldenImportBtn">ייבוא JSON</button></div></div>
+<div class="notice info"><b>הקשר:</b> קובץ ה־Excel הוא ה־Golden Dataset — השאלות, תשובות הזהב והמקורות הצפויים. TaxRAG Evaluator הוא כלי הערכה נפרד; כרגע הוא מקושר מהאתר, אך לא מחובר להרצה אוטומטית כל עוד אין לנו Contract/API מתועד שלו.</div>
 <div class="notice info"><b>חשוב:</b> Similarity והציונים האוטומטיים הם Signals בלבד. PASS עסקי דורש בדיקה שהעובדות נכונות ושה־Source/Chunk באמת תומכים בתשובה. <button class="term-link" data-glossary="Review Queue">מה נכנס ל־Review Queue?</button></div>
 <input id="goldenImportFile" type="file" accept="application/json,.json" hidden/>
 </div>

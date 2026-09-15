@@ -330,6 +330,45 @@ function saveGoldenDataset(){
   localStorage.setItem('genaiQaGoldenRuns',JSON.stringify(state.goldenRuns));
   if(state.currentGoldenRunId)localStorage.setItem('genaiQaCurrentGoldenRunId',state.currentGoldenRunId);else localStorage.removeItem('genaiQaCurrentGoldenRunId');
 }
+let bundledTaxRagGolden=null;
+async function getBundledTaxRagGolden(){
+  if(bundledTaxRagGolden) return bundledTaxRagGolden;
+  const r=await fetch('/data/taxrag-golden-v1.1.json',{cache:'no-store'});
+  if(!r.ok) throw new Error(`TaxRAG Golden HTTP ${r.status}`);
+  const obj=await r.json();
+  if(!Array.isArray(obj.dataset)) throw new Error('TaxRAG Golden dataset אינו תקין');
+  bundledTaxRagGolden=obj;
+  return obj;
+}
+function normalizeGoldenItem(x,i=0){
+  return {
+    id:String(x.id||`TAXRAG-${String(i+1).padStart(3,'0')}`),
+    question:String(x.question||''),
+    expected:String(x.expected||x.expectedAnswer||''),
+    expectedSource:String(x.expectedSource||''),
+    mustInclude:String(x.mustInclude||''),
+    tags:String(x.tags||'TaxRAG · Golden v1.1'),
+    notes:String(x.notes||''),
+    inspector:String(x.inspector||''),
+    sourceRow:x.sourceRow||null,
+    datasetSource:'TaxRAG Evaluator v1.1'
+  };
+}
+async function mergeTaxRagGolden({silent=false}={}){
+  try{
+    const obj=await getBundledTaxRagGolden();
+    const existing=new Set(state.goldenDataset.map(x=>String(x.id)));
+    const incoming=obj.dataset.map(normalizeGoldenItem).filter(x=>x.question&&x.expected);
+    const missing=incoming.filter(x=>!existing.has(x.id));
+    if(missing.length){state.goldenDataset.push(...missing);saveGoldenDataset();renderGolden();}
+    if(!silent) showToast(missing.length?`${missing.length} שאלות TaxRAG נוספו ל-Golden Dataset.`:`כל ${incoming.length} שאלות TaxRAG כבר קיימות.`,missing.length?'success':'info',5000);
+    return missing.length;
+  }catch(e){if(!silent)showToast('טעינת TaxRAG Golden נכשלה: '+e.message,'error',6000);return 0;}
+}
+async function seedTaxRagGoldenIfEmpty(){
+  if(state.goldenDataset.length) return;
+  await mergeTaxRagGolden({silent:true});
+}
 function normalizeForSimilarity(text=''){return String(text).toLowerCase().replace(/[\u0591-\u05C7]/g,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).filter(x=>x.length>1);}
 function answerSimilarity(a,b){
   const A=new Set(normalizeForSimilarity(a)),B=new Set(normalizeForSimilarity(b)); if(!A.size||!B.size)return 0;
@@ -1079,7 +1118,7 @@ async function happyFlow(){
 
 function runUiSelfTest(){
   const checks=[]; const check=(name,ok,detail='')=>checks.push({name,ok:!!ok,detail});
-  const buttonIds=['demoBtn','healthBtn','validateTokenBtn','markTokenBtn','generateCaseIdBtn','readinessBtn','runAllTests','runSafeP0','runBoundaryPack','runRagSpecPack','runHappyFlow','uiSelfTestBtn','clearResults','flowRunBtn','apiRunBtn','copyCurlBtn','aiRunBtn','goldenRunAllBtn','goldenSaveBtn','goldenResetBtn','goldenExportBtn','goldenImportBtn','goldenClearBtn','goldenCompareBtn','dialogBugEvidenceBtn','dialogInvestigateBtn','dialogGenerateBugBtn','runAiSummaryBtn','clearRunHistoryBtn','copyBugDraftBtn','downloadBugDraftBtn','exportJson','exportCsv','exportStpBtn','exportStdBtn','dialogRunBtn','dialogCopyCurlBtn'];
+  const buttonIds=['demoBtn','healthBtn','validateTokenBtn','markTokenBtn','generateCaseIdBtn','readinessBtn','runAllTests','runSafeP0','runBoundaryPack','runRagSpecPack','runHappyFlow','uiSelfTestBtn','clearResults','flowRunBtn','apiRunBtn','copyCurlBtn','aiRunBtn','goldenRunAllBtn','goldenLoadTaxRagBtn','goldenSaveBtn','goldenResetBtn','goldenExportBtn','goldenImportBtn','goldenClearBtn','goldenCompareBtn','dialogBugEvidenceBtn','dialogInvestigateBtn','dialogGenerateBugBtn','runAiSummaryBtn','clearRunHistoryBtn','copyBugDraftBtn','downloadBugDraftBtn','exportJson','exportCsv','exportStpBtn','exportStdBtn','dialogRunBtn','dialogCopyCurlBtn'];
   buttonIds.forEach(id=>{const el=$(id);check(`כפתור ${id}`,!!el && (typeof el.onclick==='function'||id==='dialogCopyCurlBtn'),!el?'לא נמצא':typeof el.onclick);});
   document.querySelectorAll('.tab').forEach(tab=>check(`Tab ${tab.dataset.tab}`,!!$(tab.dataset.tab)&&typeof tab.onclick==='function','Target section + click handler'));
   document.querySelectorAll('[data-manual-status]').forEach(b=>check(`Manual status ${b.dataset.manualStatus}`,typeof b.onclick==='function','click handler'));
@@ -1247,7 +1286,7 @@ function wire(){
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tabpage').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active');}); document.querySelectorAll('.subtab').forEach(b=>b.onclick=()=>{const root=b.closest('.tabpage'); if(!root)return; root.querySelectorAll('.subtab').forEach(x=>x.classList.remove('active')); root.querySelectorAll('.subpage').forEach(x=>x.classList.remove('active')); b.classList.add('active'); const page=root.querySelector(`[data-subpage=\"${b.dataset.subtab}\"]`); if(page)page.classList.add('active');});
   $('searchTests').oninput=()=>renderCatalog(true);$('priorityFilter').onchange=()=>renderCatalog(true);$('modeFilter').onchange=()=>renderCatalog(true);if($('statusFilter'))$('statusFilter').onchange=()=>renderCatalog(true);
   $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('validateTokenBtn').onclick=validateToken;$('markTokenBtn').onclick=()=>{markTokenNow();showToast('Token סומן ידנית כחדש.','success');};$('generateCaseIdBtn').onclick=()=>{ensureCaseId(true);showToast('נוצר Case ID חדש לבדיקה.','success');};$('readinessBtn').onclick=()=>{const ok=readiness();showToast(ok?'הסביבה מוכנה להרצה.':'עדיין חסרים נתונים — ראה כרטיסי המוכנות. ',ok?'success':'warning');};$('runAllTests').onclick=runAllTests;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runRagSpecPack').onclick=runRagSpecPack;$('runHappyFlow').onclick=happyFlow;$('uiSelfTestBtn').onclick=runUiSelfTest;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('copyCurlBtn').onclick=copyCurl;$('aiRunBtn').onclick=aiRun;
-  if($('goldenSaveBtn'))$('goldenSaveBtn').onclick=goldenSave;if($('goldenResetBtn'))$('goldenResetBtn').onclick=goldenFormReset;if($('goldenRunAllBtn'))$('goldenRunAllBtn').onclick=runGoldenAll;if($('goldenExportBtn'))$('goldenExportBtn').onclick=exportGolden;if($('goldenImportBtn'))$('goldenImportBtn').onclick=()=>$('goldenImportFile').click();if($('goldenImportFile'))$('goldenImportFile').onchange=e=>{const f=e.target.files?.[0];if(f)importGoldenFile(f);e.target.value='';};if($('goldenClearBtn'))$('goldenClearBtn').onclick=()=>{if(confirm('למחוק את כל שאלות הזהב, התוצאות והיסטוריית הריצות המקומית?')){state.goldenDataset=[];state.goldenResults={};state.goldenRuns=[];state.currentGoldenRunId=null;saveGoldenDataset();goldenFormReset();renderGolden();}};if($('goldenCompareBtn'))$('goldenCompareBtn').onclick=compareGoldenRuns;if($('glossarySearch'))$('glossarySearch').oninput=e=>renderGlossary(e.target.value);wireGlossaryLinks();
+  if($('goldenLoadTaxRagBtn'))$('goldenLoadTaxRagBtn').onclick=()=>mergeTaxRagGolden();if($('goldenSaveBtn'))$('goldenSaveBtn').onclick=goldenSave;if($('goldenResetBtn'))$('goldenResetBtn').onclick=goldenFormReset;if($('goldenRunAllBtn'))$('goldenRunAllBtn').onclick=runGoldenAll;if($('goldenExportBtn'))$('goldenExportBtn').onclick=exportGolden;if($('goldenImportBtn'))$('goldenImportBtn').onclick=()=>$('goldenImportFile').click();if($('goldenImportFile'))$('goldenImportFile').onchange=e=>{const f=e.target.files?.[0];if(f)importGoldenFile(f);e.target.value='';};if($('goldenClearBtn'))$('goldenClearBtn').onclick=()=>{if(confirm('למחוק את כל שאלות הזהב, התוצאות והיסטוריית הריצות המקומית?')){state.goldenDataset=[];state.goldenResults={};state.goldenRuns=[];state.currentGoldenRunId=null;saveGoldenDataset();goldenFormReset();renderGolden();}};if($('goldenCompareBtn'))$('goldenCompareBtn').onclick=compareGoldenRuns;if($('glossarySearch'))$('glossarySearch').oninput=e=>renderGlossary(e.target.value);wireGlossaryLinks();
   $('clearResults').onclick=()=>{state.results={};state.investigations={};state.lastExchange=null;$('runSummary').innerHTML='';if($('aiRunSummary'))$('aiRunSummary').innerHTML='';renderAll();showToast('תוצאות ההרצה אופסו.','success');};
   if($('clearRunHistoryBtn'))$('clearRunHistoryBtn').onclick=()=>{state.runHistory=[];persistRunHistory();renderRunHistory();showToast('היסטוריית ההרצות המקומית נמחקה.','success');};
   if($('runAiSummaryBtn'))$('runAiSummaryBtn').onclick=investigateRun;
@@ -1263,4 +1302,4 @@ setInterval(updateTokenCountdown,1000);
 loadGoldenDataset();
 loadRunHistory();
 ensureCaseId(); updateCaseIdHelp(); updateTokenCountdown(); readiness();
-wire(); loadData().then(()=>{renderGolden();if(new URLSearchParams(location.search).get('selftest')==='1')setTimeout(runUiSelfTest,50);}).catch(e=>{showToast('שגיאת טעינת נתונים: '+e.message,'error',8000);document.body.insertAdjacentHTML('beforeend',`<pre>${esc(e.message)}</pre>`);});
+wire(); Promise.all([loadData(),seedTaxRagGoldenIfEmpty()]).then(()=>{renderGolden();if(new URLSearchParams(location.search).get('selftest')==='1')setTimeout(runUiSelfTest,50);}).catch(e=>{showToast('שגיאת טעינת נתונים: '+e.message,'error',8000);document.body.insertAdjacentHTML('beforeend',`<pre>${esc(e.message)}</pre>`);});
