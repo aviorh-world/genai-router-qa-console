@@ -183,3 +183,38 @@
 .api-advanced{margin-top:15px;border:1px solid var(--line);border-radius:10px;padding:10px}.api-advanced summary{cursor:pointer;font-weight:800}
 .api-request-preview{display:grid;grid-template-columns:1.3fr 1fr;gap:15px}.api-request-preview pre{min-height:120px}
 @media(max-width:900px){.api-fields-grid,.api-endpoint-info,.api-request-preview{grid-template-columns:1fr}.journey-card{min-height:0}}
+
+/* Compact Postman-like API Runner */
+#api{font-size:13px}
+#api .card{padding:14px 16px;margin-bottom:10px}
+#api h2{font-size:18px;margin:0}
+#api p{margin:3px 0 0;font-size:12px}
+.api-postman-shell{border-radius:10px}
+.api-topline,.api-mini-head,.api-selector-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.env-switch{display:flex;gap:3px;background:#eef2f6;padding:3px;border-radius:7px;direction:ltr}
+.env-btn{border:0;background:transparent;padding:6px 9px;border-radius:5px;font-size:11px;font-weight:700;cursor:pointer}
+.env-btn.active{background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.15);color:#075985}
+.api-env-hint{font-size:11px;color:#64748b;margin:8px 0}
+.request-line{display:grid;grid-template-columns:78px 1fr 74px;gap:6px;direction:ltr;margin:8px 0}
+.method-box,.api-url-edit{height:36px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;padding:0 9px;font-size:12px}
+.method-box{text-align:center;font-weight:800}
+.api-url-edit{text-align:left}
+.compact-btn{min-height:36px;padding:6px 12px}
+.api-auth-strip{display:grid;grid-template-columns:2fr 1fr;gap:8px;border-top:1px solid #edf1f5;padding-top:9px;margin-top:8px}
+.api-auth-strip label,#api label{font-size:11px;font-weight:700}
+.api-auth-strip input,#api select,#api textarea{font-size:12px;min-height:34px;padding:6px 8px;border-radius:6px}
+.api-cli-help{grid-column:1/-1;color:#64748b;font-size:10px}
+.api-selector-row{margin-top:9px}.api-selector-row label{flex:1}
+.api-operation-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.api-operation-meta>div{background:#f8fafc;border:1px solid #e5eaf0;border-radius:6px;padding:7px}
+.api-operation-meta small{display:block;color:#64748b;font-size:10px;margin-bottom:2px}
+.api-operation-meta strong,.api-operation-meta code{font-size:11px}
+.api-mini-head span{font-size:10px;color:#64748b}
+.api-structured-fields{gap:8px}
+.api-json-details{margin-top:9px}.api-json-details summary{font-size:11px;cursor:pointer;color:#475569}
+#apiResponse{min-height:120px;max-height:420px;overflow:auto;font-size:11px;direction:ltr;text-align:left}
+@media(max-width:800px){
+ .api-topline,.api-selector-row,.api-mini-head{align-items:stretch;flex-direction:column}
+ .request-line{grid-template-columns:68px 1fr}.request-line .compact-btn{grid-column:1/-1}
+ .api-auth-strip,.api-operation-meta{grid-template-columns:1fr}
+}

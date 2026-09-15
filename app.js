@@ -635,7 +635,7 @@ function readiness(){
     ['TSH Base URL',!!c.baseUrl,`כתובת ידועה: ${DEFAULT_TSH_BASE_URL}`],
     ['Identity Token',!!c.token&&tokenFresh,'gcloud auth print-identity-token · אפשר לאמת דרך כפתור בדיקת Token · תוקף ~שעה'],
     ['App ID',!!c.appId,'ברירת מחדל מה-Swagger: Desktop'],
-    ['User ID',!!c.userId,'name@ita.gov.il'],
+    ['User ID',!!c.userId,'aviorha@ita.gov.il'],
     ['Case ID',!c.caseId||validCaseId(c.caseId),'לא blocker; אם נשלח — 9 ספרות'],
     ['Cloud Access',c.cloudAccessConfirmed||state.connectionOk,'משתמש ענן + הרשאה לשירות Router']
   ];
@@ -1280,6 +1280,68 @@ function renderReport(){
 }
 function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderRunHistory();renderContract();renderContext();renderRagSpec();renderStpStd();renderEndpointGuide();renderAiQaLessons();renderGlossary($('glossarySearch')?.value||'');renderGolden();wireGlossaryLinks();readiness();}
 
+
+const API_ENVIRONMENTS={
+  nonprod:{
+    label:'NonProd / TSH',
+    baseUrl:'https://t-sh-apic.taxes.gov.il/ita-chat-router-api',
+    userId:'aviorha@ita.gov.il',
+    appId:'Desktop',
+    authHeader:'Authorization',
+    tokenCommand:'gcloud auth print-access-token',
+    hint:'NonProd / TSH · Access Token מה-Google CLI. ה-Header ניתן לעריכה ידנית.'
+  },
+  sandbox:{
+    label:'Sandbox',
+    baseUrl:'https://chat-router-942568278050.me-west1.run.app',
+    userId:'Ofir',
+    appId:'Desktop',
+    authHeader:'X-Serverless-Authorization',
+    tokenCommand:'gcloud auth print-identity-token',
+    hint:'Sandbox · Identity Token · X-Serverless-Authorization: Bearer <token>'
+  }
+};
+let activeApiEnv=localStorage.getItem('genaiQaApiEnv')||'nonprod';
+const apiEditedUrls={};
+function apiEnv(){return API_ENVIRONMENTS[activeApiEnv]||API_ENVIRONMENTS.nonprod;}
+function apiOp(){return state.operations[+$('endpointSelect')?.value||0];}
+function apiOpKey(o){return o?`${o.method} ${o.path}`:'';}
+function apiDefaultUrl(o){return o?`${apiEnv().baseUrl.replace(/\/+$/,'')}/${String(o.path||'').replace(/^\/+/,'')}`:'';}
+function apiCurrentUrl(o){return apiEditedUrls[`${activeApiEnv}|${apiOpKey(o)}`]||apiDefaultUrl(o);}
+function apiRunnerToken(){
+  const own=$('apiRunnerToken')?.value.trim();
+  if(own)return own;
+  return activeApiEnv==='nonprod'?($('token')?.value.trim()||''):'';
+}
+function apiRunnerAuthHeader(){return $('apiRunnerAuthHeader')?.value.trim()||apiEnv().authHeader;}
+function setApiEnvironment(name){
+  if(!API_ENVIRONMENTS[name])return;
+  activeApiEnv=name;localStorage.setItem('genaiQaApiEnv',name);
+  document.querySelectorAll('.env-btn').forEach(b=>b.classList.toggle('active',b.dataset.env===name));
+  const e=apiEnv();
+  if($('apiEnvHint'))$('apiEnvHint').textContent=e.hint;
+  if($('apiCliHelp'))$('apiCliHelp').textContent=`CLI: ${e.tokenCommand} · Bearer מתווסף אוטומטית`;
+  if($('apiRunnerAuthHeader'))$('apiRunnerAuthHeader').value=e.authHeader;
+  if($('apiRunnerToken'))$('apiRunnerToken').value=localStorage.getItem(`genaiQaApiToken:${name}`)||(name==='nonprod'?($('token')?.value||''):'');
+  if($('userId'))$('userId').value=e.userId;
+  if($('appId'))$('appId').value=e.appId;
+  syncApiTemplate();
+}
+async function apiEnvironmentRequest({method,url,body,stream=false}){
+  const token=apiRunnerToken(), authHeader=apiRunnerAuthHeader();
+  if(!token)throw new Error(`חסר Token עבור ${apiEnv().label}. הפקודה: ${apiEnv().tokenCommand}`);
+  const headers={'Accept':'application/json, text/event-stream, */*'};
+  headers[authHeader]=token.startsWith('Bearer ')?token:`Bearer ${token}`;
+  let payload;
+  if(body!==undefined&&body!==null&&method.toUpperCase()!=='GET'){headers['Content-Type']='application/json';payload=JSON.stringify(body);}
+  const started=Date.now();
+  const res=await fetch(url,{method:method.toUpperCase(),headers,body:payload});
+  const ct=res.headers.get('content-type')||'';
+  if(stream||ct.includes('text/event-stream'))return {status:res.status,stream:res.body,headers:res.headers,latencyMs:Date.now()-started,contentType:ct};
+  const txt=await res.text();let parsed=txt;try{parsed=JSON.parse(txt)}catch{}
+  return {status:res.status,body:parsed,raw:txt,latencyMs:Date.now()-started,contentType:ct};
+}
+
 const API_FIELD_META={
   appId:{label:'App ID',type:'text',help:'האפליקציה היוזמת. לפי הדוגמה: Desktop'},
   userId:{label:'User ID',type:'email',help:'האימייל של המשתמש המורשה. דוגמת הצוות: Ofir.adi@ita.gov.il'},
@@ -1366,30 +1428,50 @@ function renderApiPreview(){
   if($('apiHeadersPreview'))$('apiHeadersPreview').textContent=`Content-Type: application/json\nAuthorization: Bearer ${cfg().token?'[TOKEN LOADED]':'[TOKEN MISSING]'}`;
 }
 function populateEndpoints(){
-  const s=$('endpointSelect');
-  s.innerHTML=state.operations.map((o,i)=>`<option value="${i}">${o.method} ${o.path} — ${esc(o.summary||o.operationId)}</option>`).join('');
+  const sel=$('endpointSelect');
+  sel.innerHTML=state.operations.map((o,i)=>`<option value="${i}">${o.method} ${o.path} — ${esc(o.summary||o.operationId)}</option>`).join('');
   const createIndex=state.operations.findIndex(o=>o.method==='POST'&&o.path==='/v1/conversations/new');
-  if(createIndex>=0)s.value=String(createIndex);
-  s.onchange=syncApiTemplate; syncApiTemplate();
+  if(createIndex>=0)sel.value=String(createIndex);
+  sel.onchange=syncApiTemplate;
+  setApiEnvironment(activeApiEnv);
 }
 function syncApiTemplate(){
-  const o=state.operations[+$('endpointSelect').value||0]; if(!o)return;
+  const o=apiOp();if(!o)return;
   $('apiMethod').value=o.method;
+  if($('apiOperation'))$('apiOperation').textContent=`${o.operationId||''} · ${o.summary||''}`;
+  if($('apiPath'))$('apiPath').textContent=o.path;
+  if($('apiFullUrl'))$('apiFullUrl').value=apiCurrentUrl(o);
   const fields=apiFieldsFor(o);
   $('apiStructuredFields').innerHTML=fields.length?fields.map(renderApiField).join(''):`<div class="api-no-fields">ל־Endpoint הזה אין Request Body מוגדר ב־Swagger.</div>`;
   document.querySelectorAll('[data-api-field]').forEach(el=>{el.oninput=syncStructuredToJson;el.onchange=syncStructuredToJson;});
   syncStructuredToJson();
 }
+function apiCurl(){
+  const o=apiOp();if(!o)return'';
+  let body;try{body=JSON.parse($('apiBody').value||'{}')}catch{body={};}
+  const token=apiRunnerToken()||'<TOKEN>';
+  const lines=[`curl -i -X ${o.method} '${$('apiFullUrl').value.trim()}'`,`  -H '${apiRunnerAuthHeader()}: ${token.startsWith('Bearer ')?token:`Bearer ${token}`}'`,`  -H 'Accept: application/json, text/event-stream, */*'`];
+  if(o.method!=='GET')lines.push(`  -H 'Content-Type: application/json'`,`  --data '${JSON.stringify(body).replace(/'/g,"'\\''")}'`);
+  return lines.join(' \\\n');
+}
 async function apiRun(){
   try{
-    const o=state.operations[+$('endpointSelect').value||0]; let b;
-    try{b=JSON.parse($('apiBody').value||'{}')}catch{throw new Error('Request JSON אינו תקין');}
-    renderApiPreview();
-    if(cfg().executionMode==='postman'){const curl=buildCurl(o.method,o.path,o.method==='GET'?undefined:b);$('apiResponse').textContent=curl;$('apiMeta').textContent='POSTMAN / cURL MODE — לא נשלחה בקשה';return;}
+    const o=apiOp();let body;
+    try{body=JSON.parse($('apiBody').value||'{}')}catch{throw new Error('Request JSON אינו תקין');}
+    const url=$('apiFullUrl').value.trim();if(!url)throw new Error('חסרה כתובת URL');
+    if(cfg().executionMode==='postman'){$('apiResponse').textContent=apiCurl();$('apiMeta').textContent='cURL mode · לא נשלחה בקשה';return;}
     const isStream=o.path==='/v1/conversations/messages';
-    const r=await proxy({method:o.method,path:o.path,body:(o.method==='GET'?undefined:b),stream:isStream});
-    if(isStream){$('apiResponse').textContent='';const txt=await readStream(r.stream,(c,f)=>$('apiResponse').textContent=f.slice(-10000));$('apiMeta').textContent=`HTTP ${r.status}\nSSE`;const mid=extractMessageIdFromText(txt);if(mid)$('messageId').value=mid;}
-    else{$('apiResponse').textContent=typeof r.body==='string'?r.body:JSON.stringify(r.body,null,2);$('apiMeta').textContent=`HTTP ${r.status}\n${r.latencyMs??''} ms\n${r.contentType??''}`;}
+    const r=await apiEnvironmentRequest({method:o.method,url,body:o.method==='GET'?undefined:body,stream:isStream});
+    if(isStream){
+      $('apiResponse').textContent='';
+      const txt=await readStream(r.stream,(c,f)=>$('apiResponse').textContent=f.slice(-10000));
+      $('apiMeta').textContent=`HTTP ${r.status} · SSE`;
+      const mid=extractMessageIdFromText(txt);if(mid)$('messageId').value=mid;
+    }else{
+      $('apiResponse').textContent=typeof r.body==='string'?r.body:JSON.stringify(r.body,null,2);
+      $('apiMeta').textContent=`HTTP ${r.status} · ${r.latencyMs??''} ms`;
+      if(o.path==='/v1/conversations/new'&&r.body?.conversationId&&$('conversationId'))$('conversationId').value=r.body.conversationId;
+    }
     showToast('API Runner הסתיים.','success');
   }catch(e){$('apiResponse').textContent=e.message;$('apiMeta').textContent='BLOCKED';showToast('API Runner: '+e.message,'error',5000);}
 }
@@ -1433,7 +1515,11 @@ function demo(){state.demo=!state.demo;$('demoBtn').textContent=state.demo?'Demo
 function wire(){
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tabpage').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active');}); document.querySelectorAll('.subtab').forEach(b=>b.onclick=()=>{const root=b.closest('.tabpage'); if(!root)return; root.querySelectorAll('.subtab').forEach(x=>x.classList.remove('active')); root.querySelectorAll('.subpage').forEach(x=>x.classList.remove('active')); b.classList.add('active'); const page=root.querySelector(`[data-subpage=\"${b.dataset.subtab}\"]`); if(page)page.classList.add('active');});
   $('searchTests').oninput=()=>renderCatalog(true);$('priorityFilter').onchange=()=>renderCatalog(true);$('modeFilter').onchange=()=>renderCatalog(true);if($('statusFilter'))$('statusFilter').onchange=()=>renderCatalog(true);
-  $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('validateTokenBtn').onclick=validateToken;$('markTokenBtn').onclick=()=>{markTokenNow();showToast('Token סומן ידנית כחדש.','success');};$('generateCaseIdBtn').onclick=()=>{ensureCaseId(true);showToast('נוצר Case ID חדש לבדיקה.','success');};$('readinessBtn').onclick=()=>{const ok=readiness();showToast(ok?'הסביבה מוכנה להרצה.':'עדיין חסרים נתונים — ראה כרטיסי המוכנות. ',ok?'success':'warning');};$('runAllTests').onclick=runAllTests;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runRagSpecPack').onclick=runRagSpecPack;$('runHappyFlow').onclick=happyFlow;$('uiSelfTestBtn').onclick=runUiSelfTest;$('flowRunBtn').onclick=happyFlow;renderMethodFlows();prepareMethodFlow();$('apiRunBtn').onclick=apiRun;$('copyCurlBtn').onclick=copyCurl;$('aiRunBtn').onclick=aiRun;
+  $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('validateTokenBtn').onclick=validateToken;$('markTokenBtn').onclick=()=>{markTokenNow();showToast('Token סומן ידנית כחדש.','success');};$('generateCaseIdBtn').onclick=()=>{ensureCaseId(true);showToast('נוצר Case ID חדש לבדיקה.','success');};$('readinessBtn').onclick=()=>{const ok=readiness();showToast(ok?'הסביבה מוכנה להרצה.':'עדיין חסרים נתונים — ראה כרטיסי המוכנות. ',ok?'success':'warning');};$('runAllTests').onclick=runAllTests;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runRagSpecPack').onclick=runRagSpecPack;$('runHappyFlow').onclick=happyFlow;$('uiSelfTestBtn').onclick=runUiSelfTest;$('flowRunBtn').onclick=happyFlow;renderMethodFlows();prepareMethodFlow();$('apiRunBtn').onclick=apiRun;
+  $('copyCurlBtn').onclick=async()=>{const txt=apiCurl();try{await navigator.clipboard.writeText(txt);showToast('cURL הועתק.','success');}catch{prompt('העתק cURL',txt);}};
+  $('envNonprodBtn').onclick=()=>setApiEnvironment('nonprod');$('envSandboxBtn').onclick=()=>setApiEnvironment('sandbox');
+  $('apiRunnerToken').oninput=e=>localStorage.setItem(`genaiQaApiToken:${activeApiEnv}`,e.target.value);
+  $('apiFullUrl').oninput=e=>{const o=apiOp();if(o)apiEditedUrls[`${activeApiEnv}|${apiOpKey(o)}`]=e.target.value.trim();};$('aiRunBtn').onclick=aiRun;
   if($('goldenLoadTaxRagBtn'))$('goldenLoadTaxRagBtn').onclick=()=>mergeTaxRagGolden();if($('goldenSaveBtn'))$('goldenSaveBtn').onclick=goldenSave;if($('goldenResetBtn'))$('goldenResetBtn').onclick=goldenFormReset;if($('goldenRunAllBtn'))$('goldenRunAllBtn').onclick=runGoldenAll;if($('goldenExportBtn'))$('goldenExportBtn').onclick=exportGolden;if($('goldenImportBtn'))$('goldenImportBtn').onclick=()=>$('goldenImportFile').click();if($('goldenImportFile'))$('goldenImportFile').onchange=e=>{const f=e.target.files?.[0];if(f)importGoldenFile(f);e.target.value='';};if($('goldenClearBtn'))$('goldenClearBtn').onclick=()=>{if(confirm('למחוק את כל שאלות הזהב, התוצאות והיסטוריית הריצות המקומית?')){state.goldenDataset=[];state.goldenResults={};state.goldenRuns=[];state.currentGoldenRunId=null;saveGoldenDataset();goldenFormReset();renderGolden();}};if($('goldenCompareBtn'))$('goldenCompareBtn').onclick=compareGoldenRuns;if($('glossarySearch'))$('glossarySearch').oninput=e=>renderGlossary(e.target.value);wireGlossaryLinks();
   $('clearResults').onclick=()=>{state.results={};state.investigations={};state.lastExchange=null;$('runSummary').innerHTML='';if($('aiRunSummary'))$('aiRunSummary').innerHTML='';renderAll();showToast('תוצאות ההרצה אופסו.','success');};
   if($('clearRunHistoryBtn'))$('clearRunHistoryBtn').onclick=()=>{state.runHistory=[];persistRunHistory();renderRunHistory();showToast('היסטוריית ההרצות המקומית נמחקה.','success');};

@@ -55,3 +55,9 @@ API Runner now exposes all Swagger operations through a structured endpoint sele
 
 ## API Runner update
 API Runner defaults to POST /v1/conversations/new, uses Authorization: Bearer <token>, and exposes structured fields for all Swagger 1.0.6 operations. Health remains GET /health because that is the method defined by Swagger 1.0.6.
+
+## API Runner environments
+The runner now has two explicit environments:
+- Sandbox: `https://chat-router-942568278050.me-west1.run.app`, `gcloud auth print-identity-token`, `X-Serverless-Authorization`, default `userId=Ofir`.
+- NonProd / TSH: `https://t-sh-apic.taxes.gov.il/ita-chat-router-api`, `gcloud auth print-access-token`, default `userId=aviorha@ita.gov.il`. The auth header is editable in the runner.
+The full URL is always visible and editable. Tokens are displayed unmasked. Bearer is added automatically.
