@@ -11,7 +11,7 @@
 <header class="topbar">
 <div>
 <h1>GenAI Router QA Console</h1>
-<p>כלי QA ל־Router 1.0.6 — Swagger + TSH + ארכיטקטורה + Postman</p>
+<p>כלי QA ל־Router 1.0.6 — Swagger + Sandbox / NonProd + ארכיטקטורה + Postman</p>
 </div>
 <div class="top-actions">
 <span class="badge version">0.02</span>
@@ -20,14 +20,14 @@
 <button class="btn ghost" id="demoBtn">Demo Mode</button>
 </div>
 </header>
-<div class="demo-warning" hidden="" id="demoWarning">⚠️ מצב הדגמה פעיל — שום בקשה לא נשלחת ל־TSH. תוצאות סימולציה יסומנו <b>DEMO</b> ולא PASS.</div>
+<div class="demo-warning" hidden="" id="demoWarning">⚠️ מצב הדגמה פעיל — שום בקשה לא נשלחת לסביבה שנבחרה. תוצאות סימולציה יסומנו <b>DEMO</b> ולא PASS.</div>
 <div aria-live="polite" class="toast-host" id="toastHost"></div>
 <main>
 <section class="card setup">
-<div class="section-head">
+<div class="section-head setup-title-row">
 <div>
-<h2>1. חיבור לסביבת הבדיקה</h2>
-<p>Base URL של TSH כבר מוגדר ל־<code>https://t-sh-apic.taxes.gov.il/ita-chat-router-api</code>. להרצות מוגנות צריך Identity Token ומשתמש בדיקה; שאר האפשרויות נמצאות תחת "אפשרויות מתקדמות".</p>
+<h2>1. סביבת בדיקה וחיבור</h2>
+<p id="environmentIntro">בחר סביבת עבודה אחת. כל הבדיקות, Auto Flow ו־API Runner יורשים את אותו Connection Profile.</p>
 </div>
 <div class="actions-row">
 <button class="btn" id="healthBtn">בדיקת חיבור</button>
@@ -35,38 +35,54 @@
 <button class="btn ghost" id="markTokenBtn">סמן Token כחדש</button>
 </div>
 </div>
+
+<div class="global-env-panel">
+  <div class="global-env-main">
+    <span class="eyebrow">Environment</span>
+    <div class="env-switch global-env-switch" role="tablist" aria-label="Test environment">
+      <button type="button" class="env-btn" id="globalEnvNonprodBtn" data-global-env="nonprod">🔒 NonProd / TSH</button>
+      <button type="button" class="env-btn" id="globalEnvSandboxBtn" data-global-env="sandbox">🧪 Sandbox</button>
+    </div>
+  </div>
+  <div class="global-env-summary">
+    <b id="globalEnvName">—</b>
+    <span id="globalEnvSummary">—</span>
+  </div>
+</div>
+
 <div class="grid cols-3 setup-essential">
-<label>TSH Base URL<input autocomplete="off" id="baseUrl" value="https://t-sh-apic.taxes.gov.il/ita-chat-router-api" placeholder="כתובת Router בסביבת TSH"/><small class="field-help">הכתובת שהתקבלה מהצוות. אם תודבק כתובת שמסתיימת ב־/v1, האתר ינרמל אותה אוטומטית.</small></label>
-<label>Identity Token<input autocomplete="off" id="token" placeholder="gcloud auth print-identity-token" type="password"/><small class="field-help" id="tokenExpiry">לא אומת עדיין</small></label>
+<label><span id="baseUrlLabel">Base URL</span><input autocomplete="off" id="baseUrl" placeholder="Router Base URL"/><small class="field-help" id="baseUrlHelp">הכתובת נטענת מה־Connection Profile וניתנת לעריכה.</small></label>
+<label><span id="tokenLabel">Token</span><input autocomplete="off" id="token" placeholder="Google CLI token" type="text" dir="ltr"/><small class="field-help" id="tokenExpiry">לא אומת עדיין</small><small class="field-help mono" id="tokenCommandHelp"></small></label>
 <label>User ID<input id="userId" inputmode="email" placeholder="User ID" value="aviorha@ita.gov.il"/></label>
 <label>App ID<input id="appId" placeholder="Desktop" value="Desktop"/></label>
-<label>Case ID<div class="field-inline"><input id="caseId" placeholder="9 ספרות · נוצר אוטומטית למעקב" value="123456789"/><button class="mini-btn field-inline-btn" id="generateCaseIdBtn" type="button">חדש</button></div><small class="field-help" id="caseIdHelp">ייווצר אוטומטית Case ID ייחודי לבדיקה, וניתן גם לשנות ידנית.</small></label>
+<label>Case ID<div class="field-inline"><input id="caseId" placeholder="מזהה בדיקה · ניתן לעריכה" value="123456789"/><button class="mini-btn field-inline-btn" id="generateCaseIdBtn" type="button">חדש</button></div><small class="field-help" id="caseIdHelp">Swagger 1.0.6 מגדיר 9 ספרות; בדוגמת Sandbox החדשה הופיע Case ID בן 10 ספרות. האתר לא יחסום מקומית ערך מספרי.</small></label>
 </div>
+
 <details class="setup-help advanced-settings">
 <summary>⚙️ אפשרויות מתקדמות</summary>
 <div class="setup-help-body">
 <div class="grid cols-3">
-<label>Execution Mode<select id="executionMode"><option value="direct">Browser Direct → Router</option><option value="proxy">Vercel Proxy (רק אם היעד ציבורי)</option><option value="postman">Postman / cURL generator בלבד</option></select></label>
-<label>Auth Header<select id="authHeader"><option value="X-Serverless-Authorization">X-Serverless-Authorization</option><option value="Authorization">Authorization (fallback)</option></select></label>
+<label>Execution Mode<select id="executionMode"><option value="direct">Browser Direct → Router</option><option value="proxy">Vercel Proxy → Router</option><option value="postman">Postman / cURL generator בלבד</option></select><small class="field-help" id="executionModeHelp"></small></label>
+<label>Auth Header<select id="authHeader"><option value="X-Serverless-Authorization">X-Serverless-Authorization</option><option value="Authorization">Authorization</option></select><small class="field-help">נטען מה־Profile, אך ניתן לשנות ידנית לצורך בדיקה.</small></label>
 <label>User ID B (אופציונלי)<input id="userIdB" placeholder="לבדיקות הרשאה"/></label>
-<label>Token B (אופציונלי)<input autocomplete="off" id="tokenB" placeholder="Token של משתמש B" type="password"/></label>
+<label>Token B (אופציונלי)<input autocomplete="off" id="tokenB" placeholder="Token של משתמש B" type="text" dir="ltr"/></label>
 <label>Conversation ID<input id="conversationId" placeholder="מתמלא אוטומטית"/></label>
 <label>Message ID<input id="messageId" placeholder="מתמלא אוטומטית"/></label>
 <label>AI Investigation Access Code<input autocomplete="off" id="aiAccessCode" placeholder="נדרש רק ל-AI עמוק" type="password"/><small class="field-help">נשאר בדפדפן בלבד ולא נשלח למודל.</small></label>
 </div>
-<label class="checkline"><input id="cloudAccessConfirmed" type="checkbox"/> <span>וידאתי שיש לי משתמש ענן והרשאה להפעיל את שירות ה־Router</span></label>
+<label class="checkline"><input id="cloudAccessConfirmed" type="checkbox"/> <span>וידאתי שיש לי משתמש ענן והרשאת Invoker/גישה מתאימה לסביבה שנבחרה</span></label>
 <label class="checkline ai-optin"><input id="aiRemoteEnabled" type="checkbox"/> <span>אפשר AI Investigation עמוק דרך השרת. רק Evidence מצונזר נשלח למודל; Token לעולם לא נשלח.</span></label>
 </div>
 </details>
 <details class="setup-help">
-<summary>ℹ️ הנחיות TSH / Google CLI / בטיחות</summary>
+<summary>ℹ️ הנחיות Connection Profile / Google CLI</summary>
 <div class="setup-help-body">
-<div class="notice">⚠️ השתמש רק ב־credentials של TSH/QA. לא ב־Production. אם ה־TSH פנימי, Vercel לא בהכרח יוכל להגיע אליו — השתמש ב־Browser Direct או העתק בקשה ל־Postman.</div>
-<div class="notice"><b>Google CLI:</b> אם צריך התחברות לחשבון: <code>gcloud init</code> או <code>gcloud init --no-launch-browser</code>. להפקת Identity Token: <code>gcloud auth print-identity-token</code>. לפי המדריך יש לשלוח: <code>X-Serverless-Authorization: Bearer &lt;TOKEN&gt;</code>.</div>
+<div class="notice" id="environmentGuideNotice">—</div>
+<div class="notice">⚠️ Token נשמר בנפרד לכל Environment ב־session של הדפדפן. מעבר בין Sandbox ל־NonProd מחליף Base URL, Token, Auth Header ו־Execution Mode יחד כדי למנוע ערבוב credentials.</div>
 </div>
 </details>
 <div class="readiness-head">
-<div><b>מוכנות להרצה אמיתית</b><span>האתר בודק מה חסר לפני שמתחילים.</span></div>
+<div><b>מוכנות להרצה אמיתית</b><span>נבדקת מול ה־Environment הפעיל.</span></div>
 <div class="actions-row"><button class="btn" id="readinessBtn">בדוק מוכנות</button></div>
 </div>
 <div class="readiness-grid" id="readinessGrid"></div>
@@ -83,7 +99,7 @@
 </nav>
 <section class="tabpage active" id="dashboard">
 <div class="card start-card">
-<div class="section-head"><div><h2>מה צריך כדי להתחיל</h2><p>Base URL כבר ידוע ומוגדר. החסמים העיקריים להרצות מוגנות הם Token תקין והרשאת משתמש ענן; App ID ו־Case ID מקבלים ברירות מחדל.</p></div><span class="badge question" id="startBadge">ממתין לנתונים</span></div>
+<div class="section-head"><div><h2>מה צריך כדי להתחיל</h2><p>Connection Profile נטען לפי Sandbox או NonProd. החסמים העיקריים להרצות מוגנות הם Token תקין והרשאת משתמש ענן; App ID ו־Case ID מקבלים ברירות מחדל.</p></div><span class="badge question" id="startBadge">ממתין לנתונים</span></div>
 <div class="blocking-summary" id="blockingSummary"></div>
 </div>
 <div class="kpis">
@@ -155,7 +171,7 @@
 <div class="card">
 <h2>מה האתר הזה עושה?</h2>
 <div class="guide-grid">
-<div class="guide-step"><span>1</span><div><b>מחברים ל־TSH</b><p>Base URL כבר מוגדר ל־https://t-sh-apic.taxes.gov.il/ita-chat-router-api. אפשר לבצע בדיקת חיבור ללא Token; להרצות מוגנות מוסיפים Identity Token.</p></div></div>
+<div class="guide-step"><span>1</span><div><b>בוחרים Environment</b><p>Sandbox או NonProd / TSH. ה־Connection Profile טוען אוטומטית Base URL, סוג Token, Auth Header ונתיב הרצה; כל הבדיקות יורשות אותו.</p></div></div>
 <div class="guide-step"><span>2</span><div><b>מריצים בדיקות</b><p>אפשר להריץ טסט יחיד, Pack, Happy Flow או את כל הבדיקות.</p></div></div>
 <div class="guide-step"><span>3</span><div><b>בודקים Evidence</b><p>בכל טסט אמיתי אפשר לראות Request, Response, HTTP status ו־latency ולהעתיק cURL.</p></div></div>
 <div class="guide-step"><span>4</span><div><b>מפרשים תוצאה</b><p>PASS/FAIL הם תוצאה אמיתית; N/A אומר שחסר תנאי; DEMO הוא סימולציה בלבד; QUESTION/BLOCKED דורשים בירור.</p></div></div>
@@ -175,7 +191,7 @@
 <div><b class="status-pass">PASS</b><span>התוצאה בפועל תאמה ל־Expected.</span></div>
 <div><b class="status-fail">FAIL</b><span>התוצאה בפועל לא תאמה ל־Expected.</span></div>
 <div><b class="status-na">N/A</b><span>הבדיקה לא רלוונטית/לא ניתנת להרצה כרגע בגלל נתון חסר.</span></div>
-<div><b class="status-demo">DEMO</b><span>סימולציה מקומית בלבד; לא נשלחה בקשה ל־TSH.</span></div>
+<div><b class="status-demo">DEMO</b><span>סימולציה מקומית בלבד; לא נשלחה בקשה לסביבה הפעילה.</span></div>
 <div><b class="status-question">QUESTION</b><span>אין Expected מוסכם או נדרש בירור.</span></div>
 <div><b class="status-blocked">BLOCKED</b><span>הבדיקה אמורה לרוץ אך חסומה טכנית/הרשאתית.</span></div>
 </div>
@@ -256,11 +272,12 @@
   <div class="api-topline">
     <div>
       <h2>API Runner</h2>
-      <p>Swagger 1.0.6 · שדות מובנים · URL מלא וניתן לעריכה.</p>
+      <p>Swagger 1.0.6 · יורש את סביבת הבדיקה הגלובלית · URL מלא וניתן לעריכה.</p>
     </div>
-    <div class="env-switch">
-      <button class="env-btn active" id="envNonprodBtn" data-env="nonprod">🔒 NonProd / TSH</button>
-      <button class="env-btn" id="envSandboxBtn" data-env="sandbox">🧪 Sandbox</button>
+    <div class="api-inherited-profile">
+      <span>Environment</span>
+      <b id="apiInheritedEnv">—</b>
+      <small>מהגדרות החיבור למעלה</small>
     </div>
   </div>
 
@@ -271,15 +288,19 @@
     <input id="apiFullUrl" class="api-url-edit mono" dir="ltr" aria-label="Full request URL" />
     <button class="btn primary compact-btn" id="apiRunBtn">Send</button>
   </div>
+  <div class="api-url-tools">
+    <span>ה־URL נבנה מה־Environment + Endpoint, וניתן לשנות אותו לבקשה הספציפית.</span>
+    <button class="btn ghost tiny-btn" id="apiResetUrlBtn" type="button">Reset URL</button>
+    <button class="btn ghost tiny-btn" id="apiOverrideBtn" type="button">Override Auth</button>
+  </div>
 
-  <div class="api-auth-strip">
-    <label>Token
-      <input id="apiRunnerToken" class="mono" dir="ltr" autocomplete="off" placeholder="הדבק Token מה-Google CLI" />
+  <div class="api-auth-override" id="apiOverridePanel" hidden>
+    <label>Override Token (ריק = Global Token)
+      <input id="apiOverrideToken" class="mono" dir="ltr" autocomplete="off" placeholder="השאר ריק כדי להשתמש ב־Token הגלובלי" />
     </label>
-    <label>Auth Header
-      <input id="apiRunnerAuthHeader" class="mono" dir="ltr" />
+    <label>Override Auth Header
+      <input id="apiOverrideAuthHeader" class="mono" dir="ltr" placeholder="ריק = Global Auth Header" />
     </label>
-    <div class="api-cli-help" id="apiCliHelp"></div>
   </div>
 
   <div class="api-selector-row">
@@ -410,10 +431,10 @@
 <button class="btn ghost" id="exportStpBtn">הורד STP בעברית</button>
 </div>
 <div class="context-grid">
-<div class="context-card"><h3>מטרת הבדיקות</h3><p>לוודא שה־GenAI Router עובד תקין בסביבת TSH, שומר על הרשאות ובידוד מידע, מנהל שיחות ו־state נכון, ומחזיר תשובות GenAI/RAG אמינות ובטוחות.</p></div>
+<div class="context-card"><h3>מטרת הבדיקות</h3><p>לוודא שה־GenAI Router עובד תקין בסביבת הבדיקה שנבחרה, שומר על הרשאות ובידוד מידע, מנהל שיחות ו־state נכון, ומחזיר תשובות GenAI/RAG אמינות ובטוחות.</p></div>
 <div class="context-card"><h3>Scope – בתוך הבדיקה</h3><p>API, Authentication, Conversations, History, Messages/SSE, Delete, Files/Chunks, Feedback, Statistics, Boundaries, הרשאות, Prompt Injection, RAG ו־State.</p></div>
 <div class="context-card"><h3>מחוץ ל־Scope כרגע</h3><p>Production, עומסים מלאים ללא SLA, אימות DB מלא ללא גישה לטבלאות, ואיכות עסקית סופית ללא Golden Dataset/SME.</p></div>
-<div class="context-card"><h3>סביבת בדיקה</h3><p>TSH / NON-PROD. הזדהות באמצעות Identity Token שמופק ב־gcloud ונשלח ב־X-Serverless-Authorization. תוקף משוער של Token: שעה.</p></div>
+<div class="context-card"><h3>סביבת בדיקה</h3><p>Sandbox או NonProd / TSH מתוך Connection Profile גלובלי. לכל סביבה Base URL, Token ו־Auth Header משלה, והבדיקות האוטומטיות יורשות את הבחירה.</p></div>
 </div>
 </div>
 <div class="card">
@@ -423,13 +444,13 @@
 <div class="card">
 <h2>תנאי כניסה ויציאה</h2>
 <div class="result-grid">
-<div><h3>Entry Criteria – אפשר להתחיל כש...</h3><ul><li>TSH Base URL: <code>https://t-sh-apic.taxes.gov.il/ita-chat-router-api</code>.</li><li>יש משתמש ענן והרשאה ל־Router.</li><li>ניתן להפיק Identity Token תקין.</li><li>Swagger/Contract זמין.</li><li>קיימים App ID, User ID ו־Case ID לבדיקה.</li></ul></div>
+<div><h3>Entry Criteria – אפשר להתחיל כש...</h3><ul><li>נבחר Connection Profile: Sandbox או NonProd.</li><li>יש משתמש ענן והרשאה ל־Router/Invoker.</li><li>ניתן להפיק את סוג ה־Token הנדרש לסביבה הפעילה.</li><li>Swagger/Contract זמין.</li><li>קיימים App ID, User ID ו־Case ID לבדיקה.</li></ul></div>
 <div><h3>Exit Criteria – אפשר לסיים כש...</h3><ul><li>כל בדיקות P0 הקריטיות עברו או שיש חריגה מאושרת ומתועדת.</li><li>אין תקלת אבטחה קריטית פתוחה.</li><li>תוצאות P1/P2 תועדו והסיכונים ידועים.</li><li>פערי Contract שחוסמים PASS/FAIL נסגרו או סומנו במפורש.</li><li>דוח הרצה הופק ונשמר.</li></ul></div>
 </div>
 </div>
 <div class="card">
 <h2>סיכונים ותלויות</h2>
-<ul><li>Token קצר־חיים עלול לפוג באמצע ריצה.</li><li>גישה ל־TSH תלויה ברשת ובהרשאות.</li><li>חלק מה־Expected Results עדיין אינם מוגדרים פורמלית ב־Swagger.</li><li>בדיקות State/Delete דורשות גישה או אישור על AlloyDB/לוגים.</li><li>בדיקות GenAI דורשות מקור אמת או SME כדי להכריע איכות עסקית.</li></ul>
+<ul><li>Token קצר־חיים עלול לפוג באמצע ריצה.</li><li>גישה ל־Sandbox/NonProd תלויה ברשת ובהרשאות המתאימות.</li><li>חלק מה־Expected Results עדיין אינם מוגדרים פורמלית ב־Swagger.</li><li>בדיקות State/Delete דורשות גישה או אישור על AlloyDB/לוגים.</li><li>בדיקות GenAI דורשות מקור אמת או SME כדי להכריע איכות עסקית.</li></ul>
 </div>
 </div>
 <div class="subpage" data-subpage="qaStd">

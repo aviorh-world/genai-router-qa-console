@@ -64,3 +64,9 @@ The full URL is always visible and editable. Tokens are displayed unmasked. Bear
 
 ## API Runner proxy hotfix
 API Runner requests are now sent Browser → `/api/proxy` → selected target environment, avoiding browser CORS/preflight failures against Cloud Run/APIC. The full target URL remains visible/editable in the UI. Sandbox default userId is now `aviorha@ita.gov.il`. The proxy allowlist includes the Sandbox Router, Sandbox direct RAG service, and TSH APIC host; additional hosts can still be added with `TSH_ALLOWED_HOSTS`.
+
+
+## Global Connection Profiles
+The console now has one global Environment selector used by automated tests, Auto Flow, GenAI/RAG and API Runner. Sandbox uses `https://chat-router-942568278050.me-west1.run.app/ita-chat-router-api`, Identity Token, `X-Serverless-Authorization`, and defaults to Vercel Proxy. NonProd / TSH uses `https://t-sh-apic.taxes.gov.il/ita-chat-router-api`, Access Token, `Authorization`, and defaults to Browser Direct. Tokens are kept separately per environment in browser session storage. API Runner inherits the global profile; per-request URL and optional auth override remain available.
+
+Case ID note: Swagger 1.0.6 defines exactly 9 digits, while the newer Sandbox email example contains 10 digits. The console therefore shows the contradiction and does not locally block numeric Case IDs.

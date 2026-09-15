@@ -5,7 +5,8 @@ const state = {
   lastExchange: null, bulkRunning: false, uiSelfTest: null,
   goldenDataset: [], goldenResults: {}, goldenEditingId: null, goldenRuns: [], currentGoldenRunId: null,
   investigations: {}, runHistory: [], bugDraft: null,
-  catalogPage: 1, catalogPageSize: 15
+  catalogPage: 1, catalogPageSize: 15,
+  environment: 'nonprod', tokenMetaByEnv: {}, connectionByEnv: {}
 };
 
 const $ = (id) => document.getElementById(id);
@@ -15,7 +16,72 @@ const now = () => new Date().toISOString();
 const clone = (v) => v == null ? v : JSON.parse(JSON.stringify(v));
 const RUN_HISTORY_KEY='genai-router-qa-run-history-v002';
 const CASE_ID_KEY='genaiQaCaseIdCounterV1';
-const DEFAULT_TSH_BASE_URL='https://t-sh-apic.taxes.gov.il/ita-chat-router-api';
+const ENVIRONMENT_KEY='genaiQaGlobalEnvironmentV1';
+const PROFILE_KEY_PREFIX='genaiQaEnvProfileV1:';
+const TOKEN_KEY_PREFIX='genaiQaEnvTokenV1:';
+const ENV_PROFILES={
+  nonprod:{
+    label:'NonProd / TSH', shortLabel:'NonProd',
+    baseUrl:'https://t-sh-apic.taxes.gov.il/ita-chat-router-api',
+    userId:'aviorha@ita.gov.il', appId:'Desktop',
+    tokenLabel:'Access Token', tokenCommand:'gcloud auth print-access-token',
+    authHeader:'Authorization', executionMode:'direct',
+    guide:'NonProd / TSH: הפק Access Token באמצעות gcloud auth print-access-token. ברירת המחדל היא Browser Direct כדי שהקריאה תצא מהרשת שלך אל APIC.'
+  },
+  sandbox:{
+    label:'Sandbox', shortLabel:'Sandbox',
+    baseUrl:'https://chat-router-942568278050.me-west1.run.app/ita-chat-router-api',
+    userId:'aviorha@ita.gov.il', appId:'Desktop',
+    tokenLabel:'Identity Token', tokenCommand:'gcloud auth print-identity-token',
+    authHeader:'X-Serverless-Authorization', executionMode:'proxy',
+    guide:'Sandbox: הפק Identity Token באמצעות gcloud auth print-identity-token. הוא נשלח כ-X-Serverless-Authorization: Bearer <TOKEN>. נדרשת הרשאת Cloud Run Invoker.'
+  }
+};
+let activeEnvironment=localStorage.getItem(ENVIRONMENT_KEY)||'nonprod';
+if(!ENV_PROFILES[activeEnvironment])activeEnvironment='nonprod';
+const DEFAULT_TSH_BASE_URL=ENV_PROFILES.nonprod.baseUrl;
+function envProfile(){return ENV_PROFILES[activeEnvironment]||ENV_PROFILES.nonprod;}
+function profileStorageKey(env=activeEnvironment){return PROFILE_KEY_PREFIX+env;}
+function tokenStorageKey(env=activeEnvironment){return TOKEN_KEY_PREFIX+env;}
+function loadStoredProfile(env){try{return JSON.parse(localStorage.getItem(profileStorageKey(env))||'{}')||{};}catch{return {};}}
+function saveActiveProfileInputs(){
+  if(!$('baseUrl'))return;
+  const data={baseUrl:$('baseUrl').value.trim(),userId:$('userId').value.trim(),appId:$('appId').value.trim(),authHeader:$('authHeader')?.value||envProfile().authHeader,executionMode:$('executionMode')?.value||envProfile().executionMode};
+  try{localStorage.setItem(profileStorageKey(),JSON.stringify(data));sessionStorage.setItem(tokenStorageKey(),$('token').value||'');}catch{}
+}
+function saveTokenMetaForEnv(){state.tokenMetaByEnv[activeEnvironment]={markedAt:state.tokenMarkedAt||null,status:state.tokenStatus||null,http:state.tokenValidationHttp||null};state.connectionByEnv[activeEnvironment]=!!state.connectionOk;}
+function loadTokenMetaForEnv(){const m=state.tokenMetaByEnv[activeEnvironment]||{};state.tokenMarkedAt=m.markedAt||null;state.tokenStatus=m.status||null;state.tokenValidationHttp=m.http||null;state.connectionOk=!!state.connectionByEnv[activeEnvironment];}
+function setGlobalEnvironment(name,{initial=false}={}){
+  if(!ENV_PROFILES[name])return;
+  if(!initial){saveActiveProfileInputs();saveTokenMetaForEnv();}
+  activeEnvironment=name;state.environment=name;try{localStorage.setItem(ENVIRONMENT_KEY,name);}catch{}
+  const d=ENV_PROFILES[name], saved=loadStoredProfile(name);
+  $('baseUrl').value=saved.baseUrl||d.baseUrl;
+  $('userId').value=saved.userId||d.userId;
+  $('appId').value=saved.appId||d.appId;
+  $('authHeader').value=saved.authHeader||d.authHeader;
+  $('executionMode').value=saved.executionMode||d.executionMode;
+  try{$('token').value=sessionStorage.getItem(tokenStorageKey(name))||'';}catch{$('token').value='';}
+  loadTokenMetaForEnv();
+  document.querySelectorAll('[data-global-env]').forEach(b=>b.classList.toggle('active',b.dataset.globalEnv===name));
+  if($('globalEnvName'))$('globalEnvName').textContent=d.label;
+  if($('globalEnvSummary'))$('globalEnvSummary').textContent=`${d.tokenLabel} · ${d.authHeader}`;
+  if($('baseUrlLabel'))$('baseUrlLabel').textContent=`${d.label} Base URL`;
+  if($('baseUrlHelp'))$('baseUrlHelp').textContent='Connection Profile פעיל. ניתן לערוך את הכתובת, והיא תישמר בנפרד לסביבה זו.';
+  if($('tokenLabel'))$('tokenLabel').textContent=d.tokenLabel;
+  if($('token'))$('token').placeholder=d.tokenCommand;
+  if($('tokenCommandHelp'))$('tokenCommandHelp').textContent=d.tokenCommand;
+  if($('executionModeHelp'))$('executionModeHelp').textContent=name==='sandbox'?'Sandbox משתמש כברירת מחדל ב־Vercel Proxy כדי להימנע מ־CORS.':'NonProd משתמש כברירת מחדל ב־Browser Direct; ניתן לשנות ידנית.';
+  if($('environmentGuideNotice'))$('environmentGuideNotice').innerHTML=`<b>${esc(d.label)}:</b> ${esc(d.guide)} <br/><code>${esc(d.baseUrl)}</code>`;
+  if($('environmentIntro'))$('environmentIntro').textContent=`Environment פעיל: ${d.label}. כל הבדיקות, Auto Flow ו־API Runner משתמשים באותו Profile.`;
+  if($('apiInheritedEnv'))$('apiInheritedEnv').textContent=d.label;
+  if($('goldenEnvironment'))$('goldenEnvironment').value=d.label;
+  if($('apiEnvHint'))$('apiEnvHint').textContent=`Inherited: ${d.baseUrl} · ${d.authHeader} · ${d.tokenCommand}`;
+  setConn(state.connectionOk?`${d.shortLabel} · מחובר`:`${d.shortLabel} · לא נבדק`,state.connectionOk?'pass':'neutral');
+  updateTokenCountdown();readiness();
+  if(state.operations.length)syncApiTemplate();
+}
+
 function redactForAi(value,key=''){
   if(value==null)return value;
   const sensitive=/(token|authorization|password|secret|api[-_]?key|private[-_]?key)/i;
@@ -43,12 +109,12 @@ function updateCaseIdHelp(){
   if(!el||!input) return;
   const v=input.value.trim();
   if(!v){el.textContent='לא הוזן Case ID. בלחיצה על "חדש" יווצר מזהה בדיקה ייחודי.';return;}
-  el.textContent=validCaseId(v)?'Case ID בדיקה תקין למעקב. אפשר לשנות ידנית או ליצור חדש.':'Case ID צריך להיות 9 ספרות אם מחליטים לשלוח אותו.';
+  el.textContent=validCaseId(v)?'Case ID מספרי. Swagger 1.0.6 מגדיר 9 ספרות, אך בדוגמת Sandbox החדשה הופיעו 10; לכן האתר אינו חוסם מקומית.':'Case ID צריך להיות מספרי. Swagger 1.0.6 מגדיר 9 ספרות; בדוגמת Sandbox החדשה הופיעו 10.';
 }
 function ensureCaseId(force=false){
   const el=$('caseId'); if(!el) return;
   const current=el.value.trim();
-  if(force || !validCaseId(current) || current==='123456789') el.value=nextCaseId();
+  if(force || !current || current==='123456789') el.value=nextCaseId();
   updateCaseIdHelp();
 }
 function showToast(message,kind='info',ms=3200){
@@ -626,36 +692,41 @@ function renderEndpointGuide(){
   }).join('');
 }
 
-function validCaseId(v){ return /^\d{9}$/.test(v||''); }
+function validCaseId(v){ return !v || /^\d{1,20}$/.test(v||''); }
 function readiness(){
-  const c=cfg();
+  const c=cfg(), p=envProfile();
   const tokenAge = state.tokenMarkedAt ? Date.now()-state.tokenMarkedAt : null;
   const tokenFresh = !c.token ? false : tokenAge==null ? true : tokenAge < 60*60*1000;
+  const caseOk=!c.caseId||validCaseId(c.caseId);
   const items=[
-    ['TSH Base URL',!!c.baseUrl,`כתובת ידועה: ${DEFAULT_TSH_BASE_URL}`],
-    ['Identity Token',!!c.token&&tokenFresh,'gcloud auth print-identity-token · אפשר לאמת דרך כפתור בדיקת Token · תוקף ~שעה'],
-    ['App ID',!!c.appId,'ברירת מחדל מה-Swagger: Desktop'],
-    ['User ID',!!c.userId,'aviorha@ita.gov.il'],
-    ['Case ID',!c.caseId||validCaseId(c.caseId),'לא blocker; אם נשלח — 9 ספרות'],
-    ['Cloud Access',c.cloudAccessConfirmed||state.connectionOk,'משתמש ענן + הרשאה לשירות Router']
+    ['Environment',true,p.label],
+    ['Base URL',!!c.baseUrl,c.baseUrl||p.baseUrl],
+    [p.tokenLabel,!!c.token&&tokenFresh,`${p.tokenCommand} · Bearer מתווסף אוטומטית`],
+    ['Auth Header',!!c.authHeader,c.authHeader],
+    ['App ID',!!c.appId,'ברירת מחדל: Desktop'],
+    ['User ID',!!c.userId,c.userId||p.userId],
+    ['Case ID',caseOk,'לא blocker; Swagger 1.0.6=9 ספרות, דוגמת Sandbox חדשה=10 ספרות'],
+    ['Cloud Access',c.cloudAccessConfirmed||state.connectionOk,'משתמש ענן + הרשאת Invoker/גישה מתאימה']
   ];
   if($('readinessGrid')) $('readinessGrid').innerHTML=items.map(([n,ok,d])=>`<div class="ready-item ${ok?'ok':'missing'}"><b>${ok?'✓':'○'} ${esc(n)}</b><span>${esc(d)}</span></div>`).join('');
   const executable = c.executionMode!=='postman';
   const core=[
-    ['Connection target',!!c.baseUrl,DEFAULT_TSH_BASE_URL],
-    ['Identity',!!c.token&&tokenFresh&&!!c.userId,'Authorization: Bearer <TOKEN> + userId @ita.gov.il'],
-    ['Test defaults',!!c.appId&&(!c.caseId||validCaseId(c.caseId)),'App ID=Desktop; Case ID יכול להיות ערך בדיקה'],
-    ['Execution path',executable,'Browser Direct / Proxy; במצב Postman האתר מייצר בקשות בלבד']
+    ['Environment',true,p.label],
+    ['Connection target',!!c.baseUrl,c.baseUrl],
+    ['Identity',!!c.token&&tokenFresh&&!!c.userId,`${p.tokenLabel} · ${c.authHeader}: Bearer <TOKEN>`],
+    ['Test defaults',!!c.appId&&caseOk,`App ID=${c.appId||'—'}; Case ID ניתן לעריכה`],
+    ['Execution path',executable,c.executionMode==='proxy'?'Vercel Proxy → Router':c.executionMode==='direct'?'Browser Direct → Router':'cURL only']
   ];
   if($('blockingSummary')) $('blockingSummary').innerHTML=core.map(([n,ok,d])=>`<div class="block-card"><b>${ok?'✅':'⏳'} ${esc(n)}</b><small>${esc(d)}</small></div>`).join('');
   const all=core.every(x=>x[1]); const badge=$('startBadge'); if(badge){badge.textContent=all?'מוכן להרצה':'ממתין לנתונים';badge.className='badge '+(all?'pass':'question');}
+  if($('globalEnvSummary'))$('globalEnvSummary').textContent=`${p.tokenLabel} · ${c.authHeader} · ${c.executionMode}`;
   updateTokenCountdown();
   return all;
 }
 function markTokenNow(){ state.tokenMarkedAt=Date.now(); state.tokenStatus='manual'; state.tokenValidationHttp=null; updateTokenCountdown(); readiness(); }
 function updateTokenCountdown(){
   const el=$('tokenExpiry'); if(!el) return;
-  if(!state.tokenMarkedAt){el.textContent='לא אומת עדיין. אפשר לסמן ידנית או לבצע "בדיקת Token".';el.className='field-help';return;}
+  if(!state.tokenMarkedAt){el.textContent=`${envProfile().tokenLabel}: לא אומת עדיין. אפשר לסמן ידנית או לבצע "בדיקת Token".`;el.className='field-help';return;}
   const remain=60*60*1000-(Date.now()-state.tokenMarkedAt);
   const prefix=state.tokenStatus==='valid' ? `Token אומת בהצלחה${state.tokenValidationHttp?` · HTTP ${state.tokenValidationHttp}`:''}` :
     state.tokenStatus==='invalid' ? `Token לא אומת${state.tokenValidationHttp?` · HTTP ${state.tokenValidationHttp}`:''}` :
@@ -669,7 +740,7 @@ function updateTokenCountdown(){
 async function validateToken(){
   const c=cfg();
   if(c.executionMode==='postman'){showToast('במצב Postman אי אפשר לאמת Token מהדפדפן. העתק cURL והרץ בסביבה הפנימית.', 'warning', 5000); return;}
-  if(!c.baseUrl || !c.token || !c.appId || !c.userId){showToast('כדי לאמת Token יש למלא Base URL, Token, App ID ו-User ID.', 'warning', 5000); return;}
+  if(!c.baseUrl || !c.token || !c.appId || !c.userId){showToast(`כדי לאמת ${envProfile().tokenLabel} יש למלא Base URL, Token, App ID ו-User ID.`, 'warning', 5000); return;}
   try{
     const body={appId:c.appId,userId:c.userId,...(c.caseId?{caseId:c.caseId}:{}),limit:1,offset:0};
     const r=await proxy({method:'POST',path:'/v1/conversations/history',body});
@@ -733,12 +804,14 @@ function saveManual(status){ const id=state.selectedTestId;if(!id)return; const 
 
 
 function cfg(){
+  const p=envProfile();
   return {
-    baseUrl:normalizeBaseUrl($('baseUrl').value.trim()||DEFAULT_TSH_BASE_URL), token:$('token').value.trim(), appId:$('appId').value.trim(),
+    environment:activeEnvironment, environmentLabel:p.label,
+    baseUrl:normalizeBaseUrl($('baseUrl').value.trim()||p.baseUrl), token:$('token').value.trim(), appId:$('appId').value.trim(),
     userId:$('userId').value.trim(), caseId:$('caseId').value.trim() || null,
     userIdB:$('userIdB').value.trim(), tokenB:$('tokenB').value.trim(),
     conversationId:$('conversationId').value.trim(), messageId:$('messageId').value.trim(),
-    executionMode:$('executionMode')?.value || 'direct', authHeader:$('authHeader')?.value || 'Authorization', cloudAccessConfirmed:!!$('cloudAccessConfirmed')?.checked
+    executionMode:$('executionMode')?.value || p.executionMode, authHeader:$('authHeader')?.value || p.authHeader, cloudAccessConfirmed:!!$('cloudAccessConfirmed')?.checked
   };
 }
 function requireFields(names){ const c=cfg(); const missing=names.filter(n=>!c[n]); if(missing.length) throw new Error('חסרים שדות: '+missing.join(', ')); return c; }
@@ -785,7 +858,7 @@ async function loadData(){
     ['BND-016','P1','Statistics','/v1/statistics/active-users','Timestamp ללא 3 ספרות מילישניות','שלח ...00Z במקום ...00.000Z','4xx Validation','auto']
   ];
   for (const [ID,priority,domain,Endpoint,scenario,steps,expected,mode] of boundaryTests) {
-    state.tests.push({ID,priority,mode,'תחום':domain,Endpoint,'תרחיש בדיקה':scenario,'תנאים מקדימים':'Base URL + Identity Token תקינים','צעדים / קלט':steps,'Expected Result':expected,'שאלה פתוחה / נדרש אישור':'','מקור / הערה':'Boundary Pack v1.3'});
+    state.tests.push({ID,priority,mode,'תחום':domain,Endpoint,'תרחיש בדיקה':scenario,'תנאים מקדימים':'Base URL + Token תקינים לסביבה הפעילה','צעדים / קלט':steps,'Expected Result':expected,'שאלה פתוחה / נדרש אישור':'','מקור / הערה':'Boundary Pack v1.3'});
   }
 
   const ragSpecTests = [
@@ -859,15 +932,15 @@ function requestBody(path,method,c=cfg()){
     case 'POST /v1/conversations/id': case 'DELETE /v1/conversations/id': return {conversationId:c.conversationId,userId:c.userId};
     case 'POST /v1/conversations/messages': return {conversationId:c.conversationId,userId:c.userId,appId:c.appId,...(c.caseId?{caseId:c.caseId}:{}),content:'בדיקת QA'};
     case 'POST /v1/messages/send/feedback': return {messageId:c.messageId,feedbackType:'thumbs_up'};
-    case 'POST /v1/conversations/fetch/chunks/text': return {chunks:[{bucketName:'REPLACE_ME',fileName:'REPLACE_ME.pdf',chunkId:0}]};
+    case 'POST /v1/conversations/fetch/chunks/text': return {chunks:[{documentBucket:'REPLACE_ME',documentFileName:'REPLACE_ME.pdf',chunkId:0}]};
     case 'POST /v1/files/download': return {bucketName:'REPLACE_ME',fileName:'REPLACE_ME.pdf'};
     default: if(path.includes('/statistics/')) return {startDate:new Date(Date.now()-86400000).toISOString(),endDate:new Date().toISOString()}; return {};
   }
 }
 
 function normalizeBaseUrl(baseUrl=''){
-  let raw=String(baseUrl||DEFAULT_TSH_BASE_URL).trim();
-  if(!raw) raw=DEFAULT_TSH_BASE_URL;
+  let raw=String(baseUrl||envProfile().baseUrl).trim();
+  if(!raw) raw=envProfile().baseUrl;
   raw=raw.replace(/\/+$/,'');
   raw=raw.replace(/\/v1$/i,'');
   return raw;
@@ -883,12 +956,12 @@ function targetUrl(baseUrl,path){
   const cleanPath=normalizeApiPath(path).replace(/^\/+/, '');
   const b=base.endsWith('/')?base:base+'/';
   const u=new URL(cleanPath,b);
-  if(u.protocol!=='https:') throw new Error('TSH Base URL חייב להיות HTTPS');
+  if(u.protocol!=='https:') throw new Error('Base URL חייב להיות HTTPS');
   return u.toString();
 }
 function normalizeBaseUrlField(){
   const el=$('baseUrl'); if(!el)return;
-  const before=el.value.trim(); const after=normalizeBaseUrl(before||DEFAULT_TSH_BASE_URL);
+  const before=el.value.trim(); const after=normalizeBaseUrl(before||envProfile().baseUrl);
   el.value=after;
   if(before && before!==after) showToast('Base URL נורמל: הוסר /v1 או / מיותר כדי למנוע כפילות ב-Endpoints.','info',4500);
   readiness();
@@ -901,7 +974,7 @@ async function directRequest({method,path,body,token,stream=false}){
   if(body!==undefined && body!==null && method.toUpperCase()!=='GET'){headers['Content-Type']='application/json';payload=JSON.stringify(body);}
   const started=Date.now(); let res;
   try{res=await fetch(url,{method:method.toUpperCase(),headers,body:payload});}
-  catch(e){finishExchange({error:e.message,latencyMs:Date.now()-started});throw new Error('Browser Direct נכשל. ייתכן CORS או שאין גישה מהרשת הנוכחית ל-TSH. נסה Postman מתוך SH/TSH. '+(e.message||''));}
+  catch(e){finishExchange({error:e.message,latencyMs:Date.now()-started});throw new Error('Browser Direct נכשל. ייתכן CORS או שאין גישה מהרשת הנוכחית לסביבה הפעילה. נסה Vercel Proxy או Postman בהתאם לסביבה. '+(e.message||''));}
   const ct=res.headers.get('content-type')||'', latencyMs=Date.now()-started;
   if(stream||ct.includes('text/event-stream')){finishExchange({status:res.status,latencyMs,contentType:ct,stream:true,body:'[SSE stream — body מתעדכן לאחר הקריאה]'});return {status:res.status,stream:res.body,headers:res.headers,latencyMs};}
   const txt=await res.text(); let parsed=txt; try{parsed=JSON.parse(txt)}catch{}
@@ -909,25 +982,26 @@ async function directRequest({method,path,body,token,stream=false}){
   return {status:res.status,body:parsed,raw:txt,latencyMs,contentType:ct,isBinary:false};
 }
 async function proxy({method,path,body,token,stream=false}){
-  const c=cfg(); path=normalizeApiPath(path); beginExchange({method,path,body,token,mode:state.demo?'DEMO':c.executionMode});
+  const c=cfg(); path=normalizeApiPath(path); beginExchange({method,path,body,token,mode:state.demo?'DEMO':`${c.environmentLabel} · ${c.executionMode}`});
   if(state.demo){const r=await demoResponse(method,path,body,stream);finishExchange({status:r.status,body:stream?'[Demo SSE stream]':r.body,latencyMs:r.latencyMs??0,contentType:r.contentType||'',stream});return r;}
-  if(!c.baseUrl){finishExchange({error:'חסר TSH Base URL'});throw new Error('יש להזין TSH Base URL');}
-  if(c.executionMode==='postman'){finishExchange({error:'Postman mode — לא נשלחה בקשה'});throw new Error('מצב Postman/cURL אינו מריץ בקשות מהדפדפן. השתמש בכפתור "העתק cURL" והרץ בתוך הסביבה הפנימית.');}
+  if(!c.baseUrl){finishExchange({error:'חסר Base URL'});throw new Error('יש להזין Base URL');}
+  if(c.executionMode==='postman'){finishExchange({error:'Postman mode — לא נשלחה בקשה'});throw new Error('מצב Postman/cURL אינו מריץ בקשות. השתמש בכפתור Copy cURL.');}
   if(c.executionMode==='direct') return directRequest({method,path,body,token,stream});
-  const started=Date.now();
-  let res; try{res=await fetch('/api/proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({baseUrl:c.baseUrl,token:token===undefined?c.token:token,authHeader:c.authHeader,method,apiPath:path,body,stream})});}
-  catch(e){finishExchange({error:e.message,latencyMs:Date.now()-started});throw e;}
-  if(stream){finishExchange({status:res.status,latencyMs:Date.now()-started,contentType:res.headers.get('content-type')||'',stream:true,body:'[SSE stream — body מתעדכן לאחר הקריאה]'});return {status:res.status,stream:res.body,headers:res.headers,latencyMs:Date.now()-started};}
-  const wrapper=await res.json();
-  if(!res.ok){finishExchange({status:res.status,body:wrapper,latencyMs:Date.now()-started,error:wrapper.error||'Proxy error'});throw new Error(wrapper.error||'Proxy error');}
-  let parsed=wrapper.body; try{parsed=JSON.parse(wrapper.body)}catch{}
-  finishExchange({status:wrapper.upstreamStatus,body:parsed,latencyMs:wrapper.latencyMs,contentType:wrapper.contentType});
-  return {status:wrapper.upstreamStatus, body:parsed, raw:wrapper.body, latencyMs:wrapper.latencyMs, contentType:wrapper.contentType, isBinary:wrapper.isBinary};
+  const url=targetUrl(c.baseUrl,path), started=Date.now();
+  let res;
+  try{
+    res=await fetch('/api/proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,token:token===undefined?c.token:token,authHeader:c.authHeader,method,body,accept:'application/json, text/event-stream, */*'})});
+  }catch(e){finishExchange({error:e.message,latencyMs:Date.now()-started});throw new Error('NETWORK/PROXY: '+(e.message||'Failed to fetch'));}
+  const ct=res.headers.get('content-type')||'', latencyMs=Date.now()-started;
+  if(stream&&ct.includes('text/event-stream')){finishExchange({status:res.status,latencyMs,contentType:ct,stream:true,body:'[SSE stream — body מתעדכן לאחר הקריאה]'});return {status:res.status,stream:res.body,headers:res.headers,latencyMs};}
+  const txt=await res.text();let parsed=txt;try{parsed=JSON.parse(txt)}catch{}
+  finishExchange({status:res.status,body:parsed,latencyMs,contentType:ct,error:res.ok?undefined:(parsed?.error||'HTTP '+res.status)});
+  return {status:res.status,body:parsed,raw:txt,latencyMs,contentType:ct,isBinary:false};
 }
 function buildCurl(method,path,body){
-  const c=cfg(); const base=c.baseUrl||'<TSH_BASE_URL>'; let url;
+  const c=cfg(); const base=c.baseUrl||'<BASE_URL>'; let url;
   try{url=targetUrl(base,path)}catch{url=`${base.replace(/\/$/,'')}${path}`;}
-  const parts=[`curl -i -X ${method.toUpperCase()} '${url}'`,`  -H 'Authorization: Bearer <IDENTITY_TOKEN>'`,`  -H 'Accept: application/json, text/event-stream, */*'`];
+  const parts=[`curl -i -X ${method.toUpperCase()} '${url}'`,`  -H '${c.authHeader}: Bearer <${envProfile().tokenLabel.toUpperCase().replace(/\s+/g,'_')}>'`,`  -H 'Accept: application/json, text/event-stream, */*'`];
   if(body!==undefined && body!==null && method.toUpperCase()!=='GET'){
     parts.push(`  -H 'Content-Type: application/json'`);
     const json=JSON.stringify(body).replace(/'/g,"'\\''");
@@ -1114,10 +1188,10 @@ let activeMethodFlow='lifecycle';
 function renderMethodFlows(){const h=$('journeyGrid');if(!h)return;h.innerHTML=METHODOLOGICAL_FLOWS.map(f=>`<button class="journey-card ${f.id===activeMethodFlow?'active':''}" data-flow="${f.id}"><span class="journey-top"><b>${esc(f.title)}</b><span>${esc(f.badge)}</span></span><span>${esc(f.description)}</span><small>${esc(f.priority)} · ${esc(f.steps)}</small></button>`).join('');h.querySelectorAll('[data-flow]').forEach(b=>b.onclick=()=>{activeMethodFlow=b.dataset.flow;renderMethodFlows();prepareMethodFlow();});}
 function activeFlow(){return METHODOLOGICAL_FLOWS.find(f=>f.id===activeMethodFlow)||METHODOLOGICAL_FLOWS[0];}
 function prepareMethodFlow(){const f=activeFlow();if($('activeFlowTitle'))$('activeFlowTitle').textContent=f.title;if($('activeFlowDescription'))$('activeFlowDescription').textContent=f.description+' '+f.steps;if($('flowSteps'))$('flowSteps').innerHTML='<div class="detail-row na-explanation"><b>מוכן להרצה</b>כל מזהה שנוצר עובר אוטומטית לשלב הבא.</div>';}
-function flowCfg(){const c=cfg(),m=[];if(!state.demo&&!c.baseUrl)m.push('TSH Base URL');if(!state.demo&&!c.token)m.push('Identity Token');if(!c.appId)m.push('App ID');if(!c.userId)m.push('User ID');if(c.executionMode==='postman')m.push('Execution Mode');if(m.length)throw new Error('לא ניתן להתחיל Flow — חסר: '+m.join(', '));return c;}
+function flowCfg(){const c=cfg(),m=[];if(!state.demo&&!c.baseUrl)m.push('Base URL');if(!state.demo&&!c.token)m.push(envProfile().tokenLabel);if(!c.appId)m.push('App ID');if(!c.userId)m.push('User ID');if(c.executionMode==='postman')m.push('Execution Mode');if(m.length)throw new Error('לא ניתן להתחיל Flow — חסר: '+m.join(', '));return c;}
 function flowCaseVariant(base,d){const n=parseInt(String(base||'100000000').replace(/\D/g,''),10)||100000000;return String(Math.min(999999999,Math.max(100000000,n+d))).padStart(9,'0');}
 async function executeFlowSteps(steps){$('flowSteps').innerHTML=steps.map((s,i)=>`<div class="flow-step" id="flow-${i}"><b>${esc(s.name)}</b><span>WAIT</span><pre>—</pre></div>`).join('');for(let i=0;i<steps.length;i++){const s=steps[i],row=$(`flow-${i}`),st=row.querySelector('span'),pre=row.querySelector('pre');st.textContent='RUN';try{const o=await s.run(pre),ok=o?.ok!==false;st.textContent=state.demo?'DEMO':(ok?'PASS':(o?.label||'FAIL'));st.className=state.demo?'status-demo':(ok?'status-pass':'status-fail');if(o?.text)pre.textContent=o.text;if(!ok&&!state.demo)return false;}catch(e){st.textContent='BLOCKED';st.className='status-blocked';pre.textContent=e.message;showToast(`${s.name}: ${e.message}`,'error',5000);return false;}}return true;}
-async function flowApi(method,path,body,pre,stream=false){state.lastExchange=null;if(stream){const r=await proxy({method,path,body,stream:true});const txt=await readStream(r.stream,(x,full)=>pre.textContent=full.slice(-4000));return {status:r.status,body:txt,text:`REQUEST\n${JSON.stringify(state.lastExchange?.request,null,2)}\n\nRESPONSE\n${txt.slice(-3000)}`};}const r=await proxy({method,path,body});return {status:r.status,body:r.body,text:`REQUEST\n${JSON.stringify(state.lastExchange?.request,null,2)}\n\nRESPONSE\n${JSON.stringify(r.body,null,2).slice(0,3000)}`};}
+async function flowApi(method,path,body,pre,stream=false){state.lastExchange=null;if(stream){const r=await proxy({method,path,body,stream:true});if(!r.stream){const out=typeof r.body==='string'?r.body:JSON.stringify(r.body,null,2);pre.textContent=out.slice(-4000);return {status:r.status,body:r.body,text:`REQUEST\n${JSON.stringify(state.lastExchange?.request,null,2)}\n\nRESPONSE\n${out.slice(-3000)}`};}const txt=await readStream(r.stream,(x,full)=>pre.textContent=full.slice(-4000));return {status:r.status,body:txt,text:`REQUEST\n${JSON.stringify(state.lastExchange?.request,null,2)}\n\nRESPONSE\n${txt.slice(-3000)}`};}const r=await proxy({method,path,body});return {status:r.status,body:r.body,text:`REQUEST\n${JSON.stringify(state.lastExchange?.request,null,2)}\n\nRESPONSE\n${JSON.stringify(r.body,null,2).slice(0,3000)}`};}
 async function happyFlow(){activateTab('flow');const c=flowCfg(),f=activeFlow();let A='',B='';const create=async(caseId,p)=>{const r=await flowApi('POST','/v1/conversations/new',{appId:c.appId,userId:c.userId,...(caseId?{caseId}:{})},p);const id=extractConversationId(r.body)||'';if(!id)throw new Error('לא התקבל conversationId');return {r,id};};const send=(id,caseId,content,p)=>flowApi('POST','/v1/conversations/messages',{conversationId:id,userId:c.userId,appId:c.appId,...(caseId?{caseId}:{}),content},p,true);const get=(id,p)=>flowApi('POST','/v1/conversations/id',{conversationId:id,userId:c.userId},p);const hist=(caseId,p)=>flowApi('POST','/v1/conversations/history',{appId:c.appId,userId:c.userId,...(caseId?{caseId}:{}),limit:20,offset:0},p);const q=$('flowQuestion').value.trim()||'בדיקת QA';let steps=[];
 if(f.id==='lifecycle')steps=[{name:'Create Conversation',run:async p=>{const x=await create(c.caseId,p);A=x.id;$('conversationId').value=A;return {ok:x.r.status===201,text:x.r.text};}},{name:'History after Create',run:async p=>{const r=await hist(c.caseId,p);return {ok:r.status>=200&&r.status<300,text:r.text};}},{name:'Send Message',run:async p=>{const r=await send(A,c.caseId,q,p);return {ok:r.status>=200&&r.status<300,text:r.text};}},{name:'Get Conversation',run:async p=>{const r=await get(A,p);return {ok:r.status>=200&&r.status<300,text:r.text};}},{name:'Delete Conversation',run:async p=>{const r=await flowApi('DELETE','/v1/conversations/id',{conversationId:A,userId:c.userId},p);return {ok:r.status>=200&&r.status<300,text:r.text};}},{name:'Verify deletion',run:async p=>{const r=await hist(c.caseId,p),raw=JSON.stringify(r.body||{});return {ok:r.status>=200&&r.status<300&&!raw.includes(A),label:'FAIL · עדיין מופיעה',text:r.text};}}];
 else if(f.id==='continue')steps=[{name:'Create Conversation',run:async p=>{const x=await create(c.caseId,p);A=x.id;return {ok:x.r.status===201,text:x.r.text};}},{name:'Question #1',run:async p=>{const r=await send(A,c.caseId,q,p);return {ok:r.status>=200&&r.status<300,text:r.text};}},{name:'Return to previous Conversation',run:async p=>{const r=await get(A,p);return {ok:r.status>=200&&r.status<300,text:r.text};}},{name:'Contextual Follow-up',run:async p=>{const r=await send(A,c.caseId,'בהמשך לתשובה הקודמת, תן סיכום קצר של הנקודה המרכזית.',p);return {ok:r.status>=200&&r.status<300,text:r.text};}},{name:'Verify persisted Conversation',run:async p=>{const r=await get(A,p);return {ok:r.status>=200&&r.status<300,text:r.text};}}];
@@ -1281,88 +1355,38 @@ function renderReport(){
 function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderRunHistory();renderContract();renderContext();renderRagSpec();renderStpStd();renderEndpointGuide();renderAiQaLessons();renderGlossary($('glossarySearch')?.value||'');renderGolden();wireGlossaryLinks();readiness();}
 
 
-const API_ENVIRONMENTS={
-  nonprod:{
-    label:'NonProd / TSH',
-    baseUrl:'https://t-sh-apic.taxes.gov.il/ita-chat-router-api',
-    userId:'aviorha@ita.gov.il',
-    appId:'Desktop',
-    authHeader:'Authorization',
-    tokenCommand:'gcloud auth print-access-token',
-    hint:'NonProd / TSH · Access Token מה-Google CLI. ה-Header ניתן לעריכה ידנית.'
-  },
-  sandbox:{
-    label:'Sandbox',
-    baseUrl:'https://chat-router-942568278050.me-west1.run.app',
-    userId:'aviorha@ita.gov.il',
-    appId:'Desktop',
-    authHeader:'X-Serverless-Authorization',
-    tokenCommand:'gcloud auth print-identity-token',
-    hint:'Sandbox · Identity Token · X-Serverless-Authorization: Bearer <token>'
-  }
-};
-let activeApiEnv=localStorage.getItem('genaiQaApiEnv')||'nonprod';
 const apiEditedUrls={};
-function apiEnv(){return API_ENVIRONMENTS[activeApiEnv]||API_ENVIRONMENTS.nonprod;}
 function apiOp(){return state.operations[+$('endpointSelect')?.value||0];}
 function apiOpKey(o){return o?`${o.method} ${o.path}`:'';}
-function apiDefaultUrl(o){return o?`${apiEnv().baseUrl.replace(/\/+$/,'')}/${String(o.path||'').replace(/^\/+/,'')}`:'';}
-function apiCurrentUrl(o){return apiEditedUrls[`${activeApiEnv}|${apiOpKey(o)}`]||apiDefaultUrl(o);}
-function apiRunnerToken(){
-  const own=$('apiRunnerToken')?.value.trim();
-  if(own)return own;
-  return activeApiEnv==='nonprod'?($('token')?.value.trim()||''):'';
-}
-function apiRunnerAuthHeader(){return $('apiRunnerAuthHeader')?.value.trim()||apiEnv().authHeader;}
-function setApiEnvironment(name){
-  if(!API_ENVIRONMENTS[name])return;
-  activeApiEnv=name;localStorage.setItem('genaiQaApiEnv',name);
-  document.querySelectorAll('.env-btn').forEach(b=>b.classList.toggle('active',b.dataset.env===name));
-  const e=apiEnv();
-  if($('apiEnvHint'))$('apiEnvHint').textContent=e.hint;
-  if($('apiCliHelp'))$('apiCliHelp').textContent=`CLI: ${e.tokenCommand} · Bearer מתווסף אוטומטית`;
-  if($('apiRunnerAuthHeader'))$('apiRunnerAuthHeader').value=e.authHeader;
-  if($('apiRunnerToken'))$('apiRunnerToken').value=localStorage.getItem(`genaiQaApiToken:${name}`)||(name==='nonprod'?($('token')?.value||''):'');
-  if($('userId'))$('userId').value=e.userId;
-  if($('appId'))$('appId').value=e.appId;
-  syncApiTemplate();
-}
+function apiDefaultUrl(o){return o?targetUrl(cfg().baseUrl,o.path):'';}
+function apiCurrentUrl(o){return apiEditedUrls[`${activeEnvironment}|${apiOpKey(o)}`]||apiDefaultUrl(o);}
+function apiOverrideOpen(){return !!$('apiOverridePanel')&&!$('apiOverridePanel').hidden;}
+function apiRunnerToken(){const v=apiOverrideOpen()?$('apiOverrideToken')?.value.trim():'';return v||cfg().token;}
+function apiRunnerAuthHeader(){const v=apiOverrideOpen()?$('apiOverrideAuthHeader')?.value.trim():'';return v||cfg().authHeader;}
 async function apiEnvironmentRequest({method,url,body,stream=false}){
-  const token=apiRunnerToken(), authHeader=apiRunnerAuthHeader();
-  if(!token)throw new Error(`חסר Token עבור ${apiEnv().label}. הפקודה: ${apiEnv().tokenCommand}`);
-  const started=Date.now();
-  let res;
+  const c=cfg(), token=apiRunnerToken(), authHeader=apiRunnerAuthHeader();
+  if(!token)throw new Error(`חסר ${envProfile().tokenLabel}. הפקודה: ${envProfile().tokenCommand}`);
+  if(c.executionMode==='postman')throw new Error('POSTMAN_MODE');
+  const headers={'Accept':'application/json, text/event-stream, */*'}; headers[authHeader]=token.startsWith('Bearer ')?token:`Bearer ${token}`;
+  let payload;if(body!==undefined&&body!==null&&method.toUpperCase()!=='GET'){headers['Content-Type']='application/json';payload=JSON.stringify(body);}
+  const started=Date.now();let res;
   try{
-    res=await fetch('/api/proxy',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        url,
-        method:method.toUpperCase(),
-        token,
-        authHeader,
-        body:(body!==undefined&&body!==null&&method.toUpperCase()!=='GET')?body:undefined,
-        accept:'application/json, text/event-stream, */*'
-      })
-    });
-  }catch(e){
-    throw new Error(`NETWORK/PROXY: ${e.message||'Failed to fetch'}`);
-  }
+    if(c.executionMode==='direct'){
+      res=await fetch(url,{method:method.toUpperCase(),headers,body:payload});
+    }else{
+      res=await fetch('/api/proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,method:method.toUpperCase(),token,authHeader,body:(body!==undefined&&body!==null&&method.toUpperCase()!=='GET')?body:undefined,accept:'application/json, text/event-stream, */*'})});
+    }
+  }catch(e){throw new Error(`NETWORK/${c.executionMode.toUpperCase()}: ${e.message||'Failed to fetch'}`);}
   const ct=res.headers.get('content-type')||'';
-  // The proxy preserves SSE as a stream when the target streams.
   if(stream&&ct.includes('text/event-stream'))return {status:res.status,stream:res.body,headers:res.headers,latencyMs:Date.now()-started,contentType:ct};
   const txt=await res.text();let parsed=txt;try{parsed=JSON.parse(txt)}catch{}
-  if(!res.ok && parsed?.error){
-    const detail=parsed.detail?` · ${parsed.detail}`:'';
-    throw new Error(`PROXY ${res.status}: ${parsed.error}${detail}`);
-  }
   return {status:res.status,body:parsed,raw:txt,latencyMs:Date.now()-started,contentType:ct};
 }
 
 const API_FIELD_META={
   appId:{label:'App ID',type:'text',help:'האפליקציה היוזמת. לפי הדוגמה: Desktop'},
   userId:{label:'User ID',type:'email',help:'האימייל של המשתמש המורשה. דוגמת הצוות: Ofir.adi@ita.gov.il'},
-  caseId:{label:'Case ID',type:'text',help:'9 ספרות. Nullable בחלק מהפעולות.'},
+  caseId:{label:'Case ID',type:'text',help:'Swagger 1.0.6 מגדיר 9 ספרות; בדוגמת Sandbox החדשה הופיעו 10. ניתן לעריכה.'},
   conversationId:{label:'Conversation ID',type:'text',help:'UUID שמתקבל מפתיחת שיחה.'},
   content:{label:'Content / Question',type:'textarea',help:'תוכן ההודעה ל־Router.'},
   limit:{label:'Limit',type:'number',help:'1–100'},
@@ -1435,14 +1459,12 @@ function syncStructuredToJson(){
   renderApiPreview();
 }
 function renderApiPreview(){
-  const o=state.operations[+$('endpointSelect').value||0]; if(!o)return;
+  const o=apiOp(); if(!o)return;
   let body={};try{body=JSON.parse($('apiBody').value||'{}')}catch{}
-  let url='—';try{url=targetUrl(cfg().baseUrl,o.path)}catch{}
-  if($('apiFullUrl'))$('apiFullUrl').textContent=url;
-  if($('apiOperationSummary'))$('apiOperationSummary').textContent=`${o.operationId||''} · ${o.summary||''}`;
-  const req={method:o.method,url,body:o.method==='GET'?undefined:body};
-  if($('apiRequestPreview'))$('apiRequestPreview').textContent=JSON.stringify(req,null,2);
-  if($('apiHeadersPreview'))$('apiHeadersPreview').textContent=`Content-Type: application/json\nAuthorization: Bearer ${cfg().token?'[TOKEN LOADED]':'[TOKEN MISSING]'}`;
+  const url=apiCurrentUrl(o);
+  if($('apiFullUrl')&&document.activeElement!==$('apiFullUrl'))$('apiFullUrl').value=url;
+  if($('apiInheritedEnv'))$('apiInheritedEnv').textContent=envProfile().label;
+  if($('apiEnvHint'))$('apiEnvHint').textContent=`Inherited: ${cfg().baseUrl} · ${cfg().authHeader} · ${envProfile().tokenCommand}`;
 }
 function populateEndpoints(){
   const sel=$('endpointSelect');
@@ -1450,10 +1472,12 @@ function populateEndpoints(){
   const createIndex=state.operations.findIndex(o=>o.method==='POST'&&o.path==='/v1/conversations/new');
   if(createIndex>=0)sel.value=String(createIndex);
   sel.onchange=syncApiTemplate;
-  setApiEnvironment(activeApiEnv);
+  syncApiTemplate();
 }
 function syncApiTemplate(){
   const o=apiOp();if(!o)return;
+  if($('apiInheritedEnv'))$('apiInheritedEnv').textContent=envProfile().label;
+  if($('apiEnvHint'))$('apiEnvHint').textContent=`Inherited: ${cfg().baseUrl} · ${cfg().authHeader} · ${envProfile().tokenCommand}`;
   $('apiMethod').value=o.method;
   if($('apiOperation'))$('apiOperation').textContent=`${o.operationId||''} · ${o.summary||''}`;
   if($('apiPath'))$('apiPath').textContent=o.path;
@@ -1466,8 +1490,8 @@ function syncApiTemplate(){
 function apiCurl(){
   const o=apiOp();if(!o)return'';
   let body;try{body=JSON.parse($('apiBody').value||'{}')}catch{body={};}
-  const token=apiRunnerToken()||'<TOKEN>';
-  const lines=[`curl -i -X ${o.method} '${$('apiFullUrl').value.trim()}'`,`  -H '${apiRunnerAuthHeader()}: ${token.startsWith('Bearer ')?token:`Bearer ${token}`}'`,`  -H 'Accept: application/json, text/event-stream, */*'`];
+  const token=apiRunnerToken()||'<TOKEN>', hdr=apiRunnerAuthHeader();
+  const lines=[`curl -i -X ${o.method} '${$('apiFullUrl').value.trim()}'`,`  -H '${hdr}: ${token.startsWith('Bearer ')?token:`Bearer ${token}`}'`,`  -H 'Accept: application/json, text/event-stream, */*'`];
   if(o.method!=='GET')lines.push(`  -H 'Content-Type: application/json'`,`  --data '${JSON.stringify(body).replace(/'/g,"'\\''")}'`);
   return lines.join(' \\\n');
 }
@@ -1479,7 +1503,7 @@ async function apiRun(){
     if(cfg().executionMode==='postman'){$('apiResponse').textContent=apiCurl();$('apiMeta').textContent='cURL mode · לא נשלחה בקשה';return;}
     const isStream=o.path==='/v1/conversations/messages';
     const r=await apiEnvironmentRequest({method:o.method,url,body:o.method==='GET'?undefined:body,stream:isStream});
-    if(isStream){
+    if(isStream&&r.stream){
       $('apiResponse').textContent='';
       const txt=await readStream(r.stream,(c,f)=>$('apiResponse').textContent=f.slice(-10000));
       $('apiMeta').textContent=`HTTP ${r.status} · SSE`;
@@ -1498,7 +1522,7 @@ async function apiRun(){
   }
 }
 
-async function aiRun(){ try{const c=requireFields(['conversationId','appId','userId']); const body={conversationId:c.conversationId,userId:c.userId,appId:c.appId,...(c.caseId?{caseId:c.caseId}:{}),content:$('aiPrompt').value.trim()}; $('aiStream').textContent=''; const r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); const txt=await readStream(r.stream,(ch,full)=>{$('aiStream').textContent=full.slice(-15000);renderSseEvents(full);}); renderSseEvents(txt); const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid; showToast('GenAI/RAG request הסתיים.','success');}catch(e){$('aiStream').textContent=e.message;showToast('GenAI/RAG: '+e.message,'error',5000);} }
+async function aiRun(){ try{const c=requireFields(['conversationId','appId','userId']); const body={conversationId:c.conversationId,userId:c.userId,appId:c.appId,...(c.caseId?{caseId:c.caseId}:{}),content:$('aiPrompt').value.trim()}; $('aiStream').textContent=''; const r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); if(!r.stream){$('aiStream').textContent=typeof r.body==='string'?r.body:JSON.stringify(r.body,null,2);showToast(`GenAI/RAG: HTTP ${r.status}`,'warning',5000);return;} const txt=await readStream(r.stream,(ch,full)=>{$('aiStream').textContent=full.slice(-15000);renderSseEvents(full);}); renderSseEvents(txt); const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid; showToast('GenAI/RAG request הסתיים.','success');}catch(e){$('aiStream').textContent=e.message;showToast('GenAI/RAG: '+e.message,'error',5000);} }
 
 function exportBlob(name,type,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 function exportJson(){exportBlob(`qa-report-${Date.now()}.json`,'application/json',JSON.stringify({generatedAt:now(),environment:cfg().baseUrl,results:Object.values(state.results),investigations:state.investigations,runHistory:state.runHistory,aiRating:state.aiRating,goldenRuns:state.goldenRuns},null,2));}
@@ -1514,14 +1538,14 @@ async function health(){
       state.connectionOk=true;
       setConn(state.demo?'Demo Mode · סימולציה בלבד':`מחובר · Health HTTP ${r.status}`,state.demo?'demo':'pass');
       readiness();
-      showToast(state.demo?'בדיקת חיבור בסימולציית Demo בלבד.':'ה-Router נגיש ו-Health הצליח ללא Token.','success');
+      showToast(state.demo?'בדיקת חיבור בסימולציית Demo בלבד.':`${envProfile().label}: ה-Router נגיש ו-Health הצליח ללא Token.`,'success');
       return;
     }
     if(r.status===401||r.status===403){
       state.connectionOk=false;
       setConn(`Router נגיש · Health דורש Auth · HTTP ${r.status}`,'question');
       readiness();
-      showToast(`הגענו ל-Router ללא Token, אך /health דורש Authentication (HTTP ${r.status}). אפשר להמשיך להפקת Token ולבדיקת Token.`, 'warning', 6500);
+      showToast(`הגענו ל-Router ללא Token, אך /health דורש Authentication (HTTP ${r.status}). אפשר להמשיך להפקת ${envProfile().tokenLabel} ולבדיקת Token.`, 'warning', 6500);
       return;
     }
     state.connectionOk=false;
@@ -1539,9 +1563,11 @@ function wire(){
   $('searchTests').oninput=()=>renderCatalog(true);$('priorityFilter').onchange=()=>renderCatalog(true);$('modeFilter').onchange=()=>renderCatalog(true);if($('statusFilter'))$('statusFilter').onchange=()=>renderCatalog(true);
   $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('validateTokenBtn').onclick=validateToken;$('markTokenBtn').onclick=()=>{markTokenNow();showToast('Token סומן ידנית כחדש.','success');};$('generateCaseIdBtn').onclick=()=>{ensureCaseId(true);showToast('נוצר Case ID חדש לבדיקה.','success');};$('readinessBtn').onclick=()=>{const ok=readiness();showToast(ok?'הסביבה מוכנה להרצה.':'עדיין חסרים נתונים — ראה כרטיסי המוכנות. ',ok?'success':'warning');};$('runAllTests').onclick=runAllTests;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runRagSpecPack').onclick=runRagSpecPack;$('runHappyFlow').onclick=happyFlow;$('uiSelfTestBtn').onclick=runUiSelfTest;$('flowRunBtn').onclick=happyFlow;renderMethodFlows();prepareMethodFlow();$('apiRunBtn').onclick=apiRun;
   $('copyCurlBtn').onclick=async()=>{const txt=apiCurl();try{await navigator.clipboard.writeText(txt);showToast('cURL הועתק.','success');}catch{prompt('העתק cURL',txt);}};
-  $('envNonprodBtn').onclick=()=>setApiEnvironment('nonprod');$('envSandboxBtn').onclick=()=>setApiEnvironment('sandbox');
-  $('apiRunnerToken').oninput=e=>localStorage.setItem(`genaiQaApiToken:${activeApiEnv}`,e.target.value);
-  $('apiFullUrl').oninput=e=>{const o=apiOp();if(o)apiEditedUrls[`${activeApiEnv}|${apiOpKey(o)}`]=e.target.value.trim();};$('aiRunBtn').onclick=aiRun;
+  $('globalEnvNonprodBtn').onclick=()=>setGlobalEnvironment('nonprod');$('globalEnvSandboxBtn').onclick=()=>setGlobalEnvironment('sandbox');
+  $('apiFullUrl').oninput=e=>{const o=apiOp();if(o)apiEditedUrls[`${activeEnvironment}|${apiOpKey(o)}`]=e.target.value.trim();};
+  $('apiResetUrlBtn').onclick=()=>{const o=apiOp();if(!o)return;delete apiEditedUrls[`${activeEnvironment}|${apiOpKey(o)}`];$('apiFullUrl').value=apiDefaultUrl(o);showToast('URL הוחזר לברירת המחדל של הסביבה.','success');};
+  $('apiOverrideBtn').onclick=()=>{const panel=$('apiOverridePanel');panel.hidden=!panel.hidden;$('apiOverrideBtn').textContent=panel.hidden?'Override Auth':'Close Override';};
+  $('aiRunBtn').onclick=aiRun;
   if($('goldenLoadTaxRagBtn'))$('goldenLoadTaxRagBtn').onclick=()=>mergeTaxRagGolden();if($('goldenSaveBtn'))$('goldenSaveBtn').onclick=goldenSave;if($('goldenResetBtn'))$('goldenResetBtn').onclick=goldenFormReset;if($('goldenRunAllBtn'))$('goldenRunAllBtn').onclick=runGoldenAll;if($('goldenExportBtn'))$('goldenExportBtn').onclick=exportGolden;if($('goldenImportBtn'))$('goldenImportBtn').onclick=()=>$('goldenImportFile').click();if($('goldenImportFile'))$('goldenImportFile').onchange=e=>{const f=e.target.files?.[0];if(f)importGoldenFile(f);e.target.value='';};if($('goldenClearBtn'))$('goldenClearBtn').onclick=()=>{if(confirm('למחוק את כל שאלות הזהב, התוצאות והיסטוריית הריצות המקומית?')){state.goldenDataset=[];state.goldenResults={};state.goldenRuns=[];state.currentGoldenRunId=null;saveGoldenDataset();goldenFormReset();renderGolden();}};if($('goldenCompareBtn'))$('goldenCompareBtn').onclick=compareGoldenRuns;if($('glossarySearch'))$('glossarySearch').oninput=e=>renderGlossary(e.target.value);wireGlossaryLinks();
   $('clearResults').onclick=()=>{state.results={};state.investigations={};state.lastExchange=null;$('runSummary').innerHTML='';if($('aiRunSummary'))$('aiRunSummary').innerHTML='';renderAll();showToast('תוצאות ההרצה אופסו.','success');};
   if($('clearRunHistoryBtn'))$('clearRunHistoryBtn').onclick=()=>{state.runHistory=[];persistRunHistory();renderRunHistory();showToast('היסטוריית ההרצות המקומית נמחקה.','success');};
@@ -1550,12 +1576,12 @@ function wire(){
   if($('dialogGenerateBugBtn'))$('dialogGenerateBugBtn').onclick=()=>state.selectedTestId&&openBugDraft(state.selectedTestId);
   if($('copyBugDraftBtn'))$('copyBugDraftBtn').onclick=copyBugDraft; if($('downloadBugDraftBtn'))$('downloadBugDraftBtn').onclick=downloadBugDraft;
   $('exportJson').onclick=exportJson;$('exportCsv').onclick=exportCsv; if($('exportStpBtn')) $('exportStpBtn').onclick=exportStp; if($('exportStdBtn')) $('exportStdBtn').onclick=exportStd;
-  ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',()=>{readiness(); if(id==='caseId') updateCaseIdHelp();})); $('baseUrl').addEventListener('blur',normalizeBaseUrlField); $('executionMode').addEventListener('change',readiness); $('authHeader').addEventListener('change',readiness); $('cloudAccessConfirmed').addEventListener('change',readiness); if($('dialogBugEvidenceBtn'))$('dialogBugEvidenceBtn').onclick=downloadSelectedTestBugEvidence; $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));
+  ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',()=>{if(id!=='caseId')saveActiveProfileInputs();readiness(); if(id==='caseId') updateCaseIdHelp(); if(id==='baseUrl'&&state.operations.length)syncApiTemplate();})); $('baseUrl').addEventListener('blur',()=>{normalizeBaseUrlField();saveActiveProfileInputs();if(state.operations.length)syncApiTemplate();}); $('executionMode').addEventListener('change',()=>{saveActiveProfileInputs();readiness();}); $('authHeader').addEventListener('change',()=>{saveActiveProfileInputs();readiness();if(state.operations.length)syncApiTemplate();}); $('cloudAccessConfirmed').addEventListener('change',readiness); if($('dialogBugEvidenceBtn'))$('dialogBugEvidenceBtn').onclick=downloadSelectedTestBugEvidence; $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));
   document.querySelectorAll('[data-rating]').forEach(b=>b.onclick=()=>{state.aiRating={rating:b.dataset.rating,note:$('aiNote').value,time:now()};$('aiRating').textContent=`נבחר: ${b.dataset.rating}`;});
 }
 
 setInterval(updateTokenCountdown,1000);
 loadGoldenDataset();
 loadRunHistory();
-if($('baseUrl')&&!$('baseUrl').value.trim())$('baseUrl').value=DEFAULT_TSH_BASE_URL; normalizeBaseUrlField(); ensureCaseId(); updateCaseIdHelp(); updateTokenCountdown(); readiness();
+setGlobalEnvironment(activeEnvironment,{initial:true}); normalizeBaseUrlField(); ensureCaseId(); updateCaseIdHelp(); updateTokenCountdown(); readiness();
 wire(); Promise.all([loadData(),seedTaxRagGoldenIfEmpty()]).then(()=>{renderGolden();if(new URLSearchParams(location.search).get('selftest')==='1')setTimeout(runUiSelfTest,50);}).catch(e=>{showToast('שגיאת טעינת נתונים: '+e.message,'error',8000);document.body.insertAdjacentHTML('beforeend',`<pre>${esc(e.message)}</pre>`);});

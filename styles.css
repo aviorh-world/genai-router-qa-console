@@ -218,3 +218,17 @@
  .request-line{grid-template-columns:68px 1fr}.request-line .compact-btn{grid-column:1/-1}
  .api-auth-strip,.api-operation-meta{grid-template-columns:1fr}
 }
+
+/* Global Connection Profile */
+.setup-title-row{align-items:flex-start}
+.global-env-panel{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 12px;margin:8px 0 14px;border:1px solid #dce4ee;background:#f8fafc;border-radius:10px}
+.global-env-main{display:flex;align-items:center;gap:10px}.eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-weight:800}
+.global-env-switch{display:flex;gap:3px;background:#e9eef5;padding:3px;border-radius:7px;direction:ltr}
+.global-env-switch .env-btn{border:0;background:transparent;padding:7px 10px;border-radius:5px;font-size:11px;font-weight:800;cursor:pointer}
+.global-env-switch .env-btn.active{background:#fff;color:#075985;box-shadow:0 1px 4px rgba(15,23,42,.14)}
+.global-env-summary{display:flex;align-items:center;gap:8px;font-size:11px;color:#64748b}.global-env-summary b{color:#0f172a;font-size:12px}
+#token{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px}
+.api-inherited-profile{display:flex;align-items:center;gap:7px;padding:6px 9px;border:1px solid #dce4ee;border-radius:7px;background:#f8fafc;font-size:10px}.api-inherited-profile b{font-size:11px}.api-inherited-profile small{color:#64748b}
+.api-url-tools{display:flex;align-items:center;justify-content:flex-end;gap:7px;color:#64748b;font-size:10px;margin-top:5px}.tiny-btn{min-height:28px!important;padding:4px 8px!important;font-size:10px!important}
+.api-auth-override{display:grid;grid-template-columns:2fr 1fr;gap:8px;border:1px dashed #cbd5e1;background:#fbfdff;border-radius:7px;padding:8px;margin-top:8px}
+@media(max-width:800px){.global-env-panel,.global-env-main,.global-env-summary{align-items:stretch;flex-direction:column}.global-env-summary{gap:2px}.api-inherited-profile{flex-wrap:wrap}.api-url-tools{align-items:flex-start;flex-wrap:wrap}.api-auth-override{grid-template-columns:1fr}}
