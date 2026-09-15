@@ -167,3 +167,6 @@
 .golden-collapse>:last-child{margin-bottom:20px}
 .golden-collapse .golden-compare-controls{margin-top:16px}
 @media(max-width:700px){.golden-collapse>summary{padding:15px;flex-wrap:wrap}.golden-collapse>:not(summary){margin-left:14px;margin-right:14px}}
+
+/* Methodological E2E journeys */
+.journey-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.journey-card{appearance:none;text-align:right;background:var(--panel,#101827);border:1px solid var(--border,#334155);border-radius:12px;padding:14px;color:inherit;cursor:pointer;display:grid;gap:9px}.journey-card:hover,.journey-card.active{border-color:#60a5fa;box-shadow:0 0 0 1px rgba(96,165,250,.18)}.journey-card small{opacity:.72}.journey-top{display:flex;justify-content:space-between;gap:10px;align-items:center}.method-table{width:100%;border-collapse:collapse}.method-table th,.method-table td{padding:9px;border-bottom:1px solid var(--border,#334155);vertical-align:top}@media(max-width:800px){.journey-grid{grid-template-columns:1fr}.method-table{min-width:760px}}

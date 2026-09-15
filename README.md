@@ -43,3 +43,7 @@ The access code is sent only to the QA server for authorization. It is not added
 - Base URL: `https://t-sh-apic.taxes.gov.il/ita-chat-router-api`
 - API paths from Swagger already start with `/v1`; the console normalizes a pasted Base URL ending in `/v1` to avoid `/v1/v1`.
 - `GET /health` is attempted without an Identity Token first, so connectivity can be separated from authentication when the environment allows it.
+
+
+## Methodological E2E Flows
+Auto Flow includes Conversation Lifecycle, Continue Previous Conversation, Multi-Conversation Isolation, Case Isolation, and Golden RAG Journey. State is propagated automatically between steps.

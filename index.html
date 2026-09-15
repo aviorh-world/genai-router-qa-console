@@ -248,12 +248,9 @@
 
 
 <section class="tabpage" id="flow">
-<div class="card">
-<div class="section-head"><div><h2>Conversation Happy Flow</h2><p>Create → History → Send Message (SSE) → Get Conversation → Delete → Verify deletion.</p></div><button class="btn primary" id="flowRunBtn">▶ הרץ Flow</button></div>
-<label>שאלה ל־AI<textarea id="flowQuestion" rows="3">מה אפשר להסיק מהמסמכים הרלוונטיים לשאלה זו?</textarea></label>
-<div class="flow-steps" id="flowSteps"></div>
-</div>
-</section>
+<div class="card"><div class="section-head"><div><h2>Methodological E2E Flows</h2><p>תרחישי משתמש מלאים שמחברים כמה Endpoints לרצף אחד, עם State שעובר אוטומטית בין השלבים.</p></div></div><div class="journey-grid" id="journeyGrid"></div></div>
+<div class="card"><div class="section-head"><div><h2 id="activeFlowTitle">Conversation Lifecycle</h2><p id="activeFlowDescription">Create → History → Send → Get → Delete → Verify deletion.</p></div><button class="btn primary" id="flowRunBtn">▶ הרץ Flow</button></div><label>שאלה ל־AI<textarea id="flowQuestion" rows="3">מה אפשר להסיק מהמסמכים הרלוונטיים לשאלה זו?</textarea></label><div class="flow-steps" id="flowSteps"></div></div>
+<div class="card"><details class="guide-details"><summary>מטריצת תרחישים מתודולוגיים</summary><div class="table-wrap"><table class="method-table"><thead><tr><th>Flow</th><th>מטרה</th><th>רצף עיקרי</th><th>Priority</th><th>אוטומציה</th></tr></thead><tbody><tr><td>Conversation Lifecycle</td><td>מחזור חיים מלא של שיחה</td><td>Create → History → Send → Get → Delete → Verify</td><td>P0</td><td>מלאה</td></tr><tr><td>Continue Previous Conversation</td><td>חזרה לשיחה והמשך Context</td><td>Create → Question → Get → Follow-up → Get</td><td>P0</td><td>מלאה</td></tr><tr><td>Multi-Conversation Isolation</td><td>שתי שיחות נפרדות לאותו משתמש</td><td>Create A/B → Send A/B → Get A/B → History</td><td>P0</td><td>מלאה</td></tr><tr><td>Case Isolation</td><td>בידוד בין Cases</td><td>Create Case A/B → Messages → History per Case</td><td>P0 Security</td><td>מלאה</td></tr><tr><td>Golden RAG Journey</td><td>שאלה אמיתית מול Golden Dataset</td><td>Create → Golden Question → Answer/Sources → Review</td><td>P0 GenAI</td><td>חצי-אוטומטית</td></tr></tbody></table></div></details></div></section>
 <section class="tabpage" id="api">
 <div class="card">
 <div class="section-head"><div><h2>API Runner</h2><p>הרצה חופשית של כל Endpoint מה־Swagger, או יצירת cURL ל־Postman/סביבה פנימית.</p></div><div class="actions-row"><button class="btn primary" id="apiRunBtn">Run</button><button class="btn ghost" id="copyCurlBtn">העתק cURL</button></div></div>
