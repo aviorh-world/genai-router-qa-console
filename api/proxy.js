@@ -72,7 +72,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   try {
     const p = req.body || {};
-    const { baseUrl, token, authHeader='X-Serverless-Authorization', method='GET', apiPath='/', body, stream=false } = p;
+    const { baseUrl, token, authHeader='Authorization', method='GET', apiPath='/', body, stream=false } = p;
     if (!baseUrl) return res.status(400).json({error:'Base URL is required'});
     const target = await safeTarget(baseUrl, apiPath, method);
     const payloadText = body == null ? '' : (typeof body === 'string' ? body : JSON.stringify(body));
