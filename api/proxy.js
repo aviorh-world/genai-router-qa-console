@@ -14,17 +14,17 @@ function safeJson(res,status,obj){res.status(status).setHeader('Content-Type','a
 export default async function handler(req,res){
   if(req.method!=='POST')return safeJson(res,405,{error:'Method not allowed'});
   try{
-    const {url,method='GET',token='',authHeader='Authorization',body,accept='application/json, text/event-stream, */*'}=req.body||{};
-    if(!url)return safeJson(res,400,{error:'Missing target URL'});
+    const {url,baseUrl,apiPath,method='GET',token='',authHeader='Authorization',body,accept='application/json, text/event-stream, */*'}=req.body||{};
+    const rawUrl=url||(baseUrl&&apiPath?`${String(baseUrl).replace(/\/+$/,'')}/${String(apiPath).replace(/^\/+/,'')}`:'');
+    if(!rawUrl)return safeJson(res,400,{error:'Missing target URL'});
     let target;
-    try{target=new URL(url);}catch{return safeJson(res,400,{error:'Invalid target URL'});}
+    try{target=new URL(rawUrl);}catch{return safeJson(res,400,{error:'Invalid target URL'});}
     if(target.protocol!=='https:')return safeJson(res,400,{error:'Only HTTPS targets are allowed'});
     if(!allowedHosts().has(target.hostname))return safeJson(res,403,{error:'Target host is not allowed',detail:target.hostname});
 
     const t=cleanToken(token);
-    if(!t)return safeJson(res,400,{error:'Missing token'});
     const headers={'Accept':accept};
-    headers[String(authHeader||'Authorization')]=`Bearer ${t}`;
+    if(t)headers[String(authHeader||'Authorization')]=`Bearer ${t}`;
     let payload;
     const m=String(method||'GET').toUpperCase();
     if(body!==undefined && body!==null && !['GET','HEAD'].includes(m)){
