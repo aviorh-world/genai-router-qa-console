@@ -36,16 +36,27 @@ function isPrivateIp(ip){
   return false;
 }
 
+function normalizeProxyBaseUrl(baseUrl=''){
+  return String(baseUrl||'').trim().replace(/\/+$/,'').replace(/\/v1$/i,'');
+}
+function normalizeProxyApiPath(apiPath='/'){
+  let p=String(apiPath||'/').trim();
+  if(!p.startsWith('/')) p='/'+p;
+  return p.replace(/^\/v1\/v1(?=\/|$)/i,'/v1');
+}
+
 async function safeTarget(baseUrl, apiPath, method){
-  const base = new URL(baseUrl);
+  const normalizedBaseUrl=normalizeProxyBaseUrl(baseUrl);
+  const normalizedApiPath=normalizeProxyApiPath(apiPath);
+  const base = new URL(normalizedBaseUrl);
   if(base.protocol !== 'https:') throw new Error('Only HTTPS Base URL is allowed');
   if(base.username || base.password) throw new Error('Credentials in Base URL are not allowed');
   if(['localhost','127.0.0.1','0.0.0.0','::1'].includes(base.hostname)) throw new Error('Localhost is not allowed');
   if(isPrivateIp(base.hostname)) throw new Error('Private IP targets are not allowed');
   const allowedHosts=(process.env.TSH_ALLOWED_HOSTS||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
   if(allowedHosts.length && !allowedHosts.includes(base.hostname.toLowerCase())) throw new Error('Host is not in TSH_ALLOWED_HOSTS');
-  if(!ALLOWED.has(`${method.toUpperCase()} ${apiPath}`)) throw new Error('Endpoint/method is not allowed by this QA proxy');
-  const target = new URL(apiPath, base.toString().replace(/\/?$/, '/'));
+  if(!ALLOWED.has(`${method.toUpperCase()} ${normalizedApiPath}`)) throw new Error('Endpoint/method is not allowed by this QA proxy');
+  const target = new URL(normalizedApiPath.replace(/^\/+/,''), base.toString().replace(/\/?$/, '/'));
   if (target.origin !== base.origin) throw new Error('Target origin must match Base URL');
   try{
     const answers=await dns.lookup(base.hostname,{all:true});
