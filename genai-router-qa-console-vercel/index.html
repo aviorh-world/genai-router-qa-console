@@ -14,7 +14,7 @@
 <p>כלי QA ל־Router 1.0.6 — Swagger + TSH + ארכיטקטורה + Postman</p>
 </div>
 <div class="top-actions">
-<span class="badge version">v2.0</span>
+<span class="badge version">0.01</span>
 <span class="badge neutral" id="connectionBadge">לא מחובר</span>
 <button class="btn ghost" id="demoBtn">Demo Mode</button>
 </div>
@@ -105,7 +105,7 @@
 <div class="bulk-progress" hidden="" id="bulkProgress"><div class="bulk-progress-bar" id="bulkProgressBar"></div><span id="bulkProgressText"></span></div>
 <div class="run-summary" id="runSummary"></div>
 </div>
-<div class="card"><div class="section-head"><div><h2>מפת חבילות הבדיקות</h2><p>הדשבורד מפריד בין רכיב שנבדק, סוג הבדיקה וכלי ה־QA עצמו. Console Self-Test אינו בדיקת מוצר ואינו מעיד על תקינות ה־Router API.</p></div><span class="badge neutral">Coverage Map</span></div><div class="context-grid"><div class="context-card"><h3>Router / API</h3><p>Authentication · Conversations · Messages/SSE · State · Files/Chunks · Statistics</p></div><div class="context-card"><h3>AI Components</h3><p><button class="term-link" data-glossary="Routing">Routing</button> · RAG · <button class="term-link" data-glossary="Text2SQL">Text2SQL</button>. יעדי הניתוב המדויקים עדיין דורשים אישור Runtime.</p></div><div class="context-card"><h3>AI Quality</h3><p>Golden Regression · Retrieval · Grounding · Answer Correctness</p></div><div class="context-card"><h3>Cross-Cutting</h3><p>Security · Boundary/Negative · E2E/Happy Flow</p></div><div class="context-card"><h3>QA Tool — לא המוצר</h3><p><b>Console Self-Test</b>: בודק טאבים, כפתורים והודעות באתר הבדיקות עצמו בלבד.</p></div></div></div>
+<div class="card"><div class="section-head"><div><h2>מפת חבילות הבדיקות</h2><p>הדשבורד מפריד בין רכיב שנבדק, סוג הבדיקה וכלי ה־QA עצמו. Console Self-Test אינו בדיקת מוצר ואינו מעיד על תקינות ה־Router API.</p></div><span class="badge neutral">Coverage Map</span></div><div class="context-grid"><div class="context-card"><h3>Router / API</h3><p>Authentication · Conversations · Messages/SSE · State · Files/Chunks · Statistics</p></div><div class="context-card"><h3>AI Components</h3><p><button class="term-link" data-glossary="Routing">Routing</button> · Q&amp;A/RAG · שיחה כללית · <button class="term-link" data-glossary="Text2SQL">Text2SQL</button>. לפי תרשים ה־Serving, אלה מסלולי הניתוב המרכזיים שנבדוק.</p></div><div class="context-card"><h3>AI Quality</h3><p>Golden Regression · Retrieval · Grounding · Answer Correctness</p></div><div class="context-card"><h3>Cross-Cutting</h3><p>Security · Boundary/Negative · E2E/Happy Flow</p></div><div class="context-card"><h3>QA Tool — לא המוצר</h3><p><b>Console Self-Test</b>: בודק טאבים, כפתורים והודעות באתר הבדיקות עצמו בלבד.</p></div></div></div>
 <div class="card">
 <h2>מה האתר לא יכול לקבוע לבד</h2>
 <ul>
@@ -178,8 +178,20 @@
 </div>
 </div>
 <div class="subpage" data-subpage="guideEndpoints">
+<div class="card endpoint-intro">
+<div class="section-head"><div><h2>הקדמה — איך בודקים API במערכת הזאת?</h2><p>כל Endpoint הוא פעולה שהמערכת מאפשרת לבצע. הבדיקה אינה רק “האם חזר 200”, אלא האם הבקשה התקבלה נכון, האם התוכן שהוחזר נכון, האם ה־state השתנה כשצריך, והאם שגיאות והרשאות מטופלות בצורה בטוחה.</p></div><a class="btn ghost" href="/data/swagger.yaml" target="_blank" rel="noopener">פתח Swagger YAML</a></div>
+<div class="context-grid">
+<div class="context-card"><h3>Health</h3><p>בודקים שהשירות חי ונגיש. זו בדיקת זמינות/תקשורת, לא איכות AI.</p></div>
+<div class="context-card"><h3>Conversation</h3><p>בודקים Create / Get / History / Delete, מזהים, הרשאות ושינויי State בפועל.</p></div>
+<div class="context-card"><h3>Messages / SSE</h3><p>בודקים שליחת שאלה, Streaming, סדר אירועים, done/error, Sources ותשובת AI.</p></div>
+<div class="context-card"><h3>Files / Chunks</h3><p>בודקים שהמקור וה־Chunk הנכונים נשלפים, ושאין גישה למסמך שאינו מורשה.</p></div>
+<div class="context-card"><h3>Feedback</h3><p>בודקים Validation, שמירת משוב וקישורו ל־Message הנכון.</p></div>
+<div class="context-card"><h3>Statistics</h3><p>בודקים פילטרים, טווחי זמן, חישובים, הרשאות וחשיפת מידע.</p></div>
+</div>
+<div class="spec-callout"><b>כלל אצבע:</b> לכל Endpoint שואלים 5 שאלות: Happy Path? קלט שגוי? הרשאה לא נכונה? State/Side Effect? ומה ה־Evidence שמוכיח את התוצאה?</div>
+</div>
 <div class="card">
-<div class="section-head"><div><h2>מדריך Endpoints</h2><p>הסבר פשוט: מה כל Endpoint עושה, מה מצופה בהצלחה, ומה ה־QA צריך לבדוק. הפרטים הטכניים המדויקים עדיין מגיעים מה־Swagger.</p></div><span class="badge neutral">23 operations</span></div>
+<div class="section-head"><div><h2>מדריך Endpoints</h2><p>פירוט מילולי לכל פעולה: מה היא עושה, מה מצופה בהצלחה ומה חשוב ל־QA.</p></div><span class="badge neutral">23 operations</span></div>
 <div class="endpoint-guide" id="endpointGuide"></div>
 </div>
 </div>
@@ -206,6 +218,12 @@
 <div class="card"><h2>זרימות RAG מהאפיון</h2><div class="pipeline-grid" id="ragPipelines"></div></div>
 <div class="card"><h2>כללי Business / QA</h2><div class="table-wrap" id="ragRules"></div></div>
 <div class="card"><h2>מפת מערכת → מה זה אומר ל־QA</h2><div class="table-wrap" id="architectureTable"></div></div>
+<details class="card guide-details" open><summary>Text2SQL — איך הרכיב עובד ומה בודקים?</summary>
+<p>הרכיב מקבל שאלה בשפה טבעית, בונה Context לפי מאגרים/דומיינים, מייצר SQL באמצעות Gemini, מבצע BigQuery dry-run ויכול לתקן SQL לא תקין עד 3 ניסיונות. כאשר <code>shouldFetchData=true</code> הוא גם מריץ את השאילתה ומחזיר נתונים; תוצאה גדולה יכולה להישמר ב־GCS.</p>
+<div class="pipeline-steps"><div class="pipeline-step"><span>1</span>Question → בחירת <button class="term-link" data-glossary="Domain Selection">מאגר/Domain</button></div><div class="pipeline-step"><span>2</span>LLM → <button class="term-link" data-glossary="Generated SQL">Generated SQL</button></div><div class="pipeline-step"><span>3</span><button class="term-link" data-glossary="Dry Run">BigQuery Dry Run</button> + Validation / Retry</div><div class="pipeline-step"><span>4</span>Query Execution → Data או GCS אם התוצאה גדולה</div><div class="pipeline-step"><span>5</span>SQL/Data → תשובה אנושית</div></div>
+<p><b>Endpoints מתועדים:</b> <code>POST /applications/queryanddata</code> לשאלה→SQL/נתונים, ו־<code>POST /applications/sql2text</code> ל־SQL→הסבר ללא הרצת BigQuery.</p><p><b>Authentication:</b> התיעוד מציין <code>x-text2sql-api-key</code> וכן JWT filter בשכבה שמעל. לפני אוטומציה יש לקבל Base URL ופרטי Auth של סביבת הבדיקה.</p>
+<p><b>QA:</b> לא מספיק שה־SQL חוקי. צריך לבדוק שהוא נכון לוגית, משתמש בטבלאות/פילטרים/joins הנכונים, מחזיר את הנתונים הנכונים, אינו חושף מידע אסור, ושהתשובה הסופית תואמת לנתונים.</p>
+</details>
 <div class="card"><h2>בקרת איכות RAG</h2><div class="context-grid" id="ragQuality"></div></div>
 <details class="card guide-details"><summary>טבלאות ו־Observability</summary><p class="muted">השמות מגיעים מהאפיון. קיום טבלה באפיון לא אומר של־QA יש גישה אליה בפועל.</p><div class="table-wrap" id="ragTables"></div></details>
 <details class="card guide-details"><summary>API ניהול RAG – טיוטה</summary><div class="table-wrap" id="ragApiScope"></div></details>
@@ -402,7 +420,7 @@
 <div class="dialog-body" id="dialogBody"></div>
 <div class="dialog-evidence" id="dialogEvidence"></div>
 <label>הערת QA<textarea id="manualNote" placeholder="מה בדקת ומה בפועל קרה?" rows="4"></textarea></label>
-<div class="grid cols-2 bug-classifier"><label>סיווג כשל<select id="manualBugCategory"><option value="">לא סווג</option><option>Retrieval Failure</option><option>Generation Failure</option><option>Grounding Failure</option><option>Authorization/Security Failure</option><option>Routing Failure</option></select><span class="field-help">רלוונטי בעיקר ל־FAIL. הסבר במילון AI.</span></label><div class="bug-type-help"><button class="term-link" type="button" data-glossary="Failure Taxonomy">מה ההבדל בין 4 הסוגים?</button></div></div>
+<div class="grid cols-2 bug-classifier"><label>סיווג כשל<select id="manualBugCategory"><option value="">לא סווג</option><option>Retrieval Failure</option><option>Generation Failure</option><option>Grounding Failure</option><option>Authorization/Security Failure</option><option>Routing Failure</option><option>SQL Generation Failure</option><option>Data/Execution Failure</option></select><span class="field-help">רלוונטי בעיקר ל־FAIL. הסבר במילון AI.</span></label><div class="bug-type-help"><button class="term-link" type="button" data-glossary="Failure Taxonomy">הסבר על סיווגי הכשל</button></div></div>
 <div class="actions-row dialog-actions">
 <button class="btn" data-manual-status="PASS" type="button">PASS</button>
 <button class="btn" data-manual-status="FAIL" type="button">FAIL</button>
@@ -414,7 +432,7 @@
 </div>
 </form>
 </dialog>
-<footer>GenAI Router QA Console · Swagger 1.0.6 · UI v2.1</footer>
+<footer>GenAI Router QA Console · Swagger 1.0.6 · גרסה 0.01</footer>
 <script src="/app.js" type="module"></script>
 </body>
 </html>

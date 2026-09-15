@@ -81,7 +81,9 @@ const BUG_CATEGORIES = [
   'Generation Failure',
   'Grounding Failure',
   'Authorization/Security Failure',
-  'Routing Failure'
+  'Routing Failure',
+  'SQL Generation Failure',
+  'Data/Execution Failure'
 ];
 function bugCategoryOptions(selected=''){return `<option value="">לא סווג</option>`+BUG_CATEGORIES.map(x=>`<option ${x===selected?'selected':''}>${esc(x)}</option>`).join('');}
 function classifyGoldenReason(r={}){
@@ -97,7 +99,7 @@ function classifyGoldenReason(r={}){
 }
 
 const CONTRACT_GAPS = [
-  {severity:'MEDIUM',area:'Authentication',gap:'ב־Swagger לא מוגדר securityScheme. לפי ההנחיה שהתקבלה ה-Identity Token מופק ב-gcloud auth print-identity-token ונשלח ב-X-Serverless-Authorization: Bearer <TOKEN>.',impact:'דרך ההזדהות ידועה כעת, אך עדיין חסרים תיעוד פורמלי ב-Swagger וקודי שגיאה מוסכמים.'},
+  {severity:'MEDIUM',area:'Authentication',gap:'ב־Swagger לא מוגדר securityScheme. ה-Identity Token מופק ב-gcloud auth print-identity-token ונשלח ב-X-Serverless-Authorization: Bearer <TOKEN>.',impact:'דרך ההזדהות ידועה כעת, אך עדיין חסרים תיעוד פורמלי ב-Swagger וקודי שגיאה מוסכמים.'},
   {severity:'HIGH',area:'Environment / Network',gap:'ה־servers ב־Swagger אינו מצביע על TSH. הצוות ציין שנדרשת תקשורת TSH↔NON-PROD והרשאה לשירות.',impact:'Vercel ציבורי עלול לא להגיע ליעד; יש להריץ Browser Direct או Postman מתוך הרשת המתאימה.'},
   {severity:'MEDIUM',area:'Case ID',gap:'הצוות הבהיר ש-Case ID אינו קריטי להתנעה ויכול להיות ערך בדיקה; Swagger מגדיר 9 ספרות ו-nullable אך לא required.',impact:'Test Data כבר לא blocker, אך missing/null עדיין דורשים אישור Runtime.'},
   {severity:'HIGH',area:'History / Messages',gap:'הדרישה העסקית היא 20 הודעות אחרונות, אבל הכמות והסדר אינם Contract מפורש ב-Get Conversation.',impact:'לא ניתן לקבוע PASS/FAIL חד־משמעי לסדר ולגבול בלי walkthrough.'},
@@ -105,7 +107,7 @@ const CONTRACT_GAPS = [
   {severity:'MEDIUM',area:'Streaming',gap:'קיים event בשם thought ללא הגדרה האם זה Progress מסונן או reasoning פנימי.',impact:'נדרשת בדיקת אבטחה שאין חשיפת System Prompt/Chain-of-Thought.'},
   {severity:'MEDIUM',area:'Message Length',gap:'Request מאפשר עד 32,768 תווים בעוד Message persisted/returned מתועד עד 8,192.',impact:'לא ברור מה Expected עבור הודעה גדולה מ־8,192.'},
   {severity:'MEDIUM',area:'Authorization / Sources',gap:'מסמך ההרשאות מגדיר least-privilege ל-Service Accounts, אך לא ownership אפליקטיבי של File/Chunk/Case למשתמש.',impact:'בדיקות IDOR על GCS/Chunks עדיין דורשות כלל הרשאה מוסכם.'},
-  {severity:'HIGH',area:'RAG Target Design',gap:'אפיון ה-RAG הגנרי מתאר Target Design מפורט, אך עדיין לא ידוע אילו חלקים ממנו כבר ממומשים ב-TSH.',impact:'בדיקות RAG-001…RAG-014 מסומנות כבדיקות Spec/Assisted עד walkthrough או observability שמוכיחים Runtime behavior.'},
+  {severity:'HIGH',area:'RAG Target Design',gap:'אפיון ה-RAG הגנרי מתאר Target Design מפורט, אך עדיין לא ידוע אילו חלקים ממנו כבר ממומשים ב-TSH.',impact:'בדיקות חבילת RAG מסומנות כבדיקות Spec/Assisted עד walkthrough או observability שמוכיחים Runtime behavior.'},
   {severity:'MEDIUM',area:'RAG Management APIs',gap:'המסמך מציג Category / Document Category / Permission APIs אך מסיים את הסעיף ב-"להשלים!!".',impact:'אין לבנות אוטומציה מול endpoints אלה עד לקבלת API Contract סופי.'}
 ];
 
@@ -122,7 +124,7 @@ const AI_QA_LESSONS = [
   {title:'8. אוטומציה עוזרת — אבל לא כל Judge הוא אמת',body:'Similarity או LLM-as-a-Judge יכולים לסנן תוצאות ולהאיץ עבודה, אבל חייבים לכייל אותם מול Human/SME. במיוחד במיסוי, תשובה שנשמעת דומה יכולה להיות שגויה בפרט קטן.'},
   {title:'9. בדיקות חוזרות חושפות חוסר יציבות',body:'לתסריטים קריטיים כדאי לעיתים להריץ אותה שאלה כמה פעמים. אם פעם אחת היא נכונה ופעמיים שגויה, הממוצע חשוב יותר מהרצה מוצלחת בודדת.'},
   {title:'10. אבטחה והרשאות הן חלק מאיכות AI',body:'RAG איכותי לא רק עונה נכון; הוא גם לא מחזיר מסמך, Chunk או מידע מקטגוריה שהמשתמש אינו מורשה לראות, ולא נופל ל־Prompt Injection.'},
-  {title:'11. בודקים גם את ה־Router וגם כל רכיב בנפרד',body:'ב־E2E שולחים שאלה דרך ה־Router ובודקים שה־Intent נותב ליכולת הנכונה. אם קיימים APIs ישירים ל־RAG/Text2SQL, מוסיפים Component Tests לכל רכיב כדי לבודד את מקור הכשל. יעדי הניתוב בפועל חייבים להיות מאומתים מול Runtime/Observability.'}
+  {title:'11. בודקים גם את ה־Router וגם כל רכיב בנפרד',body:'ב־E2E שולחים שאלה דרך ה־Router ובודקים שה־Intent נותב למסלול הנכון. בתרשים ה־Serving שסופק מופיעים שלושה מסלולים מרכזיים: Q&A/ידע דרך Retrieval, שיחה כללית דרך LLM, ושאלה טבלאית דרך Text2SQL. בנוסף מבצעים Component Tests ישירים ל־Text2SQL ולרכיבים שנגישים לבדיקה כדי לבודד את מקור הכשל.'}
 ];
 
 const AI_GLOSSARY = [
@@ -158,7 +160,7 @@ const AI_GLOSSARY = [
   {term:'SSE',aliases:['Server-Sent Events'],desc:'Streaming חד־כיווני מהשרת לדפדפן. במקום Response אחד בסוף, מתקבלים events כמו content, sources, error ו־done. בבדיקות צריך לבדוק סדר, סיום, כפילויות וניתוק באמצע.'},
   {term:'Observability',aliases:[],desc:'היכולת להבין מה קרה בתוך הזרימה: איזה Tool הופעל, אילו Sources/Chunks נבחרו, latency, errors, category/filtering ועוד. בלי Observability קשה מאוד להסביר כשל AI.'},
   {term:'Audit',aliases:[],desc:'תיעוד של מי שינה מה ומתי. במערכת AI חשוב במיוחד לשינויים ב־Prompt, Config, Categories, Ingestion Strategy וגרסאות, כי שינוי כזה יכול להסביר שינוי באיכות.'},
-  {term:'Router',aliases:[],desc:'השירות שמקבל בקשה ומנתב אותה ליכולת המתאימה, למשל RAG או Text2SQL. מבחינת QA צריך לבדוק גם ניתוב נכון וגם שמירת Context/הרשאות לאורך המעבר בין רכיבים.'},
+  {term:'Router',aliases:[],desc:'השירות שמקבל את שאלת המשתמש, מסווג אותה ומנתב למסלול מתאים. בתרשים ה־Serving שסופק מופיעים Q&A/ידע דרך Retrieval, שיחה כללית דרך LLM ושאלה טבלאית דרך Text2SQL. מבחינת QA בודקים Expected Route מול Actual Route וגם שמירת Context והרשאות לאורך המעבר.'},
   {term:'Text2SQL',aliases:[],desc:'רכיב שמתרגם שאלה בשפה טבעית לשאילתת SQL. איכות נמדדת לא רק אם נוצר SQL תקין אלא אם הוא מחזיר את הנתונים הנכונים, בטוח ואינו מאפשר גישה שלא הותרה.'},
   {term:'Model Version',aliases:[],desc:'הגרסה המדויקת של המודל ששימש בהרצה. שינוי Model יכול לשנות איכות, latency ועלות גם אם הקוד לא השתנה, ולכן כדאי לשמור אותו בדוח Sanity.'},
   {term:'Baseline',aliases:['קו בסיס'],desc:'ריצת ייחוס מאושרת שאליה משווים Release חדש. ה־Baseline אינו חייב להיות מושלם; הוא צריך להיות גרסה ידועה ומאושרת שממנה ניתן לזהות מה השתפר ומה הורע.'},
@@ -200,7 +202,7 @@ const AI_GLOSSARY = [
   {term:'Latency / TTFT',aliases:['Time To First Token','זמן תגובה'],desc:'Latency הוא זמן התגובה; ב־Streaming חשוב במיוחד TTFT — הזמן עד ה־event/token הראשון — בנוסף לזמן הכולל עד done. את שניהם כדאי למדוד מול SLA מוגדר.'},
   {term:'Clarification',aliases:['Clarification Policy','שאלת הבהרה'],desc:'התנהגות שבה המערכת מבקשת מידע נוסף כשהשאלה עמומה במקום לנחש. QA בודק מתי מצופה Clarification, שהשאלה באמת מועילה ושלא נוצר Hallucination במקום הבהרה.'},
   {term:'Routing',aliases:['AI Routing','ניתוב'],desc:'החלטת ה־Router לאיזה Agent/Tool/יכולת להעביר את שאלת המשתמש. בדיקת QA טובה מגדירה Expected Route ומנסה לאמת Actual Route דרך SSE, Tool event, Trace או Log — ולא מנחשת אותו רק לפי נוסח התשובה.'},
-  {term:'Intent Classification',aliases:['Intent Detection','זיהוי כוונה'],desc:'השלב שבו המערכת מסווגת מה המשתמש מבקש כדי לבחור Route מתאים. לדוגמה, שאלה על נתון מובנה עשויה להתאים ל־Text2SQL ושאלה על נוהל למסלול מסמכים/RAG — אך החלוקה המדויקת בפרויקט חייבת להיות מאושרת מול הארכיטקטורה בפועל.'},
+  {term:'Intent Classification',aliases:['Intent Detection','זיהוי כוונה'],desc:'השלב שבו ה־Router מסווג מה המשתמש מבקש כדי לבחור Route. בתרשים המערכת מופיעים שלושה סוגים מרכזיים: Q&A/ידע, שיחה כללית ושאלה טבלאית. טעות בסיווג יכולה להפנות שאלה נכונה לרכיב הלא נכון.'},
   {term:'Routing Accuracy',aliases:[],desc:'אחוז שאלות שבהן Actual Route תואם ל־Expected Route המאושר. אפשר לבנות Golden Routing Dataset קטן של Question + Expected Route ולמדוד אותו בנפרד מאיכות התשובה.'},
   {term:'Routing Failure',aliases:[],desc:'כשל שבו ה־Router שולח בקשה ליכולת הלא נכונה או לא מזהה נכון את ה־Intent. זהו סיווג נפרד: גם RAG וגם Text2SQL יכולים להיות תקינים בפני עצמם, אך ה־E2E ייכשל אם הניתוב ביניהם שגוי.'},
   {term:'Component Test',aliases:['Component Testing','בדיקת רכיב'],desc:'בדיקה של רכיב מסוים בבידוד ככל האפשר, למשל RAG או Text2SQL ישירות. היא עוזרת להבדיל בין כשל פנימי ברכיב לבין כשל Routing/Integration. אפשר לבצע אותה רק אם יש Interface/Endpoint/כלי מתאים.'},
@@ -208,6 +210,17 @@ const AI_GLOSSARY = [
   {term:'Integration Test',aliases:['בדיקת אינטגרציה'],desc:'בדיקה של החיבור בין רכיבים, למשל Router שמעביר Context והרשאות ל־RAG/Text2SQL ומקבל מהם תוצאה. המיקוד הוא בחוזה ובמעבר המידע בין השירותים.'},
   {term:'Expected Route',aliases:[],desc:'היעד שאושר מראש עבור שאלת בדיקה, למשל RAG או Text2SQL. הוא צריך להגיע מאפיון/SME/צוות הארכיטקטורה ולא מהשערה של ה־QA.'},
   {term:'Actual Route',aliases:[],desc:'היעד שאליו המערכת ניתבה בפועל. רצוי לזהות אותו מ־Observability — Tool/SSE/Trace/Log — ולא להסיק רק מהתשובה. Expected מול Actual מאפשר PASS/FAIL אוטומטי ל־Routing.'},
+
+  {term:'Generated SQL',aliases:['SQL Generation'],desc:'שאילתת ה־SQL שהמודל יצר מתוך שאלה בשפה טבעית. QA בודק גם Syntax וגם לוגיקה: טבלאות, JOINs, WHERE, Aggregation, תאריכים, NULL והרשאות.'},
+  {term:'Dry Run',aliases:['BigQuery Dry Run'],desc:'בדיקת SQL מול BigQuery בלי לבצע את השאילתה בפועל. היא יכולה לזהות SQL לא חוקי או references שגויים לפני Execution. בתיעוד Text2SQL שסופק מתואר retry של עד 3 ניסיונות אם ה־SQL אינו תקין.'},
+  {term:'Query Execution',aliases:['SQL Execution'],desc:'הרצת ה־SQL בפועל מול בסיס הנתונים. יש להפריד בין SQL שנראה נכון לבין הנתונים שההרצה באמת החזירה.'},
+  {term:'Domain Selection',aliases:['Maagarim','מאגרים','Domain Routing'],desc:'בחירת מאגרי/דומייני הנתונים שמשמשים לבניית Context ולניתוב Text2SQL. כאשר maagarim לא נשלח, התיעוד מתאר אפשרות שה־Router יבחר דומיינים אוטומטית.'},
+  {term:'Result Truncation',aliases:['Truncated Result'],desc:'מצב שבו מספר השורות גדול מהמגבלה להחזרה inline. בתיעוד Text2SQL, התוצאה המקוצרת מוחזרת בתגובה והקובץ המלא יכול להישמר ב־GCS עם bucketName ו־fileName.'},
+  {term:'GCS',aliases:['Google Cloud Storage'],desc:'אחסון אובייקטים בענן. ב־Text2SQL הוא יכול לשמש לשמירת תוצאה מלאה כאשר היא גדולה מדי להחזרה inline. QA צריך לבדוק גם הרשאות, קישור לקובץ הנכון ושהמידע אינו נחשף למשתמש לא מורשה.'},
+  {term:'SQL2Text',aliases:['/applications/sql2text'],desc:'פעולת Text2SQL שמקבלת SQL ומחזירה הסבר קריא לאדם. לפי התיעוד שסופק היא אינה מריצה BigQuery וה־data בתגובה אמור להיות null.'},
+  {term:'QueryAndData',aliases:['/applications/queryanddata'],desc:'פעולת Text2SQL שממירה שאלה בשפה טבעית ל־SQL ויכולה גם להריץ אותו ולהחזיר נתונים. זהו Endpoint מרכזי לבדיקות Component של Text2SQL.'},
+  {term:'SQL Generation Failure',aliases:[],desc:'כשל שבו Text2SQL יוצר SQL שגוי לוגית או תחבירית: טבלה/שדה/Join/Filter/Aggregation שגויים, גם אם ה־Router ניתב נכון.'},
+  {term:'Data/Execution Failure',aliases:['Query Execution Failure'],desc:'כשל לאחר יצירת SQL: הרצה נכשלת, נתונים שגויים/חסרים, truncation/GCS לא תקינים או חוסר התאמה בין תוצאת DB לתשובה הסופית.'},
   {term:'API Test',aliases:['API Testing'],desc:'בדיקה ישירה של Contract והתנהגות Endpoint: Request, Headers, Validation, HTTP status, Schema, State ו־Errors. אין צורך ב־UI של המוצר כדי לבצע API Testing.'},
   {term:'Console Self-Test',aliases:['QA Tool Self-Test'],desc:'בדיקה של אתר ה־QA עצמו: שהטאבים, הכפתורים, Run All, הודעות שגיאה/הצלחה ורכיבי התצוגה עובדים. זו אינה בדיקת המוצר או Router API, ולכן יש להפריד אותה מספירת Product QA.'},
   {term:'Boundary Test',aliases:['Boundary Value Analysis','בדיקת גבולות'],desc:'בדיקה סביב גבולות קלט: מינימום, מקסימום, בדיוק על הגבול ומעבר לו. לדוגמה limit=1/0 או אורך שדה מקסימלי+1. זהו סוג בדיקה שחוצה רכיבים ולא רכיב בפני עצמו.'},
@@ -415,7 +428,7 @@ function bugEvidenceMarkdown({title,category='',meta={},fields={},sources=[],chu
 }
 function downloadGoldenBugEvidence(id){
   const g=state.goldenDataset.find(x=>x.id===id),r=state.goldenResults[id];if(!g||!r)return;const run=state.goldenRuns.find(x=>x.id===state.currentGoldenRunId);
-  const md=bugEvidenceMarkdown({title:`Golden Bug Evidence — ${id}`,category:r.bugCategory,meta:run?.meta||r.runMeta||{},fields:{Question:g.question,'Golden Answer':g.expected,'Expected Source':g.expectedSource||'—','Actual Answer':r.answer,'Retrieval Score':r.retrievalScore,'Answer Score':r.answerScore,'Grounding Score':r.groundingScore,'Source Match':r.sourceMatch,HTTP:r.http,ConversationId:r.conversationId},sources:r.sourceRefs||[],chunks:r.chunkEvidence||[],evidence:r.messageEvidence||null});exportBlob(`bug-evidence-${id}-${Date.now()}.md`,'text/markdown;charset=utf-8',md);
+  const md=bugEvidenceMarkdown({title:`Golden Bug Evidence — ${id}`,category:r.bugCategory,meta:run?.meta||r.runMeta||{},fields:{Question:g.question,'Golden Answer':g.expected,'Expected Source':g.expectedSource||'—','Actual Answer':r.answer,'Retrieval Score':r.retrievalScore,'Answer Score':r.answerScore,'Grounding Score':r.groundingScore,'Source Match':r.sourceMatch,HTTP:r.http,ConversationId:r.conversationId},sources:r.sourceRefs||[],chunks:r.chunkEvidence||[],evidence:r.messageEvidence||null});exportBlob(`bug-evidence-${testLabel(t)}-${Date.now()}.md`,'text/markdown;charset=utf-8',md);
 }
 function exportGolden(){exportBlob(`golden-regression-${Date.now()}.json`,'application/json',JSON.stringify({version:2,exportedAt:now(),dataset:state.goldenDataset,results:state.goldenResults,runs:state.goldenRuns,currentRunId:state.currentGoldenRunId},null,2));}
 async function importGoldenFile(file){try{const obj=JSON.parse(await file.text());const ds=Array.isArray(obj)?obj:obj.dataset;if(!Array.isArray(ds))throw new Error('JSON אינו מכיל dataset תקין');state.goldenDataset=ds.map((x,i)=>({id:String(x.id||`GOLD-${i+1}`),question:String(x.question||''),expected:String(x.expected||x.expectedAnswer||''),expectedSource:String(x.expectedSource||''),mustInclude:String(x.mustInclude||''),tags:String(x.tags||''),notes:String(x.notes||'')})).filter(x=>x.question&&x.expected);state.goldenResults=obj.results&&typeof obj.results==='object'?obj.results:{};state.goldenRuns=Array.isArray(obj.runs)?obj.runs:[];state.currentGoldenRunId=obj.currentRunId||state.goldenRuns[0]?.id||null;saveGoldenDataset();renderGolden();showToast(`${state.goldenDataset.length} שאלות זהב יובאו${state.goldenRuns.length?` + ${state.goldenRuns.length} Runs`:''}.`, 'success');}catch(e){showToast('ייבוא Golden נכשל: '+e.message,'error',5000);}}
@@ -495,7 +508,7 @@ function renderSseEvents(text){
 function openTest(id){
   const t=state.tests.find(x=>x.ID===id); if(!t)return; state.selectedTestId=id;
   const r=state.results[id];
-  $('dialogTitle').textContent=`${t.ID} — ${t['תרחיש בדיקה']||''}`; $('dialogSubtitle').textContent=`${t.priority} · ${modeLabel(t.mode)} · ${t.Endpoint||''}`;
+  $('dialogTitle').textContent=`${testLabel(t)} — ${t['תרחיש בדיקה']||''}`; $('dialogSubtitle').textContent=`${t.priority} · ${modeLabel(t.mode)} · ${t.Endpoint||''}`;
   const resultHtml=r?`<div class="detail-row test-result-line"><b>תוצאה אחרונה</b><span class="status-chip ${statusClass(r.status)}">${esc(statusLabel(r.status))}</span><span>${esc(r.actual||'')}</span></div>`:'';
   $('dialogBody').innerHTML=`<div class="detail-row plain-explanation"><b>מה הבדיקה עושה בפשטות?</b>${esc(plainTestExplanation(t))}</div>`+resultHtml+
     [['תנאים מקדימים',t['תנאים מקדימים']],['צעדים / קלט',t['צעדים / קלט']],['Expected Result',t['Expected Result']],['שאלה פתוחה',t['שאלה פתוחה / נדרש אישור']],['מקור / הערה',t['מקור / הערה']]].filter(x=>x[1]).map(([a,b])=>`<div class="detail-row"><b>${esc(a)}</b>${esc(b)}</div>`).join('');
@@ -589,6 +602,34 @@ async function loadData(){
   for (const [ID,priority,domain,Endpoint,scenario,steps,expected] of ragSpecTests) {
     state.tests.push({ID,priority,mode:'assisted','תחום':domain,Endpoint,'תרחיש בדיקה':scenario,'תנאים מקדימים':'מימוש/גישה לרכיבי RAG + Test Documents/Categories + Observability מתאימה','צעדים / קלט':steps,'Expected Result':expected,'שאלה פתוחה / נדרש אישור':ID==='RAG-010'?'לקבוע סף Quality מוסכם: Top-3 / Top-5 / metric אחר':'','מקור / הערה':'אפיון תשתית RAG גנרית — Target Design; לא בהכרח Runtime Contract נוכחי'});
   }
+  const routingTests = [
+    ['ROUTE-001','P0','Routing','Router','שאלת Q&A/ידע מנותבת למסלול Retrieval','שלח שאלת ידע עם Expected Route מאושר','Actual Route = Q&A/Retrieval; אין מעבר ל-Text2SQL'],
+    ['ROUTE-002','P0','Routing','Router','שאלה טבלאית מנותבת ל-Text2SQL','שלח שאלה על נתון מובנה/אגרגציה','Actual Route = Text2SQL'],
+    ['ROUTE-003','P1','Routing','Router','שיחה כללית מנותבת למסלול LLM כללי','שלח שיחת חולין/שאלה כללית שאינה דורשת מסמך או DB','Actual Route = General Conversation / LLM'],
+    ['ROUTE-004','P1','Routing','Router','שאלה עמומה אינה נשלחת למסלול מסוכן/לא רלוונטי','שלח שאלה דו-משמעית בין ידע לנתונים','התנהגות עקבית לפי מדיניות: route/clarification; ללא חשיפת מידע'],
+    ['ROUTE-005','P0','Routing / Security','Router','הרשאות נשמרות לאחר Routing','שלח שאלה שמנותבת לרכיב עם מקור/נתון לא מורשה','אין Source/Data לא מורשה גם לאחר מעבר בין רכיבים']
+  ];
+  for (const [ID,priority,domain,Endpoint,scenario,steps,expected] of routingTests) state.tests.push({ID,priority,mode:'assisted','תחום':domain,Endpoint,'תרחיש בדיקה':scenario,'תנאים מקדימים':'Observability/Trace/Tool event שמאפשר לזהות Actual Route','צעדים / קלט':steps,'Expected Result':expected,'שאלה פתוחה / נדרש אישור':'','מקור / הערה':'Online User Flow & Serving'});
+
+  const text2sqlTests = [
+    ['T2S-001','P0','Text2SQL','POST /applications/queryanddata','שאלה פשוטה מייצרת SQL נכון לוגית','שלח שאלה עם Expected SQL/Data ידועים','SQL תקין ומחזיר את הנתונים הצפויים'],
+    ['T2S-002','P0','Text2SQL','POST /applications/queryanddata','Filters ו-WHERE משקפים את השאלה','שאל שאלה עם תנאי תאריך/סטטוס/יחידה','הפילטרים ב-SQL והתוצאה תואמים במדויק'],
+    ['T2S-003','P0','Text2SQL','POST /applications/queryanddata','JOIN/Aggregation נכונים','שאל שאלה המחייבת JOIN + COUNT/SUM/GROUP BY','ה-SQL וה-DB result נכונים מול שאילתת Reference'],
+    ['T2S-004','P1','Text2SQL Validation','POST /applications/queryanddata','Dry-run/Retry מטפל ב-SQL לא תקין','באמצעות Test Hook/תרחיש מתאים גרום ל-SQL ראשון לא תקין','Validation מתבצע; retry עד 3; אין הרצת SQL לא תקין'],
+    ['T2S-005','P1','Text2SQL','POST /applications/queryanddata','shouldFetchData=false מחזיר SQL ללא הרצה','שלח shouldFetchData=false','SQL מוחזר; data אינו מכיל תוצאת BigQuery'],
+    ['T2S-006','P1','Text2SQL Routing','POST /applications/queryanddata','בחירת maagarim מפורשת נשמרת','שלח maagarim ידועים','ה-Context/SQL משתמש בדומיינים שסופקו בלבד'],
+    ['T2S-007','P1','Text2SQL Routing','POST /applications/queryanddata','בחירת maagarim אוטומטית נכונה','השמט maagarim ושאל שאלה חד-משמעית','ה-Router בוחר domain מתאים והתשובה מחזירה maagarim תואמים'],
+    ['T2S-008','P0','Text2SQL Security','POST /applications/queryanddata','אין גישה לנתונים/טבלאות לא מורשים','נסה לנסח שאלה שמפתה גישה לדומיין לא מורשה','הבקשה נחסמת/מוגבלת; אין SQL/Data לא מורשים'],
+    ['T2S-009','P1','Text2SQL Large Result','POST /applications/queryanddata','תוצאה גדולה מטופלת ב-Truncation + GCS','הרץ query שמחזיר מעל מגבלת inline','warnings תקין; bucketName+fileName מצביעים לתוצאה המלאה'],
+    ['T2S-010','P0','Text2SQL Answer','Router / Text2SQL','התשובה המילולית תואמת ל-DB result','השווה SQL result לתשובה הסופית','אין מספר/עובדה בתשובה שסותרים את תוצאת DB'],
+    ['T2S-011','P1','Text2SQL','POST /applications/sql2text','SQL2Text מסביר SQL בלי להריץ DB','שלח SQL ידוע ל-sql2text','הסבר נכון; data=null; אין Query Execution'],
+    ['T2S-012','P1','Text2SQL Validation','POST /applications/queryanddata','קלט query ריק נדחה','שלח query ריק/blank','4xx Validation; אין SQL/Execution']
+  ];
+  for (const [ID,priority,domain,Endpoint,scenario,steps,expected] of text2sqlTests) state.tests.push({ID,priority,mode:'assisted','תחום':domain,Endpoint,'תרחיש בדיקה':scenario,'תנאים מקדימים':'Text2SQL Base URL + Authentication + גישת SQL/BigQuery או Reference Query','צעדים / קלט':steps,'Expected Result':expected,'שאלה פתוחה / נדרש אישור':'','מקור / הערה':'Text2SQL Controller documentation'});
+
+  // גרסה 0.01: מספור תצוגה חדש ורציף. legacyId נשמר פנימית כדי לא לשבור את מנגנון ההרצה.
+  state.tests.forEach((t,i)=>{ t.legacyId=t.ID; t.displayId=`QA-${String(i+1).padStart(3,'0')}`; });
+
   state.operations=sw.operations;
   renderAll(); populateEndpoints();
 }
@@ -604,6 +645,7 @@ const ASSISTED = new Set([
 ]);
 function getMode(id){ return AUTO.has(id)?'auto':ASSISTED.has(id)?'assisted':'manual'; }
 function modeLabel(m){return m==='auto'?'אוטומטי':m==='assisted'?'מסייע':'ידני';}
+function testLabel(t){return t?.displayId||t?.ID||'';}
 
 function requestBody(path,method,c=cfg()){
   switch(`${method} ${path}`){
@@ -880,7 +922,7 @@ function runUiSelfTest(){
   check('קטלוג בדיקות נטען',state.tests.length>0,`${state.tests.length} tests`); check('Swagger operations נטענו',state.operations.length>0,`${state.operations.length} operations`);
   check('P0-002 ברור',plainTestExplanation({ID:'P0-002'}).includes('gcloud'),'הסבר פשוט קיים');
   check('הנחיות Setup מקופלות',document.querySelector('details.setup-help')!=null,'native details/summary');
-  check('מדריך מערכת נטען',!!$('guide') && !!$('endpointGuide'),'Guide + endpoint guide'); check('RAG Spec נטען בתוך המדריך',!!state.context?.ragSpec && state.tests.some(t=>t.ID==='RAG-001'),'Spec cards + RAG test pack'); check('מילון AI נטען',AI_GLOSSARY.length>=25 && !!$('glossaryGrid'),`${AI_GLOSSARY.length} terms`); check('Golden Sanity נטען',!!$('goldenTable') && !!$('goldenResults'),'Dataset + results'); check('Golden Regression מתקדם נטען',!!$('goldenReviewQueue')&&!!$('goldenCompareTable')&&!!$('goldenRunsTable'),'Review + compare + run history'); document.querySelectorAll('.subtab').forEach(tab=>check(`Subtab ${tab.dataset.subtab}`,!!tab.closest('.tabpage')?.querySelector(`[data-subpage=\"${tab.dataset.subtab}\"]`) && typeof tab.onclick==='function','Target subpage + click handler')); 
+  check('מדריך מערכת נטען',!!$('guide') && !!$('endpointGuide'),'Guide + endpoint guide'); check('RAG Guide נטען',!!$('ragPipelines') && !!$('ragRules') && state.tests.some(t=>t.legacyId==='RAG-001'||t.ID==='RAG-001'),'Guide containers + RAG test pack'); check('מילון AI נטען',AI_GLOSSARY.length>=25 && !!$('glossaryGrid'),`${AI_GLOSSARY.length} terms`); check('Golden Sanity נטען',!!$('goldenTable') && !!$('goldenResults'),'Dataset + results'); check('Golden Regression מתקדם נטען',!!$('goldenReviewQueue')&&!!$('goldenCompareTable')&&!!$('goldenRunsTable'),'Review + compare + run history'); document.querySelectorAll('.subtab').forEach(tab=>check(`Subtab ${tab.dataset.subtab}`,!!tab.closest('.tabpage')?.querySelector(`[data-subpage=\"${tab.dataset.subtab}\"]`) && typeof tab.onclick==='function','Target subpage + click handler')); 
   check('Demo אינו PASS אמיתי',true,'ב־Demo תוצאות אוטומטיות מסומנות DEMO');
   const failed=checks.filter(x=>!x.ok); state.uiSelfTest={time:now(),checks};
   $('runSummary').innerHTML=`<div class="ui-test-list">${checks.map(x=>`<div class="ui-test-item ${x.ok?'ok':'fail'}"><b>${x.ok?'✓':'✕'} ${esc(x.name)}</b>${x.detail?` — ${esc(x.detail)}`:''}</div>`).join('')}</div>`;
@@ -890,9 +932,9 @@ function runUiSelfTest(){
 
 function renderCatalog(){
   const q=$('searchTests')?.value?.toLowerCase()||'', p=$('priorityFilter')?.value||'', m=$('modeFilter')?.value||'';
-  const rows=state.tests.filter(t=>(!p||t.priority===p)&&(!m||t.mode===m)&&(!q||[t.ID,t['תחום'],t.Endpoint,t['תרחיש בדיקה']].join(' ').toLowerCase().includes(q)));
+  const rows=state.tests.filter(t=>(!p||t.priority===p)&&(!m||t.mode===m)&&(!q||[t.displayId,t.ID,t['תחום'],t.Endpoint,t['תרחיש בדיקה']].join(' ').toLowerCase().includes(q)));
   $('testsTableWrap').innerHTML=`<table class="qa-table"><thead><tr><th>ID</th><th>רמה</th><th>מצב</th><th>תחום</th><th>Endpoint</th><th>תרחיש</th><th>Expected</th><th>שאלה פתוחה</th><th>תוצאה</th><th></th></tr></thead><tbody>${rows.map(t=>{
-    const r=state.results[t.ID]; return `<tr><td>${esc(t.ID)}</td><td class="${t.priority.toLowerCase()}">${t.priority}</td><td class="mode-${t.mode}">${modeLabel(t.mode)}</td><td>${esc(t['תחום'])}</td><td dir="ltr">${esc(t.Endpoint)}</td><td>${esc(t['תרחיש בדיקה'])}</td><td>${esc(t['Expected Result'])}</td><td>${esc(t['שאלה פתוחה / נדרש אישור'])}</td><td class="${r?statusClass(r.status):''}">${r?esc(r.status):'Not Run'}</td><td><div class="actions-row"><button class="btn test-run" data-id="${t.ID}">${t.mode==='manual'?'סמן':'Run'}</button><button class="btn ghost test-open" data-id="${t.ID}">פרטים</button></div></td></tr>`}).join('')}</tbody></table>`;
+    const r=state.results[t.ID]; return `<tr><td>${esc(testLabel(t))}</td><td class="${t.priority.toLowerCase()}">${t.priority}</td><td class="mode-${t.mode}">${modeLabel(t.mode)}</td><td>${esc(t['תחום'])}</td><td dir="ltr">${esc(t.Endpoint)}</td><td>${esc(t['תרחיש בדיקה'])}</td><td>${esc(t['Expected Result'])}</td><td>${esc(t['שאלה פתוחה / נדרש אישור'])}</td><td class="${r?statusClass(r.status):''}">${r?esc(r.status):'Not Run'}</td><td><div class="actions-row"><button class="btn test-run" data-id="${t.ID}">${t.mode==='manual'?'סמן':'Run'}</button><button class="btn ghost test-open" data-id="${t.ID}">פרטים</button></div></td></tr>`}).join('')}</tbody></table>`;
   document.querySelectorAll('.test-run').forEach(b=>b.onclick=()=>{const t=state.tests.find(x=>x.ID===b.dataset.id); if(t?.mode==='manual') openTest(b.dataset.id); else runTest(b.dataset.id);}); document.querySelectorAll('.test-open').forEach(b=>b.onclick=()=>openTest(b.dataset.id));
 }
 function renderQuestions(){ $('questionsTable').innerHTML=`<table class="qa-table"><thead><tr><th>Test ID</th><th>תחום</th><th>Endpoint</th><th>שאלה</th><th>למה נדרש</th><th>Status</th></tr></thead><tbody>${state.questions.map(q=>{const st=(q.Status||'Open').toLowerCase().replace(/\s+/g,'-');return `<tr><td>${esc(q['Test ID'])}</td><td>${esc(q['תחום'])}</td><td dir="ltr">${esc(q.Endpoint)}</td><td>${esc(q['שאלה פתוחה'])}</td><td>${esc(q['מקור / למה נדרש'])}</td><td class="status-${st}">${esc(q.Status||'Open')}</td></tr>`}).join('')}</tbody></table>`; }
@@ -956,7 +998,7 @@ function renderStpStd(){
     ['Hallucination / מקור שגוי','RAG Quality','Sources, chunks, grounding, manual SME rating'],
     ['קלטי קצה','Boundary / Validation','Boundary Pack + max/min/empty/invalid values'],
     ['Streaming שבור','SSE','event order, done/error, disconnect, malformed event'],
-    ['RAG Spec / Category RBAC','Ingestion + Retrieval Target Design','RAG-001…RAG-014; לא מסיקים שהמימוש קיים רק כי הוא מופיע באפיון'],
+    ['RAG Spec / Category RBAC','Ingestion + Retrieval Target Design','RAG test pack; לא מסיקים שהמימוש קיים רק כי הוא מופיע באפיון'],
     ['מידע סטטיסטי רגיש','Statistics / RBAC','Access control + response data review']
   ];
   if($('stdTraceability')) $('stdTraceability').innerHTML=`<table class="qa-table"><thead><tr><th>סיכון</th><th>אזור בדיקה</th><th>כיסוי ב־STD</th></tr></thead><tbody>${trace.map(r=>`<tr>${r.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
@@ -967,7 +1009,7 @@ function stpMarkdown(){
 }
 function stdMarkdown(){
   const lines=[`# STD – תכנון ותיאור בדיקות GenAI Router`,``,`סה״כ תסריטים: ${state.tests.length}`,``,'## Test Cases'];
-  for(const t of state.tests){ lines.push(`### ${t.ID} – ${t['תרחיש בדיקה']||''}`,`- עדיפות: ${t.priority}` ,`- תחום: ${t['תחום']||''}`,`- Endpoint: ${t.Endpoint||''}`,`- תנאים מקדימים: ${t['תנאים מקדימים']||''}`,`- צעדים/קלט: ${t['צעדים / קלט']||''}`,`- Expected: ${t['Expected Result']||''}`,`- מצב: ${modeLabel(t.mode)}`,``); }
+  for(const t of state.tests){ lines.push(`### ${testLabel(t)} – ${t['תרחיש בדיקה']||''}`,`- עדיפות: ${t.priority}` ,`- תחום: ${t['תחום']||''}`,`- Endpoint: ${t.Endpoint||''}`,`- תנאים מקדימים: ${t['תנאים מקדימים']||''}`,`- צעדים/קלט: ${t['צעדים / קלט']||''}`,`- Expected: ${t['Expected Result']||''}`,`- מצב: ${modeLabel(t.mode)}`,``); }
   return lines.join('\n');
 }
 function exportStp(){exportBlob('STP-GenAI-Router-he.md','text/markdown;charset=utf-8','\ufeff'+stpMarkdown());}
@@ -975,9 +1017,9 @@ function exportStd(){exportBlob('STD-GenAI-Router-he.md','text/markdown;charset=
 
 function renderKpis(){ $('kpiTotal').textContent=state.tests.length; $('kpiAuto').textContent=state.tests.filter(t=>t.mode!=='manual').length; $('kpiPass').textContent=Object.values(state.results).filter(r=>r.status==='PASS').length; $('kpiFail').textContent=Object.values(state.results).filter(r=>r.status==='FAIL').length; if($('kpiNA'))$('kpiNA').textContent=Object.values(state.results).filter(r=>r.status==='N/A').length; if($('kpiDemo'))$('kpiDemo').textContent=Object.values(state.results).filter(r=>r.status==='DEMO').length; $('kpiOpen').textContent=state.questions.filter(q=>(q.Status||'Open')==='Open').length; }
 function setTestBugCategory(id,val){if(!state.results[id])return;state.results[id].bugCategory=val||'';renderReport();}
-function downloadTestBugEvidence(id){const r=state.results[id],t=state.tests.find(x=>x.ID===id);if(!r||!t)return;const md=bugEvidenceMarkdown({title:`QA Bug Evidence — ${id}`,category:r.bugCategory,meta:{environment:cfg().baseUrl||'TSH',time:r.time},fields:{Scenario:t['תרחיש בדיקה'],Endpoint:t.Endpoint,'Expected Result':t['Expected Result'],Actual:r.actual,Details:r.details,Status:r.status},evidence:r.evidence});exportBlob(`bug-evidence-${id}-${Date.now()}.md`,'text/markdown;charset=utf-8',md);}
+function downloadTestBugEvidence(id){const r=state.results[id],t=state.tests.find(x=>x.ID===id);if(!r||!t)return;const md=bugEvidenceMarkdown({title:`QA Bug Evidence — ${testLabel(t)}`,category:r.bugCategory,meta:{environment:cfg().baseUrl||'TSH',time:r.time},fields:{Scenario:t['תרחיש בדיקה'],Endpoint:t.Endpoint,'Expected Result':t['Expected Result'],Actual:r.actual,Details:r.details,Status:r.status},evidence:r.evidence});exportBlob(`bug-evidence-${testLabel(t)}-${Date.now()}.md`,'text/markdown;charset=utf-8',md);}
 function downloadSelectedTestBugEvidence(){if(state.selectedTestId)downloadTestBugEvidence(state.selectedTestId);}
-function renderReport(){ const rs=Object.values(state.results); $('reportTable').innerHTML=rs.length?`<table class="qa-table"><thead><tr><th>ID</th><th>Status</th><th>Mode</th><th>Actual</th><th>Details</th><th>סיווג כשל</th><th>Evidence</th><th>Time</th></tr></thead><tbody>${rs.map(r=>`<tr><td>${r.id}</td><td class="${statusClass(r.status)}">${r.status}</td><td>${esc(r.evidence?.mode||'—')}</td><td>${esc(r.actual)}</td><td>${esc(r.details)}</td><td><select data-test-category="${esc(r.id)}">${bugCategoryOptions(r.bugCategory||'')}</select></td><td>${r.evidence?'Request/Response שמור':'—'} <button class="mini-btn" data-test-evidence="${esc(r.id)}">Bug Evidence</button></td><td dir="ltr">${r.time}</td></tr>`).join('')}</tbody></table>`:'אין תוצאות עדיין.';document.querySelectorAll('[data-test-category]').forEach(s=>s.onchange=()=>setTestBugCategory(s.dataset.testCategory,s.value));document.querySelectorAll('[data-test-evidence]').forEach(b=>b.onclick=()=>downloadTestBugEvidence(b.dataset.testEvidence)); }
+function renderReport(){ const rs=Object.values(state.results); $('reportTable').innerHTML=rs.length?`<table class="qa-table"><thead><tr><th>ID</th><th>Status</th><th>Mode</th><th>Actual</th><th>Details</th><th>סיווג כשל</th><th>Evidence</th><th>Time</th></tr></thead><tbody>${rs.map(r=>{const t=state.tests.find(x=>x.ID===r.id);return `<tr><td>${esc(testLabel(t)||r.id)}</td><td class="${statusClass(r.status)}">${r.status}</td><td>${esc(r.evidence?.mode||'—')}</td><td>${esc(r.actual)}</td><td>${esc(r.details)}</td><td><select data-test-category="${esc(r.id)}">${bugCategoryOptions(r.bugCategory||'')}</select></td><td>${r.evidence?'Request/Response שמור':'—'} <button class="mini-btn" data-test-evidence="${esc(r.id)}">Bug Evidence</button></td><td dir="ltr">${r.time}</td></tr>`}).join('')}</tbody></table>`:'אין תוצאות עדיין.';document.querySelectorAll('[data-test-category]').forEach(s=>s.onchange=()=>setTestBugCategory(s.dataset.testCategory,s.value));document.querySelectorAll('[data-test-evidence]').forEach(b=>b.onclick=()=>downloadTestBugEvidence(b.dataset.testEvidence)); }
 function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderContract();renderContext();renderRagSpec();renderStpStd();renderEndpointGuide();renderAiQaLessons();renderGlossary($('glossarySearch')?.value||'');renderGolden();wireGlossaryLinks();readiness();}
 
 function populateEndpoints(){ const s=$('endpointSelect'); s.innerHTML=state.operations.map((o,i)=>`<option value="${i}">${o.method} ${o.path} — ${esc(o.operationId)}</option>`).join(''); s.onchange=syncApiTemplate; syncApiTemplate(); }
