@@ -3,7 +3,8 @@ const state = {
   demo: false, createdConversationId: null, selectedTestId: null,
   context: null, tokenMarkedAt: null, connectionOk: false,
   lastExchange: null, bulkRunning: false, uiSelfTest: null,
-  goldenDataset: [], goldenResults: {}, goldenEditingId: null, goldenRuns: [], currentGoldenRunId: null
+  goldenDataset: [], goldenResults: {}, goldenEditingId: null, goldenRuns: [], currentGoldenRunId: null,
+  investigations: {}, runHistory: [], bugDraft: null
 };
 
 const $ = (id) => document.getElementById(id);
@@ -11,6 +12,20 @@ const esc = (v='') => String(v ?? '').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&
 const now = () => new Date().toISOString();
 
 const clone = (v) => v == null ? v : JSON.parse(JSON.stringify(v));
+const RUN_HISTORY_KEY='genai-router-qa-run-history-v002';
+function redactForAi(value,key=''){
+  if(value==null)return value;
+  const sensitive=/(token|authorization|password|secret|api[-_]?key|private[-_]?key)/i;
+  const identifiers=/(userId|caseId|conversationId|messageId)/i;
+  if(sensitive.test(key)) return '[REDACTED]';
+  if(identifiers.test(key)) return '[REDACTED-ID]';
+  if(Array.isArray(value)) return value.slice(0,50).map(v=>redactForAi(v,key));
+  if(typeof value==='object'){const out={};for(const [k,v] of Object.entries(value))out[k]=redactForAi(v,k);return out;}
+  if(typeof value==='string') return value.length>6000?value.slice(0,6000)+'…[TRUNCATED]':value;
+  return value;
+}
+function loadRunHistory(){try{const x=JSON.parse(localStorage.getItem(RUN_HISTORY_KEY)||'[]');state.runHistory=Array.isArray(x)?x.slice(0,20):[];}catch{state.runHistory=[];}}
+function persistRunHistory(){try{localStorage.setItem(RUN_HISTORY_KEY,JSON.stringify(state.runHistory.slice(0,20)));}catch{}}
 function showToast(message,kind='info',ms=3200){
   const host=$('toastHost'); if(!host){console.log(`[${kind}]`,message);return;}
   const el=document.createElement('div'); el.className=`toast ${kind}`; el.textContent=message; host.appendChild(el);
@@ -428,11 +443,104 @@ function bugEvidenceMarkdown({title,category='',meta={},fields={},sources=[],chu
 }
 function downloadGoldenBugEvidence(id){
   const g=state.goldenDataset.find(x=>x.id===id),r=state.goldenResults[id];if(!g||!r)return;const run=state.goldenRuns.find(x=>x.id===state.currentGoldenRunId);
-  const md=bugEvidenceMarkdown({title:`Golden Bug Evidence — ${id}`,category:r.bugCategory,meta:run?.meta||r.runMeta||{},fields:{Question:g.question,'Golden Answer':g.expected,'Expected Source':g.expectedSource||'—','Actual Answer':r.answer,'Retrieval Score':r.retrievalScore,'Answer Score':r.answerScore,'Grounding Score':r.groundingScore,'Source Match':r.sourceMatch,HTTP:r.http,ConversationId:r.conversationId},sources:r.sourceRefs||[],chunks:r.chunkEvidence||[],evidence:r.messageEvidence||null});exportBlob(`bug-evidence-${testLabel(t)}-${Date.now()}.md`,'text/markdown;charset=utf-8',md);
+  const md=bugEvidenceMarkdown({title:`Golden Bug Evidence — ${id}`,category:r.bugCategory,meta:run?.meta||r.runMeta||{},fields:{Question:g.question,'Golden Answer':g.expected,'Expected Source':g.expectedSource||'—','Actual Answer':r.answer,'Retrieval Score':r.retrievalScore,'Answer Score':r.answerScore,'Grounding Score':r.groundingScore,'Source Match':r.sourceMatch,HTTP:r.http,ConversationId:r.conversationId},sources:r.sourceRefs||[],chunks:r.chunkEvidence||[],evidence:r.messageEvidence||null});exportBlob(`bug-evidence-golden-${id}-${Date.now()}.md`,'text/markdown;charset=utf-8',md);
 }
 function exportGolden(){exportBlob(`golden-regression-${Date.now()}.json`,'application/json',JSON.stringify({version:2,exportedAt:now(),dataset:state.goldenDataset,results:state.goldenResults,runs:state.goldenRuns,currentRunId:state.currentGoldenRunId},null,2));}
 async function importGoldenFile(file){try{const obj=JSON.parse(await file.text());const ds=Array.isArray(obj)?obj:obj.dataset;if(!Array.isArray(ds))throw new Error('JSON אינו מכיל dataset תקין');state.goldenDataset=ds.map((x,i)=>({id:String(x.id||`GOLD-${i+1}`),question:String(x.question||''),expected:String(x.expected||x.expectedAnswer||''),expectedSource:String(x.expectedSource||''),mustInclude:String(x.mustInclude||''),tags:String(x.tags||''),notes:String(x.notes||'')})).filter(x=>x.question&&x.expected);state.goldenResults=obj.results&&typeof obj.results==='object'?obj.results:{};state.goldenRuns=Array.isArray(obj.runs)?obj.runs:[];state.currentGoldenRunId=obj.currentRunId||state.goldenRuns[0]?.id||null;saveGoldenDataset();renderGolden();showToast(`${state.goldenDataset.length} שאלות זהב יובאו${state.goldenRuns.length?` + ${state.goldenRuns.length} Runs`:''}.`, 'success');}catch(e){showToast('ייבוא Golden נכשל: '+e.message,'error',5000);}}
 
+
+function localInvestigation(id){
+  const t=state.tests.find(x=>x.ID===id),r=state.results[id];
+  if(!t||!r)return null;
+  const http=Number(r.evidence?.response?.status);
+  let category=r.bugCategory||'',cause='',confidence='Medium',next=[];
+  if(['N/A','BLOCKED'].includes(r.status)){
+    category=category||'Prerequisite / Environment';cause=r.details||r.actual||'חסר תנאי מקדים להרצה.';confidence='High';next=['להשלים את התנאי החסר','להריץ שוב את אותו Test Case לפני פתיחת Bug מוצר'];
+  }else if(http===401||http===403){
+    category=category||'Authorization/Security Failure';cause=`השרת דחה את הבקשה עם HTTP ${http}. החשד הראשי הוא Token/הרשאה/קשר בין המשתמש לזהות.`;confidence='High';next=['לאמת Identity Token ותוקף','לוודא Auth Header נכון','להשוות userId לזהות שב-Token'];
+  }else if(http===400||http===404||http===409||http===422){
+    category=category||'Data/Execution Failure';cause=`השרת החזיר HTTP ${http}; סביר שמדובר ב-Validation, Test Data או פער Contract.`;confidence='Medium';next=['להשוות payload ל-Swagger','לבדוק שדות חובה/פורמט','לאמת האם ה-Expected Result עדיין תואם ל-Contract'];
+  }else if(http===429){
+    category=category||'Data/Execution Failure';cause='Rate limit / throttling אפשרי (HTTP 429).';confidence='High';next=['לבדוק Retry-After','להמתין ולהריץ שוב','לבדוק מגבלת קצב מוסכמת'];
+  }else if(http>=500){
+    category=category||'Data/Execution Failure';cause=`כשל Server-side אפשרי: HTTP ${http}. ה-Request הגיע לשרת אך לא הסתיים בהצלחה.`;confidence='High';next=['לצרף Request/Response המצונזרים','לחפש correlation/trace בלוגים','לבדוק אם הכשל משתחזר עם אותו payload'];
+  }else if(r.status==='FAIL'){
+    category=category||'Data/Execution Failure';cause='ה-Actual Result אינו עומד ב-Expected Result, אך הראיות לבדן אינן מצביעות חד-משמעית על רכיב שורש.';confidence='Medium';next=['להשוות Expected מול Actual','לבדוק Response body / SSE','להריץ פעם נוספת כדי לשלול flakiness'];
+  }else if(r.status==='QUESTION'){
+    category=category||'Contract / Expected Result';cause=r.details||'ה-Expected Result אינו סגור ולכן אין בסיס אמין ל-PASS/FAIL.';confidence='High';next=['לסגור את השאלה מול Product/Developer/Swagger','לעדכן Expected Result','להריץ שוב לאחר סגירת ה-Contract'];
+  }else{
+    category=category||'No failure detected';cause='אין כשל מובהק בתוצאה הנוכחית.';confidence='High';next=['אין צורך לפתוח Bug על סמך ההרצה הזו'];
+  }
+  const ev=r.evidence||{};
+  const evidence=[`Status: ${r.status}`,Number.isFinite(http)?`HTTP: ${http}`:'HTTP: —',ev.response?.latencyMs!=null?`Latency: ${ev.response.latencyMs} ms`:'Latency: —',`Endpoint: ${t.Endpoint||ev.request?.path||'—'}`];
+  return {source:'Local evidence analysis',category,cause,confidence,next,evidence,createdAt:now()};
+}
+function renderInvestigation(id){
+  const host=$('dialogInvestigation');if(!host)return;
+  const inv=state.investigations[id];
+  if(!inv){host.innerHTML='';return;}
+  host.innerHTML=`<div class="investigation-card"><div class="section-head"><div><h3>🤖 Investigation</h3><p>${esc(inv.source||'Evidence analysis')} · Confidence: ${esc(inv.confidence||'—')}</p></div><span class="badge question">${esc(inv.category||'Unclassified')}</span></div><p><b>Probable cause:</b> ${esc(inv.cause||'—')}</p><div class="investigation-evidence">${(inv.evidence||[]).map(x=>`<span>${esc(x)}</span>`).join('')}</div>${inv.aiText?`<div class="ai-deep-analysis"><b>AI analysis</b><pre>${esc(inv.aiText)}</pre></div>`:''}<b>Next steps</b><ol>${(inv.next||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ol></div>`;
+}
+function investigationPayload(id){
+  const t=state.tests.find(x=>x.ID===id),r=state.results[id];if(!t||!r)return null;
+  return redactForAi({test:{id:testLabel(t),legacyId:t.ID,priority:t.priority,domain:t['תחום'],endpoint:t.Endpoint,scenario:t['תרחיש בדיקה'],prerequisites:t['תנאים מקדימים'],steps:t['צעדים / קלט'],expected:t['Expected Result'],openQuestion:t['שאלה פתוחה / נדרש אישור']},result:{status:r.status,actual:r.actual,details:r.details,failureCategory:r.bugCategory||''},evidence:r.evidence||null});
+}
+async function investigateTest(id){
+  if(!state.results[id]){showToast('יש להריץ או לסמן את הטסט לפני Investigation.','warning');return;}
+  const base=localInvestigation(id);state.investigations[id]=base;renderInvestigation(id);
+  if(!$('aiRemoteEnabled')?.checked){showToast('בוצע תחקור מקומי מה-Evidence. AI עמוק כבוי בהגדרות המתקדמות.','info',4500);return base;}
+  try{
+    const resp=await fetch('/api/ai-investigate',{method:'POST',headers:{'Content-Type':'application/json','X-QA-AI-Code':$('aiAccessCode')?.value||''},body:JSON.stringify({mode:'test',payload:investigationPayload(id)})});
+    const data=await resp.json().catch(()=>({}));if(!resp.ok)throw new Error(data.error||`HTTP ${resp.status}`);
+    state.investigations[id]={...base,source:`AI + Runtime Evidence${data.model?` · ${data.model}`:''}`,aiText:data.analysis||'',createdAt:now()};renderInvestigation(id);showToast('AI Investigation הסתיים.','success');return state.investigations[id];
+  }catch(e){state.investigations[id]={...base,aiText:`AI עמוק לא זמין: ${e.message}`};renderInvestigation(id);showToast('התחקור המקומי זמין, אך AI עמוק לא הופעל: '+e.message,'warning',6000);return state.investigations[id];}
+}
+function bugDraftFor(id){
+  const t=state.tests.find(x=>x.ID===id),r=state.results[id];if(!t||!r)return null;
+  const inv=state.investigations[id]||localInvestigation(id);const ev=r.evidence||{},resp=ev.response||{};
+  const http=resp.status!=null?`HTTP ${resp.status}`:'';const title=`[${testLabel(t)}] ${t['תרחיש בדיקה']||'QA failure'}${http?` — ${http}`:` — ${r.status}`}`;
+  const steps=(t['צעדים / קלט']||'הרץ את ה-Test Case לפי ה-STD').split(/\n|;/).map(x=>x.trim()).filter(Boolean);
+  const body=[
+    `## Environment\n${cfg().baseUrl||'TSH / QA'}`,
+    `## Test Case\n${testLabel(t)} (${t.ID}) — ${t['תרחיש בדיקה']||''}`,
+    `## Endpoint\n${t.Endpoint||ev.request?.path||'—'}`,
+    `## Steps to reproduce\n${(steps.length?steps:['הרץ את ה-Test Case']).map((x,i)=>`${i+1}. ${x}`).join('\n')}`,
+    `## Expected Result\n${t['Expected Result']||'—'}`,
+    `## Actual Result\n${r.actual||'—'}\n\nStatus: ${r.status}`,
+    `## QA Investigation\nCategory: ${inv?.category||r.bugCategory||'Unclassified'}\nProbable cause: ${inv?.cause||'—'}\nConfidence: ${inv?.confidence||'—'}`,
+    `## Runtime Evidence\nMode: ${ev.mode||'—'}\nHTTP: ${resp.status??'—'}\nLatency: ${resp.latencyMs??'—'} ms\nRequest/Response are available in the QA Console Bug Evidence export. Token is redacted.`,
+    r.details?`## QA Notes\n${r.details}`:''
+  ].filter(Boolean).join('\n\n');
+  return {id,title,body};
+}
+function openBugDraft(id){
+  const rr=state.results[id];
+  if(!rr){showToast('אין תוצאה שממנה אפשר ליצור Bug.','warning');return;}
+  if(!['FAIL','BLOCKED','QUESTION'].includes(rr.status)){showToast(`לא נוצר Bug: סטטוס ${rr.status} אינו כשל מוצר/חסם שדורש Bug.`, 'warning');return;}
+  const d=bugDraftFor(id);state.bugDraft=d;$('bugDraftTitle').value=d.title;$('bugDraftBody').value=d.body;$('bugDialog').showModal();
+}
+async function copyBugDraft(){
+  const text=`${$('bugDraftTitle').value.trim()}\n\n${$('bugDraftBody').value}`;try{await navigator.clipboard.writeText(text);showToast('ה-Bug הועתק ומוכן להדבקה ב-Azure.','success');}catch{prompt('העתק Bug',text);}
+}
+function downloadBugDraft(){
+  const title=$('bugDraftTitle').value.trim(),body=$('bugDraftBody').value;exportBlob(`azure-bug-${state.bugDraft?.id||'qa'}-${Date.now()}.md`,'text/markdown;charset=utf-8',`# ${title}\n\n${body}`);
+}
+async function investigateRun(){
+  const rs=Object.values(state.results);if(!rs.length){showToast('אין עדיין תוצאות לתחקור.','warning');return;}
+  const counts={};rs.forEach(r=>counts[r.status]=(counts[r.status]||0)+1);
+  const problems=rs.filter(r=>['FAIL','BLOCKED','N/A','QUESTION'].includes(r.status));
+  const local=`הרצה: ${rs.length} תוצאות · FAIL ${counts.FAIL||0} · BLOCKED ${counts.BLOCKED||0} · N/A ${counts['N/A']||0} · QUESTION ${counts.QUESTION||0}. ${problems.length?'מומלץ להתחיל בכשלים אמיתיים (FAIL), ורק אחר כך לטפל בחסמי סביבה/Contract.':'לא נמצאו כשלים או חסמים בתוצאות הנוכחיות.'}`;
+  const host=$('aiRunSummary');host.innerHTML=`<div class="investigation-card"><b>Evidence summary</b><p>${esc(local)}</p></div>`;
+  if(!$('aiRemoteEnabled')?.checked)return showToast('סיכום מקומי הוצג. להפעלת AI עמוק סמן את האפשרות בהגדרות המתקדמות.','info',5000);
+  const payload=redactForAi({counts,issues:problems.slice(0,40).map(r=>{const t=state.tests.find(x=>x.ID===r.id);return {id:testLabel(t)||r.id,status:r.status,scenario:t?.['תרחיש בדיקה'],endpoint:t?.Endpoint,expected:t?.['Expected Result'],actual:r.actual,details:r.details,http:r.evidence?.response?.status};})});
+  try{const resp=await fetch('/api/ai-investigate',{method:'POST',headers:{'Content-Type':'application/json','X-QA-AI-Code':$('aiAccessCode')?.value||''},body:JSON.stringify({mode:'run',payload})});const data=await resp.json().catch(()=>({}));if(!resp.ok)throw new Error(data.error||`HTTP ${resp.status}`);host.innerHTML=`<div class="investigation-card"><div class="section-head"><div><h3>🤖 Run Investigation</h3><p>${esc(data.model||'AI')}</p></div></div><pre>${esc(data.analysis||local)}</pre></div>`;showToast('תחקור ההרצה הסתיים.','success');}catch(e){host.insertAdjacentHTML('beforeend',`<div class="notice">AI עמוק לא זמין: ${esc(e.message)}</div>`);showToast('AI עמוק לא זמין; הסיכום המקומי נשאר מוצג.','warning');}
+}
+function saveRunHistory(label,ids=null){
+  const rs=(ids?.length?ids.map(id=>state.results[id]).filter(Boolean):Object.values(state.results)),counts={};rs.forEach(r=>counts[r.status]=(counts[r.status]||0)+1);state.runHistory.unshift({id:`RUN-${Date.now()}`,label,time:now(),mode:state.demo?'DEMO':cfg().executionMode,total:rs.length,counts});state.runHistory=state.runHistory.slice(0,20);persistRunHistory();renderRunHistory();
+}
+function renderRunHistory(){
+  const host=$('runHistoryTable');if(!host)return;host.innerHTML=state.runHistory.length?`<table class="qa-table"><thead><tr><th>Run</th><th>Mode</th><th>PASS</th><th>FAIL</th><th>BLOCKED</th><th>N/A</th><th>QUESTION</th><th>Time</th></tr></thead><tbody>${state.runHistory.map(r=>`<tr><td><b>${esc(r.label)}</b></td><td>${esc(r.mode)}</td><td class="status-pass">${r.counts?.PASS||0}</td><td class="status-fail">${r.counts?.FAIL||0}</td><td class="status-blocked">${r.counts?.BLOCKED||0}</td><td class="status-na">${r.counts?.['N/A']||0}</td><td class="status-question">${r.counts?.QUESTION||0}</td><td dir="ltr">${esc(r.time)}</td></tr>`).join('')}</tbody></table>`:'<div class="empty-state">עדיין אין הרצות שמורות.</div>';
+}
 
 function renderEndpointGuide(){
   const host=$('endpointGuide'); if(!host) return;
@@ -513,6 +621,9 @@ function openTest(id){
   $('dialogBody').innerHTML=`<div class="detail-row plain-explanation"><b>מה הבדיקה עושה בפשטות?</b>${esc(plainTestExplanation(t))}</div>`+resultHtml+
     [['תנאים מקדימים',t['תנאים מקדימים']],['צעדים / קלט',t['צעדים / קלט']],['Expected Result',t['Expected Result']],['שאלה פתוחה',t['שאלה פתוחה / נדרש אישור']],['מקור / הערה',t['מקור / הערה']]].filter(x=>x[1]).map(([a,b])=>`<div class="detail-row"><b>${esc(a)}</b>${esc(b)}</div>`).join('');
   renderDialogEvidence(r?.evidence||null,r?.status||'');
+  renderInvestigation(id);
+  if($('dialogInvestigateBtn'))$('dialogInvestigateBtn').hidden=!r;
+  if($('dialogGenerateBugBtn'))$('dialogGenerateBugBtn').hidden=!r||!['FAIL','BLOCKED','QUESTION'].includes(r.status);
   $('manualNote').value=r?.details||''; if($('manualBugCategory'))$('manualBugCategory').innerHTML=bugCategoryOptions(r?.bugCategory||''); $('dialogRunBtn').style.display=t.mode==='manual'?'none':'inline-block'; $('testDialog').showModal();
 }
 function renderDialogEvidence(ev,status=''){
@@ -627,7 +738,7 @@ async function loadData(){
   ];
   for (const [ID,priority,domain,Endpoint,scenario,steps,expected] of text2sqlTests) state.tests.push({ID,priority,mode:'assisted','תחום':domain,Endpoint,'תרחיש בדיקה':scenario,'תנאים מקדימים':'Text2SQL Base URL + Authentication + גישת SQL/BigQuery או Reference Query','צעדים / קלט':steps,'Expected Result':expected,'שאלה פתוחה / נדרש אישור':'','מקור / הערה':'Text2SQL Controller documentation'});
 
-  // גרסה 0.01: מספור תצוגה חדש ורציף. legacyId נשמר פנימית כדי לא לשבור את מנגנון ההרצה.
+  // גרסה 0.02: מספור תצוגה רציף נשמר; נוספו Investigation, Bug Draft ו-Run History. legacyId נשמר פנימית כדי לא לשבור את מנגנון ההרצה.
   state.tests.forEach((t,i)=>{ t.legacyId=t.ID; t.displayId=`QA-${String(i+1).padStart(3,'0')}`; });
 
   state.operations=sw.operations;
@@ -839,19 +950,19 @@ async function runTest(id,{bulk=false}={}){
 async function runSafeP0(){
   const ids=['P0-001','P0-002','P0-003','P0-004','P0-006','P0-007']; $('runSummary').innerHTML='';
   for(const id of ids){ const r=await runTest(id,{bulk:true}); if(r)$('runSummary').innerHTML += `<div class="run-item"><b>${id}</b><span class="${statusClass(r.status)}">${r.status}</span><span>${esc(r.actual)}</span></div>`; }
-  showToast('Run Safe P0 הסתיים.','success');
+  saveRunHistory('Safe P0',ids); showToast('Run Safe P0 הסתיים.','success');
 }
 
 async function runBoundaryPack(){
   const ids=state.tests.filter(t=>t.ID.startsWith('BND-')&&t.mode==='auto').map(t=>t.ID); $('runSummary').innerHTML='';
   for(const id of ids){ const r=await runTest(id,{bulk:true}); if(r)$('runSummary').innerHTML += `<div class="run-item"><b>${id}</b><span class="${statusClass(r.status)}">${r.status}</span><span>${esc(r.actual)}</span></div>`; }
-  showToast('Boundary Pack הסתיים.','success');
+  saveRunHistory('Boundary Pack',ids); showToast('Boundary Pack הסתיים.','success');
 }
 
 async function runRagSpecPack(){
   const ids=state.tests.filter(t=>t.ID.startsWith('RAG-')).map(t=>t.ID); $('runSummary').innerHTML='';
   for(const id of ids){ const r=await runTest(id,{bulk:true}); if(r)$('runSummary').insertAdjacentHTML('beforeend',`<div class="run-item"><b>${esc(id)}</b><span class="${statusClass(r.status)}">${esc(r.status)}</span><span>${esc(r.actual)}</span></div>`); }
-  showToast('RAG Spec Pack הסתיים. בדיקות שאין להן Observability/Test Data מסומנות N/A.','info',5000);
+  saveRunHistory('RAG Spec Pack',ids); showToast('RAG Spec Pack הסתיים. בדיקות שאין להן Observability/Test Data מסומנות N/A.','info',5000);
 }
 
 async function runAllTests(){
@@ -872,7 +983,8 @@ async function runAllTests(){
     }
     const counts={}; Object.values(state.results).forEach(r=>counts[r.status]=(counts[r.status]||0)+1);
     text.textContent=`הסתיים: ${tests.length} בדיקות · PASS ${counts.PASS||0} · FAIL ${counts.FAIL||0} · N/A ${counts['N/A']||0} · DEMO ${counts.DEMO||0} · QUESTION ${counts.QUESTION||0}`;
-    showToast(`הרצה כוללת הסתיימה. FAIL: ${counts.FAIL||0}, N/A: ${counts['N/A']||0}${state.demo?' · Demo Mode פעיל':''}`,counts.FAIL?'warning':'success',5000);
+    saveRunHistory('Run All',tests.map(t=>t.ID));
+    showToast(`הרצה כוללת הסתיימה. FAIL: ${counts.FAIL||0}, BLOCKED: ${counts.BLOCKED||0}, N/A: ${counts['N/A']||0}${state.demo?' · Demo Mode פעיל':''}`,counts.FAIL?'warning':'success',5000);
   }finally{state.bulkRunning=false;btn.disabled=false;btn.textContent=old;}
 }
 
@@ -913,7 +1025,7 @@ async function happyFlow(){
 
 function runUiSelfTest(){
   const checks=[]; const check=(name,ok,detail='')=>checks.push({name,ok:!!ok,detail});
-  const buttonIds=['demoBtn','healthBtn','markTokenBtn','readinessBtn','runAllTests','runSafeP0','runBoundaryPack','runRagSpecPack','runHappyFlow','uiSelfTestBtn','clearResults','flowRunBtn','apiRunBtn','copyCurlBtn','aiRunBtn','goldenRunAllBtn','goldenSaveBtn','goldenResetBtn','goldenExportBtn','goldenImportBtn','goldenClearBtn','goldenCompareBtn','dialogBugEvidenceBtn','exportJson','exportCsv','exportStpBtn','exportStdBtn','dialogRunBtn','dialogCopyCurlBtn'];
+  const buttonIds=['demoBtn','healthBtn','markTokenBtn','readinessBtn','runAllTests','runSafeP0','runBoundaryPack','runRagSpecPack','runHappyFlow','uiSelfTestBtn','clearResults','flowRunBtn','apiRunBtn','copyCurlBtn','aiRunBtn','goldenRunAllBtn','goldenSaveBtn','goldenResetBtn','goldenExportBtn','goldenImportBtn','goldenClearBtn','goldenCompareBtn','dialogBugEvidenceBtn','dialogInvestigateBtn','dialogGenerateBugBtn','runAiSummaryBtn','clearRunHistoryBtn','copyBugDraftBtn','downloadBugDraftBtn','exportJson','exportCsv','exportStpBtn','exportStdBtn','dialogRunBtn','dialogCopyCurlBtn'];
   buttonIds.forEach(id=>{const el=$(id);check(`כפתור ${id}`,!!el && (typeof el.onclick==='function'||id==='dialogCopyCurlBtn'),!el?'לא נמצא':typeof el.onclick);});
   document.querySelectorAll('.tab').forEach(tab=>check(`Tab ${tab.dataset.tab}`,!!$(tab.dataset.tab)&&typeof tab.onclick==='function','Target section + click handler'));
   document.querySelectorAll('[data-manual-status]').forEach(b=>check(`Manual status ${b.dataset.manualStatus}`,typeof b.onclick==='function','click handler'));
@@ -931,8 +1043,8 @@ function runUiSelfTest(){
 }
 
 function renderCatalog(){
-  const q=$('searchTests')?.value?.toLowerCase()||'', p=$('priorityFilter')?.value||'', m=$('modeFilter')?.value||'';
-  const rows=state.tests.filter(t=>(!p||t.priority===p)&&(!m||t.mode===m)&&(!q||[t.displayId,t.ID,t['תחום'],t.Endpoint,t['תרחיש בדיקה']].join(' ').toLowerCase().includes(q)));
+  const q=$('searchTests')?.value?.toLowerCase()||'', p=$('priorityFilter')?.value||'', m=$('modeFilter')?.value||'', st=$('statusFilter')?.value||'';
+  const rows=state.tests.filter(t=>{const rs=state.results[t.ID]?.status||'NOT_RUN';return (!p||t.priority===p)&&(!m||t.mode===m)&&(!st||rs===st)&&(!q||[t.displayId,t.ID,t['תחום'],t.Endpoint,t['תרחיש בדיקה']].join(' ').toLowerCase().includes(q));});
   $('testsTableWrap').innerHTML=`<table class="qa-table"><thead><tr><th>ID</th><th>רמה</th><th>מצב</th><th>תחום</th><th>Endpoint</th><th>תרחיש</th><th>Expected</th><th>שאלה פתוחה</th><th>תוצאה</th><th></th></tr></thead><tbody>${rows.map(t=>{
     const r=state.results[t.ID]; return `<tr><td>${esc(testLabel(t))}</td><td class="${t.priority.toLowerCase()}">${t.priority}</td><td class="mode-${t.mode}">${modeLabel(t.mode)}</td><td>${esc(t['תחום'])}</td><td dir="ltr">${esc(t.Endpoint)}</td><td>${esc(t['תרחיש בדיקה'])}</td><td>${esc(t['Expected Result'])}</td><td>${esc(t['שאלה פתוחה / נדרש אישור'])}</td><td class="${r?statusClass(r.status):''}">${r?esc(r.status):'Not Run'}</td><td><div class="actions-row"><button class="btn test-run" data-id="${t.ID}">${t.mode==='manual'?'סמן':'Run'}</button><button class="btn ghost test-open" data-id="${t.ID}">פרטים</button></div></td></tr>`}).join('')}</tbody></table>`;
   document.querySelectorAll('.test-run').forEach(b=>b.onclick=()=>{const t=state.tests.find(x=>x.ID===b.dataset.id); if(t?.mode==='manual') openTest(b.dataset.id); else runTest(b.dataset.id);}); document.querySelectorAll('.test-open').forEach(b=>b.onclick=()=>openTest(b.dataset.id));
@@ -1015,12 +1127,19 @@ function stdMarkdown(){
 function exportStp(){exportBlob('STP-GenAI-Router-he.md','text/markdown;charset=utf-8','\ufeff'+stpMarkdown());}
 function exportStd(){exportBlob('STD-GenAI-Router-he.md','text/markdown;charset=utf-8','\ufeff'+stdMarkdown());}
 
-function renderKpis(){ $('kpiTotal').textContent=state.tests.length; $('kpiAuto').textContent=state.tests.filter(t=>t.mode!=='manual').length; $('kpiPass').textContent=Object.values(state.results).filter(r=>r.status==='PASS').length; $('kpiFail').textContent=Object.values(state.results).filter(r=>r.status==='FAIL').length; if($('kpiNA'))$('kpiNA').textContent=Object.values(state.results).filter(r=>r.status==='N/A').length; if($('kpiDemo'))$('kpiDemo').textContent=Object.values(state.results).filter(r=>r.status==='DEMO').length; $('kpiOpen').textContent=state.questions.filter(q=>(q.Status||'Open')==='Open').length; }
+function renderKpis(){ const rs=Object.values(state.results); $('kpiTotal').textContent=state.tests.length; $('kpiAuto').textContent=state.tests.filter(t=>t.mode!=='manual').length; $('kpiPass').textContent=rs.filter(r=>r.status==='PASS').length; $('kpiFail').textContent=rs.filter(r=>r.status==='FAIL').length; if($('kpiBlocked'))$('kpiBlocked').textContent=rs.filter(r=>r.status==='BLOCKED').length; if($('kpiQuestion'))$('kpiQuestion').textContent=rs.filter(r=>r.status==='QUESTION').length; if($('kpiNA'))$('kpiNA').textContent=rs.filter(r=>r.status==='N/A').length; if($('kpiDemo'))$('kpiDemo').textContent=rs.filter(r=>r.status==='DEMO').length; $('kpiOpen').textContent=state.questions.filter(q=>(q.Status||'Open')==='Open').length; }
 function setTestBugCategory(id,val){if(!state.results[id])return;state.results[id].bugCategory=val||'';renderReport();}
 function downloadTestBugEvidence(id){const r=state.results[id],t=state.tests.find(x=>x.ID===id);if(!r||!t)return;const md=bugEvidenceMarkdown({title:`QA Bug Evidence — ${testLabel(t)}`,category:r.bugCategory,meta:{environment:cfg().baseUrl||'TSH',time:r.time},fields:{Scenario:t['תרחיש בדיקה'],Endpoint:t.Endpoint,'Expected Result':t['Expected Result'],Actual:r.actual,Details:r.details,Status:r.status},evidence:r.evidence});exportBlob(`bug-evidence-${testLabel(t)}-${Date.now()}.md`,'text/markdown;charset=utf-8',md);}
 function downloadSelectedTestBugEvidence(){if(state.selectedTestId)downloadTestBugEvidence(state.selectedTestId);}
-function renderReport(){ const rs=Object.values(state.results); $('reportTable').innerHTML=rs.length?`<table class="qa-table"><thead><tr><th>ID</th><th>Status</th><th>Mode</th><th>Actual</th><th>Details</th><th>סיווג כשל</th><th>Evidence</th><th>Time</th></tr></thead><tbody>${rs.map(r=>{const t=state.tests.find(x=>x.ID===r.id);return `<tr><td>${esc(testLabel(t)||r.id)}</td><td class="${statusClass(r.status)}">${r.status}</td><td>${esc(r.evidence?.mode||'—')}</td><td>${esc(r.actual)}</td><td>${esc(r.details)}</td><td><select data-test-category="${esc(r.id)}">${bugCategoryOptions(r.bugCategory||'')}</select></td><td>${r.evidence?'Request/Response שמור':'—'} <button class="mini-btn" data-test-evidence="${esc(r.id)}">Bug Evidence</button></td><td dir="ltr">${r.time}</td></tr>`}).join('')}</tbody></table>`:'אין תוצאות עדיין.';document.querySelectorAll('[data-test-category]').forEach(s=>s.onchange=()=>setTestBugCategory(s.dataset.testCategory,s.value));document.querySelectorAll('[data-test-evidence]').forEach(b=>b.onclick=()=>downloadTestBugEvidence(b.dataset.testEvidence)); }
-function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderContract();renderContext();renderRagSpec();renderStpStd();renderEndpointGuide();renderAiQaLessons();renderGlossary($('glossarySearch')?.value||'');renderGolden();wireGlossaryLinks();readiness();}
+function renderReport(){
+  const rs=Object.values(state.results);
+  $('reportTable').innerHTML=rs.length?`<table class="qa-table"><thead><tr><th>ID</th><th>Status</th><th>Mode</th><th>Actual</th><th>Details</th><th>סיווג כשל</th><th>Evidence / Investigation</th><th>Time</th></tr></thead><tbody>${rs.map(r=>{const t=state.tests.find(x=>x.ID===r.id);const canBug=['FAIL','BLOCKED','QUESTION'].includes(r.status);return `<tr><td>${esc(testLabel(t)||r.id)}</td><td class="${statusClass(r.status)}">${r.status}</td><td>${esc(r.evidence?.mode||'—')}</td><td>${esc(r.actual)}</td><td>${esc(r.details)}</td><td><select data-test-category="${esc(r.id)}">${bugCategoryOptions(r.bugCategory||'')}</select></td><td><div class="report-actions"><button class="mini-btn" data-test-evidence="${esc(r.id)}">Evidence</button><button class="mini-btn" data-test-investigate="${esc(r.id)}">🤖 Investigate</button>${canBug?`<button class="mini-btn" data-test-bug="${esc(r.id)}">🐞 Bug</button>`:''}</div></td><td dir="ltr">${r.time}</td></tr>`}).join('')}</tbody></table>`:'אין תוצאות עדיין.';
+  document.querySelectorAll('[data-test-category]').forEach(x=>x.onchange=()=>setTestBugCategory(x.dataset.testCategory,x.value));
+  document.querySelectorAll('[data-test-evidence]').forEach(b=>b.onclick=()=>downloadTestBugEvidence(b.dataset.testEvidence));
+  document.querySelectorAll('[data-test-investigate]').forEach(b=>b.onclick=()=>{openTest(b.dataset.testInvestigate);investigateTest(b.dataset.testInvestigate);});
+  document.querySelectorAll('[data-test-bug]').forEach(b=>b.onclick=()=>openBugDraft(b.dataset.testBug));
+}
+function renderAll(){renderCatalog();renderQuestions();renderKpis();renderReport();renderRunHistory();renderContract();renderContext();renderRagSpec();renderStpStd();renderEndpointGuide();renderAiQaLessons();renderGlossary($('glossarySearch')?.value||'');renderGolden();wireGlossaryLinks();readiness();}
 
 function populateEndpoints(){ const s=$('endpointSelect'); s.innerHTML=state.operations.map((o,i)=>`<option value="${i}">${o.method} ${o.path} — ${esc(o.operationId)}</option>`).join(''); s.onchange=syncApiTemplate; syncApiTemplate(); }
 function syncApiTemplate(){ const o=state.operations[+$('endpointSelect').value||0]; if(!o)return; $('apiMethod').value=o.method; $('apiBody').value=JSON.stringify(requestBody(o.path,o.method),null,2); }
@@ -1028,7 +1147,7 @@ async function apiRun(){ try{const o=state.operations[+$('endpointSelect').value
 async function aiRun(){ try{const c=requireFields(['conversationId','appId','userId']); const body={conversationId:c.conversationId,userId:c.userId,appId:c.appId,...(c.caseId?{caseId:c.caseId}:{}),content:$('aiPrompt').value.trim()}; $('aiStream').textContent=''; const r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); const txt=await readStream(r.stream,(ch,full)=>{$('aiStream').textContent=full.slice(-15000);renderSseEvents(full);}); renderSseEvents(txt); const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid; showToast('GenAI/RAG request הסתיים.','success');}catch(e){$('aiStream').textContent=e.message;showToast('GenAI/RAG: '+e.message,'error',5000);} }
 
 function exportBlob(name,type,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
-function exportJson(){exportBlob(`qa-report-${Date.now()}.json`,'application/json',JSON.stringify({generatedAt:now(),environment:cfg().baseUrl,results:Object.values(state.results),aiRating:state.aiRating,goldenRuns:state.goldenRuns},null,2));}
+function exportJson(){exportBlob(`qa-report-${Date.now()}.json`,'application/json',JSON.stringify({generatedAt:now(),environment:cfg().baseUrl,results:Object.values(state.results),investigations:state.investigations,runHistory:state.runHistory,aiRating:state.aiRating,goldenRuns:state.goldenRuns},null,2));}
 function exportCsv(){const rows=[['ID','Status','Actual','Details','Failure Category','Time'],...Object.values(state.results).map(r=>[r.id,r.status,r.actual,r.details,r.bugCategory||'',r.time])];const csv=rows.map(row=>row.map(x=>'"'+String(x??'').replace(/"/g,'""')+'"').join(',')).join('\n');exportBlob(`qa-report-${Date.now()}.csv`,'text/csv;charset=utf-8','\ufeff'+csv);}
 
 async function health(){ if(cfg().executionMode==='postman'){setConn('Postman mode · העתק cURL','question');showToast('במצב Postman האתר לא שולח בקשה.','warning');return;} try{const r=await proxy({method:'GET',path:'/health'}); const ok=r.status===200; state.connectionOk=ok; setConn(state.demo?'Demo Mode · סימולציה בלבד':(ok?`מחובר · HTTP ${r.status}`:`HTTP ${r.status}`),state.demo?'demo':(ok?'pass':'fail')); readiness();showToast(state.demo?'בדיקת חיבור בסימולציית Demo בלבד.':(ok?'החיבור ל־Router הצליח.':`ה־Router החזיר HTTP ${r.status}.`),state.demo?'warning':(ok?'success':'error'));}catch(e){state.connectionOk=false;setConn(e.message,'fail');readiness();showToast('בדיקת חיבור נכשלה: '+e.message,'error',5000);} }
@@ -1036,10 +1155,15 @@ function demo(){state.demo=!state.demo;$('demoBtn').textContent=state.demo?'Demo
 
 function wire(){
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tabpage').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active');}); document.querySelectorAll('.subtab').forEach(b=>b.onclick=()=>{const root=b.closest('.tabpage'); if(!root)return; root.querySelectorAll('.subtab').forEach(x=>x.classList.remove('active')); root.querySelectorAll('.subpage').forEach(x=>x.classList.remove('active')); b.classList.add('active'); const page=root.querySelector(`[data-subpage=\"${b.dataset.subtab}\"]`); if(page)page.classList.add('active');});
-  $('searchTests').oninput=renderCatalog;$('priorityFilter').onchange=renderCatalog;$('modeFilter').onchange=renderCatalog;
+  $('searchTests').oninput=renderCatalog;$('priorityFilter').onchange=renderCatalog;$('modeFilter').onchange=renderCatalog;if($('statusFilter'))$('statusFilter').onchange=renderCatalog;
   $('demoBtn').onclick=demo;$('healthBtn').onclick=health;$('markTokenBtn').onclick=()=>{markTokenNow();showToast('זמן הפקת Token סומן.','success');};$('readinessBtn').onclick=()=>{const ok=readiness();showToast(ok?'הסביבה מוכנה להרצה.':'עדיין חסרים נתונים — ראה כרטיסי המוכנות. ',ok?'success':'warning');};$('runAllTests').onclick=runAllTests;$('runSafeP0').onclick=runSafeP0;$('runBoundaryPack').onclick=runBoundaryPack;$('runRagSpecPack').onclick=runRagSpecPack;$('runHappyFlow').onclick=happyFlow;$('uiSelfTestBtn').onclick=runUiSelfTest;$('flowRunBtn').onclick=happyFlow;$('apiRunBtn').onclick=apiRun;$('copyCurlBtn').onclick=copyCurl;$('aiRunBtn').onclick=aiRun;
   if($('goldenSaveBtn'))$('goldenSaveBtn').onclick=goldenSave;if($('goldenResetBtn'))$('goldenResetBtn').onclick=goldenFormReset;if($('goldenRunAllBtn'))$('goldenRunAllBtn').onclick=runGoldenAll;if($('goldenExportBtn'))$('goldenExportBtn').onclick=exportGolden;if($('goldenImportBtn'))$('goldenImportBtn').onclick=()=>$('goldenImportFile').click();if($('goldenImportFile'))$('goldenImportFile').onchange=e=>{const f=e.target.files?.[0];if(f)importGoldenFile(f);e.target.value='';};if($('goldenClearBtn'))$('goldenClearBtn').onclick=()=>{if(confirm('למחוק את כל שאלות הזהב, התוצאות והיסטוריית הריצות המקומית?')){state.goldenDataset=[];state.goldenResults={};state.goldenRuns=[];state.currentGoldenRunId=null;saveGoldenDataset();goldenFormReset();renderGolden();}};if($('goldenCompareBtn'))$('goldenCompareBtn').onclick=compareGoldenRuns;if($('glossarySearch'))$('glossarySearch').oninput=e=>renderGlossary(e.target.value);wireGlossaryLinks();
-  $('clearResults').onclick=()=>{state.results={};state.lastExchange=null;$('runSummary').innerHTML='';renderAll();showToast('תוצאות ההרצה אופסו.','success');};
+  $('clearResults').onclick=()=>{state.results={};state.investigations={};state.lastExchange=null;$('runSummary').innerHTML='';if($('aiRunSummary'))$('aiRunSummary').innerHTML='';renderAll();showToast('תוצאות ההרצה אופסו.','success');};
+  if($('clearRunHistoryBtn'))$('clearRunHistoryBtn').onclick=()=>{state.runHistory=[];persistRunHistory();renderRunHistory();showToast('היסטוריית ההרצות המקומית נמחקה.','success');};
+  if($('runAiSummaryBtn'))$('runAiSummaryBtn').onclick=investigateRun;
+  if($('dialogInvestigateBtn'))$('dialogInvestigateBtn').onclick=()=>state.selectedTestId&&investigateTest(state.selectedTestId);
+  if($('dialogGenerateBugBtn'))$('dialogGenerateBugBtn').onclick=()=>state.selectedTestId&&openBugDraft(state.selectedTestId);
+  if($('copyBugDraftBtn'))$('copyBugDraftBtn').onclick=copyBugDraft; if($('downloadBugDraftBtn'))$('downloadBugDraftBtn').onclick=downloadBugDraft;
   $('exportJson').onclick=exportJson;$('exportCsv').onclick=exportCsv; if($('exportStpBtn')) $('exportStpBtn').onclick=exportStp; if($('exportStdBtn')) $('exportStdBtn').onclick=exportStd;
   ['baseUrl','token','appId','userId','caseId'].forEach(id=>$(id).addEventListener('input',readiness)); $('executionMode').addEventListener('change',readiness); $('authHeader').addEventListener('change',readiness); $('cloudAccessConfirmed').addEventListener('change',readiness); if($('dialogBugEvidenceBtn'))$('dialogBugEvidenceBtn').onclick=downloadSelectedTestBugEvidence; $('dialogRunBtn').onclick=async()=>{const id=state.selectedTestId;if(id){await runTest(id);$('testDialog').close();}}; document.querySelectorAll('[data-manual-status]').forEach(b=>b.onclick=()=>saveManual(b.dataset.manualStatus));
   document.querySelectorAll('[data-rating]').forEach(b=>b.onclick=()=>{state.aiRating={rating:b.dataset.rating,note:$('aiNote').value,time:now()};$('aiRating').textContent=`נבחר: ${b.dataset.rating}`;});
@@ -1047,4 +1171,5 @@ function wire(){
 
 setInterval(updateTokenCountdown,1000);
 loadGoldenDataset();
+loadRunHistory();
 wire(); loadData().then(()=>{renderGolden();if(new URLSearchParams(location.search).get('selftest')==='1')setTimeout(runUiSelfTest,50);}).catch(e=>{showToast('שגיאת טעינת נתונים: '+e.message,'error',8000);document.body.insertAdjacentHTML('beforeend',`<pre>${esc(e.message)}</pre>`);});

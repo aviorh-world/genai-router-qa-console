@@ -14,7 +14,7 @@
 <p>כלי QA ל־Router 1.0.6 — Swagger + TSH + ארכיטקטורה + Postman</p>
 </div>
 <div class="top-actions">
-<span class="badge version">0.01</span>
+<span class="badge version">0.02</span>
 <span class="badge neutral" id="connectionBadge">לא מחובר</span>
 <button class="btn ghost" id="demoBtn">Demo Mode</button>
 </div>
@@ -50,8 +50,10 @@
 <label>Token B (אופציונלי)<input autocomplete="off" id="tokenB" placeholder="Token של משתמש B" type="password"/></label>
 <label>Conversation ID<input id="conversationId" placeholder="מתמלא אוטומטית"/></label>
 <label>Message ID<input id="messageId" placeholder="מתמלא אוטומטית"/></label>
+<label>AI Investigation Access Code<input autocomplete="off" id="aiAccessCode" placeholder="נדרש רק ל-AI עמוק" type="password"/><small class="field-help">נשאר בדפדפן בלבד ולא נשלח למודל.</small></label>
 </div>
 <label class="checkline"><input id="cloudAccessConfirmed" type="checkbox"/> <span>וידאתי שיש לי משתמש ענן והרשאה להפעיל את שירות ה־Router</span></label>
+<label class="checkline ai-optin"><input id="aiRemoteEnabled" type="checkbox"/> <span>אפשר AI Investigation עמוק דרך השרת. רק Evidence מצונזר נשלח למודל; Token לעולם לא נשלח.</span></label>
 </div>
 </details>
 <details class="setup-help">
@@ -87,6 +89,8 @@
 <div class="kpi"><b id="kpiAuto">0</b><span>אוטומטיים/מסייעים</span></div>
 <div class="kpi"><b id="kpiPass">0</b><span>PASS</span></div>
 <div class="kpi"><b id="kpiFail">0</b><span>FAIL</span></div>
+<div class="kpi"><b id="kpiBlocked">0</b><span>BLOCKED</span></div>
+<div class="kpi"><b id="kpiQuestion">0</b><span>QUESTION</span></div>
 <div class="kpi"><b id="kpiNA">0</b><span>N/A</span></div>
 <div class="kpi"><b id="kpiDemo">0</b><span>DEMO</span></div>
 <div class="kpi"><b id="kpiOpen">37</b><span>שאלות פתוחות</span></div>
@@ -105,6 +109,7 @@
 <div class="bulk-progress" hidden="" id="bulkProgress"><div class="bulk-progress-bar" id="bulkProgressBar"></div><span id="bulkProgressText"></span></div>
 <div class="run-summary" id="runSummary"></div>
 </div>
+<div class="card run-history-card"><div class="section-head"><div><h2>Run History</h2><p>נשמרת מקומית רק תמונת מצב מסכמת של הרצות, ללא Token וללא Request/Response.</p></div><button class="btn ghost" id="clearRunHistoryBtn">נקה היסטוריה</button></div><div class="table-wrap" id="runHistoryTable"></div></div>
 <div class="card"><div class="section-head"><div><h2>מפת חבילות הבדיקות</h2><p>הדשבורד מפריד בין רכיב שנבדק, סוג הבדיקה וכלי ה־QA עצמו. Console Self-Test אינו בדיקת מוצר ואינו מעיד על תקינות ה־Router API.</p></div><span class="badge neutral">Coverage Map</span></div><div class="context-grid"><div class="context-card"><h3>Router / API</h3><p>Authentication · Conversations · Messages/SSE · State · Files/Chunks · Statistics</p></div><div class="context-card"><h3>AI Components</h3><p><button class="term-link" data-glossary="Routing">Routing</button> · Q&amp;A/RAG · שיחה כללית · <button class="term-link" data-glossary="Text2SQL">Text2SQL</button>. לפי תרשים ה־Serving, אלה מסלולי הניתוב המרכזיים שנבדוק.</p></div><div class="context-card"><h3>AI Quality</h3><p>Golden Regression · Retrieval · Grounding · Answer Correctness</p></div><div class="context-card"><h3>Cross-Cutting</h3><p>Security · Boundary/Negative · E2E/Happy Flow</p></div><div class="context-card"><h3>QA Tool — לא המוצר</h3><p><b>Console Self-Test</b>: בודק טאבים, כפתורים והודעות באתר הבדיקות עצמו בלבד.</p></div></div></div>
 <div class="card">
 <h2>מה האתר לא יכול לקבוע לבד</h2>
@@ -122,6 +127,7 @@
 <input id="searchTests" placeholder="חיפוש לפי ID / Endpoint / תרחיש"/>
 <select id="priorityFilter"><option value="">כל הרמות</option><option>P0</option><option>P1</option><option>P2</option></select>
 <select id="modeFilter"><option value="">כל המצבים</option><option value="auto">אוטומטי</option><option value="assisted">מסייע</option><option value="manual">ידני</option></select>
+<select id="statusFilter"><option value="">כל התוצאות</option><option>PASS</option><option>FAIL</option><option>BLOCKED</option><option>QUESTION</option><option>N/A</option><option>DEMO</option><option value="NOT_RUN">Not Run</option></select>
 </div>
 <div class="table-wrap" id="testsTableWrap"></div>
 </div>
@@ -409,7 +415,8 @@
 
 <section class="tabpage" id="report">
 <div class="card">
-<div class="section-head"><div><h2>Test Run Report</h2><p>ה־Token לעולם לא נכנס לדוח.</p></div><div><button class="btn" id="exportJson">Export JSON</button> <button class="btn ghost" id="exportCsv">Export CSV</button></div></div>
+<div class="section-head"><div><h2>Test Run Report</h2><p>ה־Token לעולם לא נכנס לדוח. מכאן אפשר לתחקר FAIL וליצור Bug מוכן ל־Azure.</p></div><div><button class="btn primary" id="runAiSummaryBtn">🤖 תחקר את ההרצה</button> <button class="btn" id="exportJson">Export JSON</button> <button class="btn ghost" id="exportCsv">Export CSV</button></div></div>
+<div class="ai-run-summary" id="aiRunSummary"></div>
 <div class="table-wrap" id="reportTable"></div>
 </div>
 </section>
@@ -419,6 +426,7 @@
 <div class="section-head"><div><h2 id="dialogTitle">Test</h2><p id="dialogSubtitle"></p></div><button class="btn ghost" value="cancel">✕</button></div>
 <div class="dialog-body" id="dialogBody"></div>
 <div class="dialog-evidence" id="dialogEvidence"></div>
+<div class="investigation-panel" id="dialogInvestigation"></div>
 <label>הערת QA<textarea id="manualNote" placeholder="מה בדקת ומה בפועל קרה?" rows="4"></textarea></label>
 <div class="grid cols-2 bug-classifier"><label>סיווג כשל<select id="manualBugCategory"><option value="">לא סווג</option><option>Retrieval Failure</option><option>Generation Failure</option><option>Grounding Failure</option><option>Authorization/Security Failure</option><option>Routing Failure</option><option>SQL Generation Failure</option><option>Data/Execution Failure</option></select><span class="field-help">רלוונטי בעיקר ל־FAIL. הסבר במילון AI.</span></label><div class="bug-type-help"><button class="term-link" type="button" data-glossary="Failure Taxonomy">הסבר על סיווגי הכשל</button></div></div>
 <div class="actions-row dialog-actions">
@@ -428,11 +436,21 @@
 <button class="btn" data-manual-status="QUESTION" type="button">QUESTION</button>
 <button class="btn ghost" hidden="" id="dialogCopyCurlBtn" type="button">העתק cURL / Postman</button>
 <button class="btn ghost" id="dialogBugEvidenceBtn" type="button">צור Bug Evidence</button>
+<button class="btn ghost" id="dialogInvestigateBtn" type="button">🤖 Investigate</button>
+<button class="btn ghost" id="dialogGenerateBugBtn" type="button">🐞 Generate Bug</button>
 <button class="btn primary" id="dialogRunBtn" type="button">Run</button>
 </div>
 </form>
 </dialog>
-<footer>GenAI Router QA Console · Swagger 1.0.6 · גרסה 0.01</footer>
+<dialog class="test-dialog bug-dialog" id="bugDialog">
+<form class="dialog-card" method="dialog">
+<div class="section-head"><div><h2>🐞 Azure Bug Draft</h2><p>נוצר אוטומטית מה־Test Case ומה־Runtime Evidence. מומלץ לעבור עליו לפני פתיחת Bug.</p></div><button class="btn ghost" value="cancel">✕</button></div>
+<label>Title<input id="bugDraftTitle"/></label>
+<label>Description<textarea id="bugDraftBody" rows="18"></textarea></label>
+<div class="actions-row dialog-actions"><button class="btn primary" id="copyBugDraftBtn" type="button">העתק Bug</button><button class="btn" id="downloadBugDraftBtn" type="button">הורד Markdown</button></div>
+</form>
+</dialog>
+<footer>GenAI Router QA Console · Swagger 1.0.6 · גרסה 0.02</footer>
 <script src="/app.js" type="module"></script>
 </body>
 </html>
