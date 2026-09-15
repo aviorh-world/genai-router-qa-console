@@ -4,7 +4,8 @@ const state = {
   context: null, tokenMarkedAt: null, connectionOk: false,
   lastExchange: null, bulkRunning: false, uiSelfTest: null,
   goldenDataset: [], goldenResults: {}, goldenEditingId: null, goldenRuns: [], currentGoldenRunId: null,
-  investigations: {}, runHistory: [], bugDraft: null
+  investigations: {}, runHistory: [], bugDraft: null,
+  catalogPage: 1, catalogPageSize: 15
 };
 
 const $ = (id) => document.getElementById(id);
@@ -13,6 +14,7 @@ const now = () => new Date().toISOString();
 
 const clone = (v) => v == null ? v : JSON.parse(JSON.stringify(v));
 const RUN_HISTORY_KEY='genai-router-qa-run-history-v002';
+const CASE_ID_KEY='genaiQaCaseIdCounterV1';
 function redactForAi(value,key=''){
   if(value==null)return value;
   const sensitive=/(token|authorization|password|secret|api[-_]?key|private[-_]?key)/i;
@@ -1095,6 +1097,10 @@ function runUiSelfTest(){
 }
 
 function renderCatalog(resetPage=false){
+  if(!Number.isFinite(Number(state.catalogPage))) state.catalogPage=1;
+  if(!Number.isFinite(Number(state.catalogPageSize))) state.catalogPageSize=15;
+  state.catalogPage=Math.max(1,parseInt(state.catalogPage,10)||1);
+  state.catalogPageSize=Math.max(5,parseInt(state.catalogPageSize,10)||15);
   if(resetPage) state.catalogPage=1;
   const q=$('searchTests')?.value?.toLowerCase()||'', p=$('priorityFilter')?.value||'', m=$('modeFilter')?.value||'', st=$('statusFilter')?.value||'';
   const rows=state.tests.filter(t=>{
@@ -1125,7 +1131,7 @@ function renderCatalog(resetPage=false){
     </div>
     <table class="qa-table catalog-table"><thead><tr><th>ID</th><th>רמה</th><th>מצב</th><th>תחום</th><th>Endpoint</th><th>תרחיש</th><th>Expected</th><th>שאלה פתוחה</th><th>תוצאה</th><th>פעולות</th></tr></thead><tbody>${pageRows.map(t=>{
       const r=state.results[t.ID];
-      return `<tr><td>${esc(testLabel(t))}</td><td class="${t.priority.toLowerCase()}">${t.priority}</td><td class="mode-${t.mode}">${modeLabel(t.mode)}</td><td>${esc(t['תחום'])}</td><td dir="ltr">${esc(t.Endpoint)}</td><td>${esc(t['תרחיש בדיקה'])}</td><td>${esc(t['Expected Result'])}</td><td>${esc(t['שאלה פתוחה / נדרש אישור'])||'—'}</td><td class="${r?statusClass(r.status):''}">${r?esc(r.status):'Not Run'}</td><td><div class="actions-row"><button class="btn test-run" data-id="${t.ID}">${t.mode==='manual'?'סמן':'Run'}</button><button class="btn ghost test-open" data-id="${t.ID}">פרטים</button></div></td></tr>`
+      return `<tr><td data-label="ID">${esc(testLabel(t))}</td><td data-label="רמה" class="${t.priority.toLowerCase()}">${t.priority}</td><td data-label="מצב" class="mode-${t.mode}">${modeLabel(t.mode)}</td><td data-label="תחום">${esc(t['תחום'])}</td><td data-label="Endpoint" dir="ltr">${esc(t.Endpoint)}</td><td data-label="תרחיש">${esc(t['תרחיש בדיקה'])}</td><td data-label="Expected">${esc(t['Expected Result'])}</td><td data-label="שאלה פתוחה">${esc(t['שאלה פתוחה / נדרש אישור'])||'—'}</td><td data-label="תוצאה" class="${r?statusClass(r.status):''}">${r?esc(r.status):'Not Run'}</td><td data-label="פעולות"><div class="actions-row"><button class="btn test-run" data-id="${t.ID}">${t.mode==='manual'?'סמן':'Run'}</button><button class="btn ghost test-open" data-id="${t.ID}">פרטים</button></div></td></tr>`
     }).join('')}</tbody></table>`;
   document.querySelectorAll('.test-run').forEach(b=>b.onclick=()=>{const t=state.tests.find(x=>x.ID===b.dataset.id); if(t?.mode==='manual') openTest(b.dataset.id); else runTest(b.dataset.id);});
   document.querySelectorAll('.test-open').forEach(b=>b.onclick=()=>openTest(b.dataset.id));
