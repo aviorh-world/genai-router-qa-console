@@ -1,3 +1,4 @@
+// GenAI Router QA Console proxy hotfix 0.02.2 — dual auth headers + safe diagnostics
 import dns from 'node:dns/promises';
 import net from 'node:net';
 
@@ -45,8 +46,6 @@ async function safeTarget(baseUrl, apiPath, method){
   const allowedHosts=(process.env.TSH_ALLOWED_HOSTS||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
   if(allowedHosts.length && !allowedHosts.includes(base.hostname.toLowerCase())) throw new Error('Host is not in TSH_ALLOWED_HOSTS');
   if(!ALLOWED.has(`${method.toUpperCase()} ${apiPath}`)) throw new Error('Endpoint/method is not allowed by this QA proxy');
-  // Preserve the Base URL pathname (for example /ita-chat-router-api).
-  // A leading slash in apiPath would otherwise reset the URL back to the host root.
   const normalizedBase = base.toString().replace(/\/?$/, '/');
   const normalizedApiPath = String(apiPath || '').replace(/^\/+/, '');
   const target = new URL(normalizedApiPath, normalizedBase);
@@ -61,6 +60,41 @@ async function safeTarget(baseUrl, apiPath, method){
   return target;
 }
 
+
+function safeHeaderSubset(headers){
+  const names = [
+    'www-authenticate',
+    'x-cloud-trace-context',
+    'x-request-id',
+    'server',
+    'via',
+    'date'
+  ];
+  const out = {};
+  for (const name of names) {
+    const value = headers.get(name);
+    if (value) out[name] = value;
+  }
+  return out;
+}
+
+function debugSummary(d){
+  const lines = [
+    `QA Proxy Log ID: ${d.logId}`,
+    `Request: ${d.request.method} ${d.request.target}`,
+    `API Path: ${d.request.apiPath}`,
+    `Auth token present: ${d.request.tokenPresent}`,
+    `X-Serverless-Authorization sent: ${d.request.authHeaders.xServerlessAuthorization}`,
+    `Authorization sent: ${d.request.authHeaders.authorization}`,
+    `Upstream HTTP: ${d.response?.status ?? 'N/A'} ${d.response?.statusText ?? ''}`.trim(),
+    `Content-Type: ${d.response?.contentType || 'N/A'}`,
+    `Latency: ${d.response?.latencyMs ?? 'N/A'} ms`
+  ];
+  if (d.response?.bodyPreview) lines.push(`Body preview: ${d.response.bodyPreview}`);
+  if (d.error) lines.push(`Proxy error: ${d.error}`);
+  return lines.join('\n');
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   try {
@@ -71,9 +105,14 @@ export default async function handler(req, res) {
     const payloadText = body == null ? '' : (typeof body === 'string' ? body : JSON.stringify(body));
     if(payloadText.length > 512_000) return res.status(413).json({error:'Request body is too large'});
     const h = {'Accept':'application/json, text/event-stream, */*'};
-    const allowedAuthHeaders=new Set(['X-Serverless-Authorization','Authorization']);
-    if(!allowedAuthHeaders.has(authHeader)) return res.status(400).json({error:'Unsupported auth header'});
-    if (token) h[authHeader] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+
+    // Router authentication currently requires the SAME Identity Token in both headers.
+    // Keep authHeader in the request contract for backward compatibility, but do not rely on it.
+    const bearer = token ? (token.startsWith('Bearer ') ? token : `Bearer ${token}`) : '';
+    if (bearer) {
+      h['X-Serverless-Authorization'] = bearer;
+      h['Authorization'] = bearer;
+    }
     let payload;
     if (body !== undefined && body !== null && method.toUpperCase() !== 'GET') {
       h['Content-Type'] = 'application/json';
@@ -88,28 +127,94 @@ export default async function handler(req, res) {
       upstream = await fetch(target, {method:method.toUpperCase(), headers:h, body:payload, redirect:'manual', signal:controller.signal});
     } finally { clearTimeout(timer); }
     const contentType = upstream.headers.get('content-type') || '';
+    const latencyMs = Date.now()-started;
+    const logId = `qa-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+    const baseDebug = {
+      logId,
+      request: {
+        method: method.toUpperCase(),
+        target: target.toString(),
+        apiPath,
+        tokenPresent: !!token,
+        authHeaders: {
+          xServerlessAuthorization: !!h['X-Serverless-Authorization'],
+          authorization: !!h['Authorization']
+        },
+        bodyBytes: payloadText ? Buffer.byteLength(payloadText, 'utf8') : 0
+      },
+      response: {
+        status: upstream.status,
+        statusText: upstream.statusText || '',
+        contentType,
+        latencyMs,
+        headers: safeHeaderSubset(upstream.headers)
+      }
+    };
+
     if (stream || contentType.includes('text/event-stream')) {
+      if (upstream.status >= 400) {
+        console.error('[QA_PROXY_UPSTREAM_ERROR]', JSON.stringify(baseDebug));
+      }
       res.status(upstream.status);
       res.setHeader('Content-Type', contentType || 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
-      res.setHeader('X-Upstream-Latency-Ms', String(Date.now()-started));
+      res.setHeader('X-Upstream-Latency-Ms', String(latencyMs));
+      res.setHeader('X-QA-Debug-Log-Id', logId);
+      res.setHeader('X-QA-Upstream-Status', String(upstream.status));
       if(!upstream.body) return res.end();
       const reader=upstream.body.getReader();
       while(true){ const {done,value}=await reader.read(); if(done)break; res.write(Buffer.from(value)); }
       return res.end();
     }
+
     const ab = await upstream.arrayBuffer();
     const buf = Buffer.from(ab);
     const isBinary = !contentType.includes('json') && !contentType.startsWith('text/') && !contentType.includes('xml');
+    const responseBody = isBinary ? buf.toString('base64') : buf.toString('utf8');
+
+    if (upstream.status >= 400) {
+      const debug = {
+        ...baseDebug,
+        response: {
+          ...baseDebug.response,
+          bodyPreview: isBinary ? '[binary response]' : responseBody.slice(0, 1200)
+        }
+      };
+      console.error('[QA_PROXY_UPSTREAM_ERROR]', JSON.stringify(debug));
+
+      // Connection/Token check uses /health. Surface a readable, redacted diagnostic
+      // through the existing UI instead of only showing "HTTP 403".
+      if (apiPath === '/health') {
+        return res.status(502).json({
+          error: debugSummary(debug),
+          diagnostics: debug
+        });
+      }
+    }
+
+    res.setHeader('X-QA-Debug-Log-Id', logId);
+    res.setHeader('X-QA-Upstream-Status', String(upstream.status));
     return res.status(200).json({
       upstreamStatus: upstream.status,
-      latencyMs: Date.now()-started,
+      latencyMs,
       contentType,
       isBinary,
-      body: isBinary ? buf.toString('base64') : buf.toString('utf8')
+      body: responseBody,
+      diagnostics: baseDebug
     });
   } catch (e) {
     const msg=e?.name==='AbortError'?'Upstream request timed out':(e.message || String(e));
-    return res.status(502).json({error:msg});
+    const logId = `qa-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+    const diagnostics = {
+      logId,
+      errorName: e?.name || 'Error',
+      error: msg,
+      causeCode: e?.cause?.code || null
+    };
+    console.error('[QA_PROXY_ERROR]', JSON.stringify(diagnostics));
+    return res.status(502).json({
+      error: `QA Proxy Log ID: ${logId}\n${msg}`,
+      diagnostics
+    });
   }
 }
