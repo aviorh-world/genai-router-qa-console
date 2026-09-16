@@ -241,3 +241,27 @@
 .mobile-token-command{display:block;direction:ltr;text-align:left;white-space:pre-wrap;word-break:break-all;padding:8px 9px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;font-size:10px;line-height:1.45}
 .mobile-token-helper .field-help{display:block;margin-top:6px;font-size:10px;line-height:1.45}
 @media(max-width:800px){.mobile-token-actions{flex-wrap:wrap}.mobile-token-actions .btn{flex:1;min-width:135px}}
+
+/* v0.02 Golden Judge + Inspector E2E */
+.inspector-golden-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-bottom:10px}
+.judge-status-strip{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.judge-status-box{border:1px solid #e2e8f0;border-radius:9px;padding:10px;background:#fbfdff;display:grid;grid-template-columns:auto 1fr;gap:5px 9px;align-items:center}
+.judge-status-box small{grid-column:1/-1;color:#64748b;font-weight:700}
+.judge-status-box span:last-child{font-size:11px;color:#64748b}
+.inspector-collapse{margin-top:10px;border:1px solid #e2e8f0;border-radius:9px;background:#fff}
+.inspector-collapse>summary{cursor:pointer;padding:9px 11px;font-weight:800;font-size:12px}
+.inspector-collapse>.event-list,.source-chunk-list,.judge-details{padding:0 10px 10px}
+.source-chunk-list{display:grid;gap:8px}
+.source-chunk-card{border:1px solid #e2e8f0;border-radius:8px;padding:9px;background:#f8fafc}
+.source-chunk-card>div:first-child{display:flex;flex-direction:column;gap:2px}
+.source-chunk-card small{color:#64748b}
+.source-chunk-card details{margin-top:7px}
+.source-chunk-card pre{max-height:220px;overflow:auto;white-space:pre-wrap;direction:rtl;text-align:right;font-size:11px}
+.judge-score-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:8px}
+.judge-score-grid>div{border:1px solid #e2e8f0;border-radius:7px;padding:8px;text-align:center;background:#f8fafc}
+.judge-score-grid small{display:block;color:#64748b;font-size:10px}.judge-score-grid b{font-size:17px}
+.golden-form textarea#goldenMustInclude,.golden-form textarea#goldenExpectedSource{min-height:86px}
+@media(max-width:800px){
+  .inspector-golden-row,.judge-status-strip{grid-template-columns:1fr}
+  .judge-score-grid{grid-template-columns:1fr 1fr}
+}

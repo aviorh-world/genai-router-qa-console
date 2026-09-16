@@ -78,3 +78,13 @@ The global Connection Profile help now includes a collapsed mobile helper:
 - Sandbox: `gcloud auth print-identity-token > ~/sandbox-token.txt && cloudshell download ~/sandbox-token.txt`
 - NonProd: `gcloud auth print-access-token > ~/nonprod-token.txt && cloudshell download ~/nonprod-token.txt`
 The UI reminds the tester to paste only the token; `Bearer ` is added automatically.
+
+## v0.02 focused Golden / Judge update
+- GenAI/RAG Inspector now auto-creates a conversation when no `conversationId` exists, stores the returned ID, sends the message, parses SSE and fetches referenced chunks.
+- Inspector shows Technical Test Result separately from AI Evaluation Result.
+- Golden Dataset supports Question, Expected Answer, Required Points and Expected Sources/Citations.
+- Golden results separate API/SSE technical status from AI quality status.
+- Judge dimensions: Correctness, Completeness, Grounding and Hallucination severity.
+- Configurable thresholds determine AI PASS/FAIL when the required evidence is available.
+- When Deep AI is enabled, `/api/ai-investigate` supports `mode=judge` and returns structured LLM Judge JSON. Otherwise a clearly labeled heuristic fallback is used.
+- Sources/Chunks/Citations are rendered explicitly; `/v1/conversations/fetch/chunks/text` is called automatically for Inspector and optionally for Golden runs.

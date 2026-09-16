@@ -435,13 +435,15 @@ function normalizeGoldenItem(x,i=0){
     id:String(x.id||`TAXRAG-${String(i+1).padStart(3,'0')}`),
     question:String(x.question||''),
     expected:String(x.expected||x.expectedAnswer||''),
-    expectedSource:String(x.expectedSource||''),
-    mustInclude:String(x.mustInclude||''),
+    expectedSource:String(x.expectedSource||x.expectedSources||x.expectedCitations||''),
+    mustInclude:String(x.mustInclude||x.requiredPoints||''),
+    requiredPoints:String(x.requiredPoints||x.mustInclude||''),
+    expectedCitations:String(x.expectedCitations||x.expectedSources||x.expectedSource||''),
     tags:String(x.tags||'TaxRAG · Golden v1.1'),
     notes:String(x.notes||''),
     inspector:String(x.inspector||''),
     sourceRow:x.sourceRow||null,
-    datasetSource:'TaxRAG Evaluator v1.1'
+    datasetSource:x.datasetSource||'TaxRAG Evaluator v1.1'
   };
 }
 async function mergeTaxRagGolden({silent=false}={}){
@@ -489,12 +491,35 @@ function flattenChunkTexts(body){
   const arr=Array.isArray(body)?body:(Array.isArray(body?.chunks)?body.chunks:Array.isArray(body?.data)?body.data:body?[body]:[]);
   return arr.filter(x=>x&&typeof x==='object').map(x=>({documentId:x.documentId||'',chunkIndex:x.chunkIndex??x.chunkId??'',chunkText:x.chunkText||x.text||'',found:x.found!==false}));
 }
-function goldenRunMeta(){return {label:$('goldenRunLabel')?.value.trim()||`run-${new Date().toISOString().slice(0,19)}`,environment:$('goldenEnvironment')?.value.trim()||'TSH',build:$('goldenBuild')?.value.trim()||'',model:$('goldenModel')?.value.trim()||'',promptVersion:$('goldenPromptVersion')?.value.trim()||'',indexVersion:$('goldenIndexVersion')?.value.trim()||'',configVersion:$('goldenConfigVersion')?.value.trim()||'',tester:$('goldenTester')?.value.trim()||'',notes:$('goldenRunNotes')?.value.trim()||'',baseUrl:cfg().baseUrl||''};}
+function goldenRunMeta(){return {
+  label:$('goldenRunLabel')?.value.trim()||`run-${new Date().toISOString().slice(0,19)}`,
+  environment:$('goldenEnvironment')?.value.trim()||envProfile().label,
+  build:$('goldenBuild')?.value.trim()||'',model:$('goldenModel')?.value.trim()||'',
+  promptVersion:$('goldenPromptVersion')?.value.trim()||'',indexVersion:$('goldenIndexVersion')?.value.trim()||'',
+  configVersion:$('goldenConfigVersion')?.value.trim()||'',tester:$('goldenTester')?.value.trim()||'',
+  notes:$('goldenRunNotes')?.value.trim()||'',baseUrl:cfg().baseUrl||'',thresholds:goldenThresholds(),
+  llmJudgeRequested:!!$('goldenUseLlmJudge')?.checked
+};}
 function goldenFormReset(){state.goldenEditingId=null;['goldenId','goldenTags','goldenQuestion','goldenExpected','goldenMustInclude','goldenExpectedSource','goldenNotes'].forEach(id=>{if($(id))$(id).value='';});}
-function goldenEdit(id){const g=state.goldenDataset.find(x=>x.id===id);if(!g)return;state.goldenEditingId=id;$('goldenId').value=g.id;$('goldenTags').value=g.tags||'';$('goldenQuestion').value=g.question||'';$('goldenExpected').value=g.expected||'';$('goldenMustInclude').value=g.mustInclude||'';$('goldenExpectedSource').value=g.expectedSource||'';$('goldenNotes').value=g.notes||'';$('goldenId').scrollIntoView({behavior:'smooth',block:'center'});}
+function goldenEdit(id){
+  const g=state.goldenDataset.find(x=>x.id===id);if(!g)return;
+  state.goldenEditingId=id;$('goldenId').value=g.id;$('goldenTags').value=g.tags||'';$('goldenQuestion').value=g.question||'';$('goldenExpected').value=g.expected||'';
+  $('goldenMustInclude').value=g.requiredPoints||g.mustInclude||'';
+  $('goldenExpectedSource').value=g.expectedCitations||g.expectedSource||'';
+  $('goldenNotes').value=g.notes||'';$('goldenId').scrollIntoView({behavior:'smooth',block:'center'});
+}
 function goldenDelete(id){if(!confirm(`למחוק את ${id}?`))return;state.goldenDataset=state.goldenDataset.filter(x=>x.id!==id);delete state.goldenResults[id];saveGoldenDataset();renderGolden();}
 function goldenSave(){
-  const g={id:$('goldenId').value.trim()||`GOLD-${String(state.goldenDataset.length+1).padStart(3,'0')}`,tags:$('goldenTags').value.trim(),question:$('goldenQuestion').value.trim(),expected:$('goldenExpected').value.trim(),mustInclude:$('goldenMustInclude').value.trim(),expectedSource:$('goldenExpectedSource').value.trim(),notes:$('goldenNotes').value.trim()};
+  const points=$('goldenMustInclude').value.trim(),citations=$('goldenExpectedSource').value.trim();
+  const g={
+    id:$('goldenId').value.trim()||`GOLD-${String(state.goldenDataset.length+1).padStart(3,'0')}`,
+    tags:$('goldenTags').value.trim(),
+    question:$('goldenQuestion').value.trim(),
+    expected:$('goldenExpected').value.trim(),
+    mustInclude:points,requiredPoints:points,
+    expectedSource:citations,expectedCitations:citations,
+    notes:$('goldenNotes').value.trim()
+  };
   if(!g.question||!g.expected){showToast('יש להזין שאלה ותשובת זהב.','warning');return;}
   const duplicate=state.goldenDataset.find(x=>x.id===g.id && x.id!==state.goldenEditingId); if(duplicate){showToast('כבר קיימת שאלת זהב עם ID זה.','error');return;}
   if(state.goldenEditingId){state.goldenDataset=state.goldenDataset.map(x=>x.id===state.goldenEditingId?g:x);} else state.goldenDataset.push(g);
@@ -516,53 +541,204 @@ function renderGoldenSummary(){
   $('goldenRunSummary').innerHTML=`<div class="kpi"><b>${s.total}</b><span>הורצו</span></div><div class="kpi"><b>${s.pass}</b><span>PASS</span></div><div class="kpi"><b>${s.fail}</b><span>FAIL</span></div><div class="kpi"><b>${s.review}</b><span>REVIEW</span></div><div class="kpi"><b>${s.retrievalAvg??'—'}${s.retrievalAvg!=null?'%':''}</b><span>Retrieval avg</span></div><div class="kpi"><b>${s.answerAvg??'—'}${s.answerAvg!=null?'%':''}</b><span>Answer avg</span></div><div class="kpi"><b>${s.groundingAvg??'—'}${s.groundingAvg!=null?'%':''}</b><span>Grounding avg</span></div>`;
   const run=state.goldenRuns.find(x=>x.id===state.currentGoldenRunId);if($('goldenRunBadge'))$('goldenRunBadge').textContent=run?run.meta.label:'Run נוכחי לא נשמר';
 }
-function reviewNeeded(r){return r && (r.status==='REVIEW'||r.status==='FAIL'||r.sourceMatch==='NO MATCH'||(Number.isFinite(r.retrievalScore)&&r.retrievalScore<80)||(Number.isFinite(r.answerScore)&&r.answerScore<75)||(Number.isFinite(r.groundingScore)&&r.groundingScore<70)||r.chunkFetchStatus==='FAILED');}
-function renderGolden(){
-  if(!$('goldenTable'))return; $('goldenCount').textContent=`${state.goldenDataset.length} שאלות`;
-  $('goldenTable').innerHTML=state.goldenDataset.length?`<table class="qa-table golden-table"><thead><tr><th>ID</th><th>שאלה</th><th>Expected</th><th>מקור צפוי</th><th>תגיות</th><th>פעולות</th></tr></thead><tbody>${state.goldenDataset.map(g=>`<tr><td>${esc(g.id)}</td><td>${esc(g.question)}</td><td>${esc(g.expected)}</td><td>${esc(g.expectedSource||'—')}</td><td>${esc(g.tags||'—')}</td><td><button class="mini-btn" data-golden-edit="${esc(g.id)}">עריכה</button> <button class="mini-btn danger" data-golden-delete="${esc(g.id)}">מחיקה</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty-state">עדיין אין שאלות זהב. הוסף שאלה, תשובת זהב ומקור צפוי אם ידוע.</div>';
-  const rows=state.goldenDataset.map(g=>({g,r:state.goldenResults[g.id]})).filter(x=>x.r);
-  $('goldenResults').innerHTML=rows.length?`<table class="qa-table golden-results-table"><thead><tr><th>ID</th><th>מצב</th><th>Retrieval</th><th>Answer</th><th>Grounding</th><th>Source / Chunks</th><th>תשובה בפועל</th><th>סיווג כשל</th><th>פעולות</th></tr></thead><tbody>${rows.map(({g,r})=>`<tr><td>${esc(g.id)}</td><td><span class="status-chip ${r.status==='REVIEW'?'status-question':r.status==='N/A'?'status-na':r.status==='FAIL'?'status-fail':'status-pass'}">${esc(r.status)}</span></td><td>${Number.isFinite(r.retrievalScore)?r.retrievalScore+'%':'—'}</td><td>${Number.isFinite(r.answerScore)?r.answerScore+'%':'—'}<br><small>Similarity ${r.similarity??0}% · ${esc(r.mustScore||'—')}</small></td><td>${Number.isFinite(r.groundingScore)?r.groundingScore+'%':'—'}<br><small>Heuristic</small></td><td>${esc(r.sourceMatch||'—')}<br><small>${esc(r.chunkFetchStatus||'—')} · ${r.chunkEvidence?.length||0} chunks</small></td><td class="golden-actual">${esc(r.answer||'—')}</td><td>${esc(r.bugCategory||'—')}</td><td><button class="mini-btn" data-golden-pass="${esc(g.id)}">PASS</button> <button class="mini-btn danger" data-golden-fail="${esc(g.id)}">FAIL</button> <button class="mini-btn" data-golden-evidence="${esc(g.id)}">Evidence</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty-state">טרם הורץ Golden Sanity.</div>';
-  const reviewRows=rows.filter(({r})=>reviewNeeded(r));
-  if($('goldenReviewCount'))$('goldenReviewCount').textContent=`${reviewRows.length} לבדיקה`;
-  if($('goldenReviewQueue'))$('goldenReviewQueue').innerHTML=reviewRows.length?`<table class="qa-table review-table"><thead><tr><th>ID</th><th>למה Review?</th><th>Expected → Actual</th><th>Sources / Chunk Evidence</th><th>סיווג</th><th>החלטה</th></tr></thead><tbody>${reviewRows.map(({g,r})=>`<tr><td><b>${esc(g.id)}</b></td><td>${classifyGoldenReason(r).map(x=>`<div>• ${esc(x)}</div>`).join('')}</td><td><b>Expected:</b> ${esc(g.expected)}<br><b>Actual:</b> ${esc(r.answer||'—')}</td><td><details><summary>${r.sourceRefs?.length||0} source refs · ${r.chunkEvidence?.length||0} chunks</summary><pre>${esc(JSON.stringify({sources:r.sourceRefs||[],chunks:r.chunkEvidence||[]},null,2))}</pre></details></td><td><select data-golden-category="${esc(g.id)}">${bugCategoryOptions(r.bugCategory||'')}</select></td><td><button class="mini-btn" data-golden-pass="${esc(g.id)}">PASS</button> <button class="mini-btn danger" data-golden-fail="${esc(g.id)}">FAIL</button> <button class="mini-btn" data-golden-evidence="${esc(g.id)}">Bug Evidence</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty-state">אין כרגע תוצאות שממתינות לסקירה אנושית.</div>';
-  document.querySelectorAll('[data-golden-edit]').forEach(b=>b.onclick=()=>goldenEdit(b.dataset.goldenEdit));document.querySelectorAll('[data-golden-delete]').forEach(b=>b.onclick=()=>goldenDelete(b.dataset.goldenDelete));document.querySelectorAll('[data-golden-pass]').forEach(b=>b.onclick=()=>goldenVerdict(b.dataset.goldenPass,'PASS'));document.querySelectorAll('[data-golden-fail]').forEach(b=>b.onclick=()=>goldenVerdict(b.dataset.goldenFail,'FAIL'));document.querySelectorAll('[data-golden-category]').forEach(s=>s.onchange=()=>goldenSetBugCategory(s.dataset.goldenCategory,s.value));document.querySelectorAll('[data-golden-evidence]').forEach(b=>b.onclick=()=>downloadGoldenBugEvidence(b.dataset.goldenEvidence));
-  renderGoldenSummary();renderGoldenRuns();wireGlossaryLinks();
+function reviewNeeded(r){
+  return r && (r.technicalStatus==='FAIL'||r.aiStatus==='REVIEW'||r.aiStatus==='FAIL'||r.sourceMatch==='NO MATCH'||r.chunkFetchStatus==='FAILED'||r.llmJudgeError);
 }
-async function fetchGoldenChunks(events){
+
+function splitCriteria(v=''){
+  return String(v||'').split(/\n|,/).map(x=>x.trim()).filter(Boolean);
+}
+function goldenThresholds(){
+  const num=(id,def)=>{const n=Number($(id)?.value);return Number.isFinite(n)?Math.max(0,Math.min(100,n)):def;};
+  return {correctness:num('goldenCorrectnessThreshold',80),completeness:num('goldenCompletenessThreshold',80),grounding:num('goldenGroundingThreshold',70),hallucinationMax:num('goldenHallucinationMax',20)};
+}
+function technicalEvaluation({http,events=[],stream=true,error=''}) {
+  if(error)return {status:'FAIL',reason:error};
+  const types=events.map(e=>String(e.type||'').toLowerCase());
+  const hasContent=types.includes('content');
+  const hasDone=types.includes('done');
+  const ok=Number(http)>=200&&Number(http)<300&&stream&&hasContent&&hasDone;
+  return {status:ok?'PASS':'FAIL',reason:ok?`HTTP ${http} · SSE content + done`:`HTTP ${http??'—'} · ${stream?'SSE':'no SSE'} · content=${hasContent} · done=${hasDone}`};
+}
+function localGoldenJudge(g,answer,chunkInfo){
+  const required=splitCriteria(g.requiredPoints||g.mustInclude);
+  const lower=String(answer||'').toLowerCase();
+  const found=required.filter(x=>lower.includes(x.toLowerCase())).length;
+  const completeness=required.length?Math.round(found/required.length*100):answerSimilarity(answer,g.expected);
+  const similarity=answerSimilarity(answer,g.expected);
+  const correctness=required.length?Math.round(similarity*.55+completeness*.45):similarity;
+  const chunkText=(chunkInfo?.chunks||[]).filter(x=>x.found!==false).map(x=>x.chunkText||'').join('\n');
+  const grounding=lexicalSupport(answer,chunkText);
+  const hallucination=grounding==null?null:Math.max(0,100-grounding);
+  const reason=required.length
+    ? `${found}/${required.length} Required Points נמצאו; Similarity ${similarity}%.`
+    : `Similarity מול תשובת הזהב: ${similarity}%.`;
+  return {correctness,completeness,grounding,hallucination,reason,unsupportedClaims:[],source:'Heuristic fallback'};
+}
+async function llmGoldenJudge(g,answer,chunkInfo){
+  if(!$('goldenUseLlmJudge')?.checked || !$('aiRemoteEnabled')?.checked)return null;
+  const payload=redactForAi({
+    question:g.question,expectedAnswer:g.expected,
+    requiredPoints:splitCriteria(g.requiredPoints||g.mustInclude),
+    expectedSources:splitCriteria(g.expectedCitations||g.expectedSource),
+    actualAnswer:answer,
+    sourceRefs:chunkInfo?.refs||[],
+    chunks:(chunkInfo?.chunks||[]).map(x=>({documentId:x.documentId||'',chunkIndex:x.chunkIndex??'',chunkText:x.chunkText||'',found:x.found!==false}))
+  });
+  const resp=await fetch('/api/ai-investigate',{method:'POST',headers:{'Content-Type':'application/json','X-QA-AI-Code':$('aiAccessCode')?.value||''},body:JSON.stringify({mode:'judge',payload})});
+  const data=await resp.json().catch(()=>({}));
+  if(!resp.ok)throw new Error(data.error||`Judge HTTP ${resp.status}`);
+  if(!data.judge)throw new Error('LLM Judge לא החזיר JSON תקין');
+  return {...data.judge,source:`LLM Judge${data.model?` · ${data.model}`:''}`};
+}
+function judgeVerdict(judge,thresholds=goldenThresholds()){
+  const vals=['correctness','completeness','grounding'].map(k=>judge?.[k]);
+  if(vals.some(v=>!Number.isFinite(Number(v))) || !Number.isFinite(Number(judge?.hallucination)))return {status:'REVIEW',reason:'חסר Evidence/Score מלא כדי לקבוע PASS/FAIL.'};
+  const checks={
+    correctness:Number(judge.correctness)>=thresholds.correctness,
+    completeness:Number(judge.completeness)>=thresholds.completeness,
+    grounding:Number(judge.grounding)>=thresholds.grounding,
+    hallucination:Number(judge.hallucination)<=thresholds.hallucinationMax
+  };
+  const failed=Object.entries(checks).filter(([,v])=>!v).map(([k])=>k);
+  return {status:failed.length?'FAIL':'PASS',reason:failed.length?`נכשל Threshold: ${failed.join(', ')}`:'כל ציוני ה־Judge עברו את ה־Thresholds.'};
+}
+async function evaluateGoldenAnswer(g,answer,chunkInfo){
+  let judge=localGoldenJudge(g,answer,chunkInfo),llmError='';
+  try{const remote=await llmGoldenJudge(g,answer,chunkInfo);if(remote)judge=remote;}catch(e){llmError=e.message;}
+  const verdict=judgeVerdict(judge);
+  return {...judge,aiStatus:verdict.status,verdictReason:verdict.reason,llmError};
+}
+function renderInspectorGoldenOptions(){
+  const sel=$('aiGoldenSelect');if(!sel)return;
+  const current=sel.value;
+  sel.innerHTML='<option value="">שאלה חופשית — ללא Judge אוטומטי</option>'+state.goldenDataset.map(g=>`<option value="${esc(g.id)}">${esc(g.id)} — ${esc(g.question.slice(0,100))}</option>`).join('');
+  if(current&&state.goldenDataset.some(g=>g.id===current))sel.value=current;
+}
+function inspectorSelectedGolden(){return state.goldenDataset.find(g=>g.id===$('aiGoldenSelect')?.value)||null;}
+function loadInspectorGolden(){
+  const g=inspectorSelectedGolden();if(!g){showToast('בחר Golden Case.','warning');return;}
+  $('aiPrompt').value=g.question;
+}
+function setInspectorStatus(id,status,reason=''){
+  const el=$(id),reasonEl=$(id==='aiTechnicalStatus'?'aiTechnicalReason':'aiEvaluationReason');
+  if(el){el.textContent=status;el.className=`status-chip ${status==='PASS'?'status-pass':status==='FAIL'?'status-fail':status==='REVIEW'?'status-question':'status-na'}`;}
+  if(reasonEl)reasonEl.textContent=reason||'—';
+}
+function renderInspectorSources(chunkInfo){
+  const host=$('aiSourcesChunks');if(!host)return;
+  const refs=chunkInfo?.refs||[],chunks=chunkInfo?.chunks||[];
+  if(!refs.length){host.innerHTML='<div class="empty-state">לא התקבלו Sources/Citations ב־SSE.</div>';return;}
+  host.innerHTML=refs.map((r,i)=>{
+    const c=chunks.find(x=>String(x.chunkIndex)==String(r.chunkId))||chunks[i];
+    return `<div class="source-chunk-card"><div><b>${esc(r.fileName||r.title||'Source')}</b><small>${esc(r.bucket||'')} ${r.chunkId!=null?`· chunk ${esc(r.chunkId)}`:''}</small></div><span class="status-chip ${c?.found===false?'status-fail':c?.chunkText?'status-pass':'status-question'}">${c?.chunkText?'FETCHED':c?.found===false?'NOT FOUND':'SOURCE'}</span>${c?.chunkText?`<details><summary>Chunk text</summary><pre>${esc(c.chunkText)}</pre></details>`:''}</div>`;
+  }).join('');
+}
+function renderInspectorJudge(j){
+  const host=$('aiJudgeDetails');if(!host)return;
+  if(!j){host.innerHTML='<div class="empty-state">Judge לא הורץ.</div>';return;}
+  host.innerHTML=`<div class="judge-score-grid">
+    <div><small>Correctness</small><b>${Number.isFinite(Number(j.correctness))?Math.round(Number(j.correctness))+'%':'—'}</b></div>
+    <div><small>Completeness</small><b>${Number.isFinite(Number(j.completeness))?Math.round(Number(j.completeness))+'%':'—'}</b></div>
+    <div><small>Grounding</small><b>${Number.isFinite(Number(j.grounding))?Math.round(Number(j.grounding))+'%':'—'}</b></div>
+    <div><small>Hallucination</small><b>${Number.isFinite(Number(j.hallucination))?Math.round(Number(j.hallucination))+'%':'—'}</b></div>
+  </div><p><b>${esc(j.source||'Judge')}</b> · ${esc(j.reason||j.verdictReason||'')}</p>${j.llmError?`<div class="notice question">LLM Judge fallback: ${esc(j.llmError)}</div>`:''}`;
+}
+async function fetchChunksForEvents(events,{force=true}={}){
   const refs=extractSourceRefs(events).filter(x=>x.bucket&&x.fileName&&x.chunkId!==null&&x.chunkId!==undefined).slice(0,100);
   if(!refs.length)return {refs:extractSourceRefs(events),chunks:[],status:'NO CHUNKS',exchange:null};
-  if(!$('goldenFetchChunks')?.checked)return {refs,chunks:[],status:'SKIPPED',exchange:null};
+  if(!force && !$('goldenFetchChunks')?.checked)return {refs,chunks:[],status:'SKIPPED',exchange:null};
   try{
     const body={chunks:refs.map(x=>({documentBucket:x.bucket,documentFileName:x.fileName,chunkId:Number(x.chunkId)}))};
     const rr=await proxy({method:'POST',path:'/v1/conversations/fetch/chunks/text',body});
     return {refs,chunks:flattenChunkTexts(rr.body),status:rr.status>=200&&rr.status<300?'OK':`HTTP ${rr.status}`,exchange:clone(state.lastExchange)};
   }catch(e){return {refs,chunks:[],status:'FAILED',error:e.message,exchange:clone(state.lastExchange)};}
 }
+function renderGolden(){
+  if(!$('goldenTable'))return;
+  $('goldenCount').textContent=`${state.goldenDataset.length} שאלות`;
+  $('goldenTable').innerHTML=state.goldenDataset.length?`<table class="qa-table golden-table"><thead><tr><th>ID</th><th>Question</th><th>Expected Answer</th><th>Required Points</th><th>Expected Sources / Citations</th><th>פעולות</th></tr></thead><tbody>${state.goldenDataset.map(g=>`<tr><td>${esc(g.id)}</td><td>${esc(g.question)}</td><td>${esc(g.expected)}</td><td>${esc(g.requiredPoints||g.mustInclude||'—')}</td><td>${esc(g.expectedCitations||g.expectedSource||'—')}</td><td><button class="mini-btn" data-golden-edit="${esc(g.id)}">עריכה</button> <button class="mini-btn danger" data-golden-delete="${esc(g.id)}">מחיקה</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty-state">עדיין אין שאלות זהב.</div>';
+  const rows=state.goldenDataset.map(g=>({g,r:state.goldenResults[g.id]})).filter(x=>x.r);
+  $('goldenResults').innerHTML=rows.length?`<table class="qa-table golden-results-table"><thead><tr><th>ID</th><th>Technical</th><th>AI Evaluation</th><th>Correctness</th><th>Completeness</th><th>Grounding</th><th>Hallucination</th><th>Sources / Chunks</th><th>Reason</th><th>פעולות</th></tr></thead><tbody>${rows.map(({g,r})=>`<tr>
+    <td>${esc(g.id)}</td>
+    <td><span class="status-chip ${r.technicalStatus==='PASS'?'status-pass':r.technicalStatus==='FAIL'?'status-fail':'status-na'}">${esc(r.technicalStatus||'—')}</span><br><small>${esc(r.technicalReason||'')}</small></td>
+    <td><span class="status-chip ${r.aiStatus==='PASS'?'status-pass':r.aiStatus==='FAIL'?'status-fail':r.aiStatus==='REVIEW'?'status-question':'status-na'}">${esc(r.aiStatus||'—')}</span><br><small>${esc(r.judgeSource||'')}</small></td>
+    <td>${Number.isFinite(r.correctness)?Math.round(r.correctness)+'%':'—'}</td>
+    <td>${Number.isFinite(r.completeness)?Math.round(r.completeness)+'%':'—'}</td>
+    <td>${Number.isFinite(r.groundingScore)?Math.round(r.groundingScore)+'%':'—'}</td>
+    <td>${Number.isFinite(r.hallucination)?Math.round(r.hallucination)+'%':'—'}</td>
+    <td>${esc(r.sourceMatch||'—')}<br><small>${esc(r.chunkFetchStatus||'—')} · ${r.chunkEvidence?.length||0} chunks</small></td>
+    <td>${esc(r.judgeReason||r.judgeVerdictReason||r.llmJudgeError||'—')}</td>
+    <td><button class="mini-btn" data-golden-pass="${esc(g.id)}">PASS</button> <button class="mini-btn danger" data-golden-fail="${esc(g.id)}">FAIL</button> <button class="mini-btn" data-golden-evidence="${esc(g.id)}">Evidence</button></td>
+  </tr>`).join('')}</tbody></table>`:'<div class="empty-state">טרם הורץ Golden Sanity.</div>';
+  const reviewRows=rows.filter(({r})=>reviewNeeded(r));
+  if($('goldenReviewCount'))$('goldenReviewCount').textContent=`${reviewRows.length} לבדיקה`;
+  if($('goldenReviewQueue'))$('goldenReviewQueue').innerHTML=reviewRows.length?`<table class="qa-table review-table"><thead><tr><th>ID</th><th>Technical</th><th>AI</th><th>Expected → Actual</th><th>Sources / Chunk Evidence</th><th>Reason</th><th>החלטה</th></tr></thead><tbody>${reviewRows.map(({g,r})=>`<tr>
+    <td><b>${esc(g.id)}</b></td>
+    <td>${esc(r.technicalStatus||'—')}<br><small>${esc(r.technicalReason||'')}</small></td>
+    <td>${esc(r.aiStatus||'—')}<br><small>${esc(r.judgeSource||'')}</small></td>
+    <td><b>Expected:</b> ${esc(g.expected)}<br><b>Actual:</b> ${esc(r.answer||'—')}</td>
+    <td><details><summary>${r.sourceRefs?.length||0} refs · ${r.chunkEvidence?.length||0} chunks</summary><pre>${esc(JSON.stringify({sources:r.sourceRefs||[],chunks:r.chunkEvidence||[]},null,2))}</pre></details></td>
+    <td>${esc(r.judgeReason||r.judgeVerdictReason||r.llmJudgeError||'—')}</td>
+    <td><button class="mini-btn" data-golden-pass="${esc(g.id)}">PASS</button> <button class="mini-btn danger" data-golden-fail="${esc(g.id)}">FAIL</button> <button class="mini-btn" data-golden-evidence="${esc(g.id)}">Evidence</button></td>
+  </tr>`).join('')}</tbody></table>`:'<div class="empty-state">אין כרגע תוצאות שממתינות לסקירה.</div>';
+  document.querySelectorAll('[data-golden-edit]').forEach(b=>b.onclick=()=>goldenEdit(b.dataset.goldenEdit));
+  document.querySelectorAll('[data-golden-delete]').forEach(b=>b.onclick=()=>goldenDelete(b.dataset.goldenDelete));
+  document.querySelectorAll('[data-golden-pass]').forEach(b=>b.onclick=()=>goldenVerdict(b.dataset.goldenPass,'PASS'));
+  document.querySelectorAll('[data-golden-fail]').forEach(b=>b.onclick=()=>goldenVerdict(b.dataset.goldenFail,'FAIL'));
+  document.querySelectorAll('[data-golden-evidence]').forEach(b=>b.onclick=()=>downloadGoldenBugEvidence(b.dataset.goldenEvidence));
+  renderInspectorGoldenOptions();
+  renderGoldenSummary();renderGoldenRuns();wireGlossaryLinks();
+}
+async function fetchGoldenChunks(events){
+  return fetchChunksForEvents(events,{force:false});
+}
 async function runGoldenOne(g,runMeta){
   const c=cfg(),runLabel=runMeta?.label||$('goldenRunLabel')?.value.trim()||'unlabeled';
-  if(state.demo){return {status:'N/A',answer:'Demo Mode אינו נחשב הרצת Golden אמיתית',similarity:0,mustScore:'—',sourceMatch:'—',runLabel,time:now(),bugCategory:''};}
-  if(!c.baseUrl||!c.token||!c.userId||!c.appId){return {status:'N/A',answer:'חסר Base URL / Token / User / App ID',similarity:0,mustScore:'—',sourceMatch:'—',runLabel,time:now(),bugCategory:''};}
-  let conversationId=c.conversationId,createdForTest=false;
+  if(state.demo){return {status:'N/A',technicalStatus:'N/A',aiStatus:'N/A',answer:'Demo Mode אינו נחשב הרצת Golden אמיתית',runLabel,time:now(),bugCategory:''};}
+  if(!c.baseUrl||!c.token||!c.userId||!c.appId){return {status:'N/A',technicalStatus:'N/A',aiStatus:'N/A',answer:'חסר Base URL / Token / User / App ID',runLabel,time:now(),bugCategory:''};}
+  let conversationId=c.conversationId,createdForTest=false,createEvidence=null;
   try{
-    if($('goldenIsolate')?.checked){
-      const cb={appId:c.appId,userId:c.userId,...(c.caseId?{caseId:c.caseId}:{})}; const cr=await proxy({method:'POST',path:'/v1/conversations/new',body:cb});
-      conversationId=extractConversationId(cr.body); if(!(cr.status>=200&&cr.status<300)||!conversationId) throw new Error(`Create Conversation נכשל (HTTP ${cr.status})`); createdForTest=true;
+    if($('goldenIsolate')?.checked || !conversationId){
+      const cb={appId:c.appId,userId:c.userId,...(c.caseId?{caseId:c.caseId}:{})};
+      const cr=await proxy({method:'POST',path:'/v1/conversations/new',body:cb});
+      createEvidence=clone(state.lastExchange);
+      conversationId=extractConversationId(cr.body);
+      if(!(cr.status>=200&&cr.status<300)||!conversationId) throw new Error(`Create Conversation נכשל (HTTP ${cr.status})`);
+      createdForTest=true;
     }
-    if(!conversationId) return {status:'N/A',answer:'חסר Conversation ID או הפעל בידוד שיחות',similarity:0,mustScore:'—',sourceMatch:'—',runLabel,time:now(),bugCategory:''};
     const body={conversationId,userId:c.userId,appId:c.appId,...(c.caseId?{caseId:c.caseId}:{}),content:g.question};
-    const r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); const txt=await readStream(r.stream); const events=parseSse(txt); const answer=extractSseAnswer(events)||txt.slice(-4000); const sources=extractSseSources(events); const messageExchange=clone(state.lastExchange); const similarity=answerSimilarity(answer,g.expected);
-    const must=(g.mustInclude||'').split(',').map(x=>x.trim()).filter(Boolean); const found=must.filter(x=>answer.toLowerCase().includes(x.toLowerCase())).length; const mustScore=must.length?`${found}/${must.length}`:'—'; const mustPct=must.length?Math.round(found/must.length*100):null;
-    const sourceMatch=g.expectedSource?(sources.toLowerCase().includes(g.expectedSource.toLowerCase())?'MATCH':'NO MATCH'):'—';
-    const chunkInfo=await fetchGoldenChunks(events); const chunkText=chunkInfo.chunks.filter(x=>x.found!==false).map(x=>x.chunkText).join('\n');
-    const groundingScore=lexicalSupport(answer,chunkText);
-    const answerScore=mustPct==null?similarity:Math.round(similarity*.55+mustPct*.45);
-    let retrievalScore=null; const hasSources=chunkInfo.refs.length>0; const foundChunks=chunkInfo.chunks.filter(x=>x.found!==false).length;
-    if(g.expectedSource) retrievalScore=sourceMatch==='MATCH'?(foundChunks?100:75):0; else if(hasSources) retrievalScore=foundChunks?80:60;
+    const r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true});
+    if(!r.stream){
+      return {status:'FAIL',technicalStatus:'FAIL',technicalReason:`HTTP ${r.status} · no SSE`,aiStatus:'NOT RUN',answer:typeof r.body==='string'?r.body:JSON.stringify(r.body),http:r.status,time:now(),runLabel,conversationId,bugCategory:'',createEvidence};
+    }
+    const txt=await readStream(r.stream);
+    const events=parseSse(txt),answer=extractSseAnswer(events)||txt.slice(-4000),sources=extractSseSources(events),messageExchange=clone(state.lastExchange);
+    const technical=technicalEvaluation({http:r.status,events,stream:true});
+    const chunkInfo=await fetchGoldenChunks(events);
+    const judged=await evaluateGoldenAnswer(g,answer,chunkInfo);
+    const sourceText=(g.expectedCitations||g.expectedSource||'').trim();
+    const expectedSources=splitCriteria(sourceText);
+    const actualSources=chunkInfo.refs.map(x=>`${x.fileName||''} ${x.bucket||''} ${x.chunkId??''}`).join(' ');
+    const sourceMatch=expectedSources.length?(expectedSources.some(x=>actualSources.toLowerCase().includes(x.toLowerCase()))?'MATCH':'NO MATCH'):'—';
     const actualSourceKey=chunkInfo.refs.map(x=>`${x.bucket}/${x.fileName}#${x.chunkId}`).sort().join('|');
-    return {status:'REVIEW',answer,similarity,answerScore,retrievalScore,groundingScore,mustScore,sourceMatch,http:r.status,time:now(),runLabel,conversationId,sources:sources.slice(0,6000),sourceRefs:chunkInfo.refs,chunkEvidence:chunkInfo.chunks,chunkFetchStatus:chunkInfo.status,messageEvidence:messageExchange,chunkEvidenceRequest:chunkInfo.exchange,actualSourceKey,bugCategory:'',runMeta:clone(runMeta)};
-  }catch(e){return {status:'REVIEW',answer:`ERROR: ${e.message}`,similarity:0,answerScore:0,retrievalScore:null,groundingScore:null,mustScore:'—',sourceMatch:'—',runLabel,time:now(),bugCategory:'',runMeta:clone(runMeta)};}
-  finally{
-    if(createdForTest && conversationId && $('goldenCleanup')?.checked){try{await proxy({method:'DELETE',path:'/v1/conversations/id',body:{conversationId,userId:c.userId}});}catch{} }
+    const overall=technical.status!=='PASS'?'FAIL':judged.aiStatus;
+    return {
+      status:overall,technicalStatus:technical.status,technicalReason:technical.reason,
+      aiStatus:judged.aiStatus,judgeSource:judged.source,judgeReason:judged.reason||'',judgeVerdictReason:judged.verdictReason||'',
+      correctness:Number.isFinite(Number(judged.correctness))?Number(judged.correctness):null,
+      completeness:Number.isFinite(Number(judged.completeness))?Number(judged.completeness):null,
+      groundingScore:Number.isFinite(Number(judged.grounding))?Number(judged.grounding):null,
+      hallucination:Number.isFinite(Number(judged.hallucination))?Number(judged.hallucination):null,
+      unsupportedClaims:judged.unsupportedClaims||[],llmJudgeError:judged.llmError||'',
+      answer,http:r.status,time:now(),runLabel,conversationId,sources:sources.slice(0,6000),
+      sourceMatch,sourceRefs:chunkInfo.refs,chunkEvidence:chunkInfo.chunks,chunkFetchStatus:chunkInfo.status,
+      createEvidence,messageEvidence:messageExchange,chunkEvidenceRequest:chunkInfo.exchange,actualSourceKey,bugCategory:'',runMeta:clone(runMeta)
+    };
+  }catch(e){
+    return {status:'FAIL',technicalStatus:'FAIL',technicalReason:e.message,aiStatus:'NOT RUN',answer:`ERROR: ${e.message}`,time:now(),runLabel,conversationId,bugCategory:'',runMeta:clone(runMeta),createEvidence};
+  }finally{
+    if(createdForTest && conversationId && $('goldenCleanup')?.checked){try{await proxy({method:'DELETE',path:'/v1/conversations/id',body:{conversationId,userId:c.userId}});}catch{}}
   }
 }
 async function runGoldenAll(){
@@ -1545,7 +1721,59 @@ async function apiRun(){
   }
 }
 
-async function aiRun(){ try{const c=requireFields(['conversationId','appId','userId']); const body={conversationId:c.conversationId,userId:c.userId,appId:c.appId,...(c.caseId?{caseId:c.caseId}:{}),content:$('aiPrompt').value.trim()}; $('aiStream').textContent=''; const r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true}); if(!r.stream){$('aiStream').textContent=typeof r.body==='string'?r.body:JSON.stringify(r.body,null,2);showToast(`GenAI/RAG: HTTP ${r.status}`,'warning',5000);return;} const txt=await readStream(r.stream,(ch,full)=>{$('aiStream').textContent=full.slice(-15000);renderSseEvents(full);}); renderSseEvents(txt); const mid=extractMessageIdFromText(txt); if(mid)$('messageId').value=mid; showToast('GenAI/RAG request הסתיים.','success');}catch(e){$('aiStream').textContent=e.message;showToast('GenAI/RAG: '+e.message,'error',5000);} }
+async function aiRun(){
+  const btn=$('aiRunBtn'),old=btn.textContent;btn.disabled=true;btn.textContent='מריץ…';
+  setInspectorStatus('aiTechnicalStatus','NOT RUN','מתחיל הרצה…');
+  setInspectorStatus('aiEvaluationStatus','NOT RUN','Judge טרם הורץ.');
+  renderInspectorJudge(null);
+  try{
+    const c=requireFields(['appId','userId']);
+    let conversationId=c.conversationId,createEvidence=null;
+    if(!conversationId){
+      const createBody={appId:c.appId,userId:c.userId,...(c.caseId?{caseId:c.caseId}:{})};
+      const cr=await proxy({method:'POST',path:'/v1/conversations/new',body:createBody});
+      createEvidence=clone(state.lastExchange);
+      conversationId=extractConversationId(cr.body);
+      if(!(cr.status>=200&&cr.status<300)||!conversationId)throw new Error(`Create Conversation נכשל (HTTP ${cr.status})`);
+      $('conversationId').value=conversationId;
+    }
+    const content=$('aiPrompt').value.trim();if(!content)throw new Error('Prompt ריק');
+    const body={conversationId,userId:c.userId,appId:c.appId,...(c.caseId?{caseId:c.caseId}:{}),content};
+    $('aiStream').textContent='';
+    const r=await proxy({method:'POST',path:'/v1/conversations/messages',body,stream:true});
+    if(!r.stream){
+      const actual=typeof r.body==='string'?r.body:JSON.stringify(r.body,null,2);
+      $('aiStream').textContent=actual;
+      setInspectorStatus('aiTechnicalStatus','FAIL',`HTTP ${r.status} · לא התקבל SSE`);
+      showToast(`GenAI/RAG: HTTP ${r.status}`,'warning',5000);return;
+    }
+    const txt=await readStream(r.stream,(ch,full)=>{$('aiStream').textContent=full.slice(-15000);renderSseEvents(full);});
+    const messageEvidence=clone(state.lastExchange);
+    const events=renderSseEvents(txt);
+    const answer=extractSseAnswer(events)||txt.slice(-4000);
+    $('aiStream').textContent=answer||txt.slice(-15000);
+    const mid=extractMessageIdFromText(txt);if(mid)$('messageId').value=mid;
+    const technical=technicalEvaluation({http:r.status,events,stream:true});
+    setInspectorStatus('aiTechnicalStatus',technical.status,`${technical.reason}${createEvidence?' · Conversation נוצר אוטומטית':''}`);
+    const chunkInfo=await fetchChunksForEvents(events,{force:true});
+    renderInspectorSources(chunkInfo);
+    const g=inspectorSelectedGolden();
+    if(g){
+      const judged=await evaluateGoldenAnswer(g,answer,chunkInfo);
+      renderInspectorJudge(judged);
+      setInspectorStatus('aiEvaluationStatus',judged.aiStatus,`${judged.verdictReason}${judged.reason?` · ${judged.reason}`:''}`);
+    }else{
+      setInspectorStatus('aiEvaluationStatus','NOT RUN','שאלה חופשית — בחר Golden Case כדי להפעיל Judge.');
+    }
+    state.lastInspectorRun={time:now(),environment:c.environmentLabel,conversationId,messageId:mid||'',answer,events,sourceRefs:chunkInfo.refs,chunks:chunkInfo.chunks,technical,messageEvidence,createEvidence,goldenId:g?.id||null};
+    showToast('GenAI/RAG request הסתיים.','success');
+  }catch(e){
+    $('aiStream').textContent=e.message;
+    setInspectorStatus('aiTechnicalStatus','FAIL',e.message);
+    setInspectorStatus('aiEvaluationStatus','NOT RUN','ה־AI Judge לא רץ כי ה־Technical Flow נכשל.');
+    showToast('GenAI/RAG: '+e.message,'error',5000);
+  }finally{btn.disabled=false;btn.textContent=old;}
+}
 
 function exportBlob(name,type,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 function exportJson(){exportBlob(`qa-report-${Date.now()}.json`,'application/json',JSON.stringify({generatedAt:now(),environment:cfg().baseUrl,results:Object.values(state.results),investigations:state.investigations,runHistory:state.runHistory,aiRating:state.aiRating,goldenRuns:state.goldenRuns},null,2));}
@@ -1591,7 +1819,7 @@ function wire(){
   $('apiFullUrl').oninput=e=>{const o=apiOp();if(o)apiEditedUrls[`${activeEnvironment}|${apiOpKey(o)}`]=e.target.value.trim();};
   $('apiResetUrlBtn').onclick=()=>{const o=apiOp();if(!o)return;delete apiEditedUrls[`${activeEnvironment}|${apiOpKey(o)}`];$('apiFullUrl').value=apiDefaultUrl(o);showToast('URL הוחזר לברירת המחדל של הסביבה.','success');};
   $('apiOverrideBtn').onclick=()=>{const panel=$('apiOverridePanel');panel.hidden=!panel.hidden;$('apiOverrideBtn').textContent=panel.hidden?'Override Auth':'Close Override';};
-  $('aiRunBtn').onclick=aiRun;
+  $('aiRunBtn').onclick=aiRun;if($('aiLoadGoldenBtn'))$('aiLoadGoldenBtn').onclick=loadInspectorGolden;if($('aiGoldenSelect'))$('aiGoldenSelect').onchange=()=>{if($('aiGoldenSelect').value)loadInspectorGolden();};
   if($('goldenLoadTaxRagBtn'))$('goldenLoadTaxRagBtn').onclick=()=>mergeTaxRagGolden();if($('goldenSaveBtn'))$('goldenSaveBtn').onclick=goldenSave;if($('goldenResetBtn'))$('goldenResetBtn').onclick=goldenFormReset;if($('goldenRunAllBtn'))$('goldenRunAllBtn').onclick=runGoldenAll;if($('goldenExportBtn'))$('goldenExportBtn').onclick=exportGolden;if($('goldenImportBtn'))$('goldenImportBtn').onclick=()=>$('goldenImportFile').click();if($('goldenImportFile'))$('goldenImportFile').onchange=e=>{const f=e.target.files?.[0];if(f)importGoldenFile(f);e.target.value='';};if($('goldenClearBtn'))$('goldenClearBtn').onclick=()=>{if(confirm('למחוק את כל שאלות הזהב, התוצאות והיסטוריית הריצות המקומית?')){state.goldenDataset=[];state.goldenResults={};state.goldenRuns=[];state.currentGoldenRunId=null;saveGoldenDataset();goldenFormReset();renderGolden();}};if($('goldenCompareBtn'))$('goldenCompareBtn').onclick=compareGoldenRuns;if($('glossarySearch'))$('glossarySearch').oninput=e=>renderGlossary(e.target.value);wireGlossaryLinks();
   $('clearResults').onclick=()=>{state.results={};state.investigations={};state.lastExchange=null;$('runSummary').innerHTML='';if($('aiRunSummary'))$('aiRunSummary').innerHTML='';renderAll();showToast('תוצאות ההרצה אופסו.','success');};
   if($('clearRunHistoryBtn'))$('clearRunHistoryBtn').onclick=()=>{state.runHistory=[];persistRunHistory();renderRunHistory();showToast('היסטוריית ההרצות המקומית נמחקה.','success');};

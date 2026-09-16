@@ -353,11 +353,21 @@
 </div>
 <div class="subpage active" data-subpage="aiInspector">
 <div class="card">
-<div class="section-head"><div><h2>GenAI / RAG Inspector</h2><p>הרץ שאלה, ראה את אירועי ה־SSE, בדוק Sources/Chunks וסמן איכות ידנית.</p></div><button class="btn primary" id="aiRunBtn">▶ שאל</button></div>
+<div class="section-head"><div><h2>GenAI / RAG Inspector</h2><p>שולח שאלה מקצה לקצה: אם אין Conversation האתר יוצר אחד, שולח Message/SSE, מושך Sources/Chunks ומפריד Technical Result מ־AI Evaluation.</p></div><button class="btn primary" id="aiRunBtn">▶ שאל</button></div>
+<div class="inspector-golden-row">
+<label>Golden Case (אופציונלי)<select id="aiGoldenSelect"><option value="">שאלה חופשית — ללא Judge אוטומטי</option></select></label>
+<button class="btn ghost compact-btn" id="aiLoadGoldenBtn" type="button">טען שאלה</button>
+</div>
 <label>Prompt<textarea class="rtl-textarea" dir="rtl" id="aiPrompt" rows="4">ענה על סמך מסמכי המקור בלבד. אם אין מספיק מידע, אמור שאין מספיק מידע.</textarea></label>
+
+<div class="judge-status-strip">
+<div class="judge-status-box"><small>Technical Test Result</small><b id="aiTechnicalStatus" class="status-chip status-na">NOT RUN</b><span id="aiTechnicalReason">—</span></div>
+<div class="judge-status-box"><small>AI Evaluation Result</small><b id="aiEvaluationStatus" class="status-chip status-na">NOT RUN</b><span id="aiEvaluationReason">בחר Golden Case כדי להפעיל Judge.</span></div>
+</div>
+
 <div class="result-grid">
-<div><h3>Streaming / Answer</h3><pre id="aiStream">—</pre><h3>אירועי SSE שזוהו</h3><div class="event-list" id="aiEvents">—</div></div>
-<div><h3>הערכת QA</h3>
+<div><h3>Streaming / Answer</h3><pre id="aiStream">—</pre><details class="inspector-collapse"><summary>אירועי SSE</summary><div class="event-list" id="aiEvents">—</div></details></div>
+<div><h3>הערכת QA ידנית</h3>
 <div class="rating-buttons">
 <button class="btn ghost" data-rating="Correct">Correct</button>
 <button class="btn ghost" data-rating="Partially Correct">Partially Correct</button>
@@ -365,10 +375,19 @@
 <button class="btn ghost" data-rating="Hallucination">Hallucination</button>
 <button class="btn ghost" data-rating="Wrong Source">Wrong Source</button>
 </div>
-<label>הערה<textarea id="aiNote" rows="6"></textarea></label>
+<label>הערה<textarea id="aiNote" rows="5"></textarea></label>
 <div class="notice" id="aiRating">טרם דורג</div>
 </div>
 </div>
+
+<details class="inspector-collapse" open>
+<summary>Sources / Chunks / Citations</summary>
+<div id="aiSourcesChunks" class="source-chunk-list"><div class="empty-state">טרם הורצה שאלה.</div></div>
+</details>
+<details class="inspector-collapse">
+<summary>Judge details</summary>
+<div id="aiJudgeDetails" class="judge-details"><div class="empty-state">בחר Golden Case והריץ שאלה כדי לראות Correctness / Completeness / Grounding / Hallucination.</div></div>
+</details>
 </div>
 </div>
 <div class="subpage" data-subpage="aiGolden">
@@ -392,7 +411,18 @@
 <label>Tester<input id="goldenTester" placeholder="שם הבודק — לא נשמר בשרת"/></label>
 <label class="span-2">הערות לגרסה<input id="goldenRunNotes" placeholder="מה השתנה בגרסה הזו?"/></label>
 </div>
-<details class="guide-details"><summary>הגדרות הרצה מתקדמות</summary><div class="grid cols-3"><label class="checkbox-label"><input id="goldenIsolate" type="checkbox" checked/> כל שאלה בשיחה חדשה</label><label class="checkbox-label"><input id="goldenCleanup" type="checkbox" checked/> למחוק שיחת בדיקה אחרי ההרצה</label><label class="checkbox-label"><input id="goldenFetchChunks" type="checkbox" checked/> לשלוף אוטומטית את ה־Chunks מה־Sources</label></div><p class="muted">בידוד שיחות מונע זליגת Context. שליפת Chunks מאפשרת להפריד בין <button class="term-link" data-glossary="Retrieval Failure">Retrieval Failure</button> לבין <button class="term-link" data-glossary="Generation Failure">Generation Failure</button>.</p></details>
+<details class="guide-details"><summary>הגדרות הרצה / Judge</summary>
+<div class="grid cols-3">
+<label class="checkbox-label"><input id="goldenIsolate" type="checkbox" checked/> כל שאלה בשיחה חדשה</label>
+<label class="checkbox-label"><input id="goldenCleanup" type="checkbox" checked/> למחוק שיחת בדיקה אחרי ההרצה</label>
+<label class="checkbox-label"><input id="goldenFetchChunks" type="checkbox" checked/> לשלוף אוטומטית את ה־Chunks מה־Sources</label>
+<label>Correctness Pass ≥<input id="goldenCorrectnessThreshold" type="number" min="0" max="100" value="80"/></label>
+<label>Completeness Pass ≥<input id="goldenCompletenessThreshold" type="number" min="0" max="100" value="80"/></label>
+<label>Grounding Pass ≥<input id="goldenGroundingThreshold" type="number" min="0" max="100" value="70"/></label>
+<label>Hallucination Max ≤<input id="goldenHallucinationMax" type="number" min="0" max="100" value="20"/></label>
+<label class="checkbox-label"><input id="goldenUseLlmJudge" type="checkbox" checked/> השתמש ב־LLM Judge כאשר AI עמוק מאופשר</label>
+</div>
+<p class="muted">Technical Result נקבע מה־API/SSE בלבד. AI Evaluation נקבע בנפרד לפי Correctness, Completeness, Grounding ו־Hallucination. אם LLM Judge אינו זמין, האתר מציג Heuristic fallback במפורש.</p></details>
 </details>
 
 <details class="card golden-collapse">
@@ -402,8 +432,8 @@
 <label>תגיות<input id="goldenTags" placeholder="tax, no-answer, security"/></label>
 <label class="span-2">שאלה<textarea id="goldenQuestion" rows="3" placeholder="השאלה שתישלח ל־AI"></textarea></label>
 <label class="span-2">תשובת זהב<textarea id="goldenExpected" rows="4" placeholder="העובדות שחייבות להיות בתשובה. אין צורך לניסוח זהה."></textarea></label>
-<label>מילות/ביטויי חובה<input id="goldenMustInclude" placeholder="הפרד בפסיקים"/></label>
-<label>מקור צפוי<input id="goldenExpectedSource" placeholder="שם קובץ / document id / chunk ידוע (אופציונלי)"/></label>
+<label>Required Points<textarea id="goldenMustInclude" rows="3" placeholder="נקודה אחת בכל שורה, או הפרדה בפסיקים"></textarea></label>
+<label>Expected Sources / Citations<textarea id="goldenExpectedSource" rows="3" placeholder="מקור / filename / document id / citation אחד בכל שורה"></textarea></label>
 <label class="span-2">הערות<textarea id="goldenNotes" rows="2" placeholder="למשל: שאלה שאושרה ע״י מומחה תוכן"></textarea></label>
 </div>
 <div class="actions-row"><button class="btn primary" id="goldenSaveBtn">שמור שאלה</button><button class="btn ghost" id="goldenResetBtn">נקה טופס</button><button class="btn danger" id="goldenClearBtn">מחק Dataset מקומי</button></div>
@@ -412,7 +442,7 @@
 <summary class="golden-collapse-summary"><div><h2>שאלות זהב</h2><p>נשמרות מקומית בדפדפן בלבד. ה־Token אינו נשמר.</p></div><span class="badge neutral" id="goldenCount">0 שאלות</span></summary><div class="table-wrap" id="goldenTable"></div></details>
 
 <details class="card golden-collapse">
-<summary class="golden-collapse-summary"><div><h2>3. תוצאות Release Sanity</h2><p>המערכת מפרידה בין <button class="term-link" data-glossary="Retrieval Quality">Retrieval</button>, <button class="term-link" data-glossary="Answer Correctness">Answer</button> ו־<button class="term-link" data-glossary="Grounding">Grounding</button>. הציונים הם Heuristic בלבד.</p></div><span class="badge neutral" id="goldenRunBadge">אין Run שמור</span></summary>
+<summary class="golden-collapse-summary"><div><h2>3. תוצאות Release Sanity</h2><p>המערכת מפרידה בין <b>Technical Test Result</b> לבין <b>AI Evaluation Result</b>. ה־Judge בודק Correctness, Completeness, Grounding ו־Hallucination מול Thresholds מוגדרים.</p></div><span class="badge neutral" id="goldenRunBadge">אין Run שמור</span></summary>
 <div class="kpis" id="goldenRunSummary"></div>
 <div class="table-wrap" id="goldenResults"></div>
 </details>
