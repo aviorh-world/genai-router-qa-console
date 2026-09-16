@@ -1039,8 +1039,21 @@ async function exactPostmanTest(){
   btn.disabled=true; copy.disabled=true; meta.textContent='מריץ מ-Vercel אל Router...'; out.textContent='ממתין לתגובה...';
   const started=Date.now();
   try{
-    const res=await fetch('/api/exact-postman-test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
-    const data=await res.json();
+    const res=await fetch('/api/exact-postman-test',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({token})});
+    const raw=await res.text();
+    let data;
+    try{ data=raw?JSON.parse(raw):{}; }
+    catch{
+      const ct=res.headers.get('content-type')||'';
+      data={
+        classification:'VERCEL_ENDPOINT_NON_JSON',
+        logId:res.headers.get('x-vercel-id')||null,
+        response:{status:res.status,statusText:res.statusText||'',contentType:ct,bodyPreview:raw.slice(0,3000)},
+        diagnosis:res.status===401||res.status===403
+          ?'Vercel עצמו החזיר HTML/Non-JSON לפני שפונקציית Exact Postman החזירה JSON. בדוק Deployment Protection / Firewall / Routing של /api/exact-postman-test.'
+          :'הנתיב /api/exact-postman-test לא החזיר JSON. ייתכן שה-Function לא נפרסה, שהנתיב לא קיים, או ש-Vercel החזיר דף שגיאה.'
+      };
+    }
     lastExactDiagnosticText=JSON.stringify(data,null,2); out.textContent=lastExactDiagnosticText; copy.disabled=false;
     const c=data.classification||'UNKNOWN'; const st=data.response?.status??'—';
     meta.textContent=`${c} · HTTP ${st} · ${data.response?.latencyMs??(Date.now()-started)} ms · Log ${data.logId||'—'}`;
