@@ -11,94 +11,79 @@
 <header class="topbar">
 <div>
 <h1>GenAI Router QA Console</h1>
-<p>כלי QA ל־Router 1.0.6 — Swagger + Sandbox / NonProd + ארכיטקטורה + Postman</p>
+<p>כלי QA ל־Router 1.0.6 — Swagger + TSH + ארכיטקטורה + Postman</p>
 </div>
 <div class="top-actions">
-<span class="badge version">0.02</span>
+<span class="badge version">0.02.4</span>
 <span class="badge neutral" id="connectionBadge">לא מחובר</span>
-<a class="btn ghost" href="https://app.swaggerhub.com/apis/ofir-kpmg/Router/1.0.6" target="_blank" rel="noopener">SwaggerHub ↗</a>
 <button class="btn ghost" id="demoBtn">Demo Mode</button>
 </div>
 </header>
-<div class="demo-warning" hidden="" id="demoWarning">⚠️ מצב הדגמה פעיל — שום בקשה לא נשלחת לסביבה שנבחרה. תוצאות סימולציה יסומנו <b>DEMO</b> ולא PASS.</div>
+<div class="demo-warning" hidden="" id="demoWarning">⚠️ מצב הדגמה פעיל — שום בקשה לא נשלחת ל־TSH. תוצאות סימולציה יסומנו <b>DEMO</b> ולא PASS.</div>
 <div aria-live="polite" class="toast-host" id="toastHost"></div>
 <main>
 <section class="card setup">
-<div class="section-head setup-title-row">
+<div class="section-head">
 <div>
-<h2>1. סביבת בדיקה וחיבור</h2>
-<p id="environmentIntro">בחר סביבת עבודה אחת. כל הבדיקות, Auto Flow ו־API Runner יורשים את אותו Connection Profile.</p>
+<h2>1. חיבור לסביבת הבדיקה</h2>
+<p>כדי להתחיל צריך בעיקר Base URL, Identity Token ומשתמש בדיקה. שאר האפשרויות נמצאות תחת "אפשרויות מתקדמות".</p>
 </div>
 <div class="actions-row">
 <button class="btn" id="healthBtn">בדיקת חיבור</button>
-<button class="btn" id="validateTokenBtn">בדיקת Token</button>
-<button class="btn ghost" id="markTokenBtn">סמן Token כחדש</button>
+<button class="btn ghost" id="markTokenBtn">Token הופק עכשיו</button>
 </div>
 </div>
-
-<div class="global-env-panel">
-  <div class="global-env-main">
-    <span class="eyebrow">Environment</span>
-    <div class="env-switch global-env-switch" role="tablist" aria-label="Test environment">
-      <button type="button" class="env-btn" id="globalEnvNonprodBtn" data-global-env="nonprod">🔒 NonProd / TSH</button>
-      <button type="button" class="env-btn" id="globalEnvSandboxBtn" data-global-env="sandbox">🧪 Sandbox</button>
-    </div>
-  </div>
-  <div class="global-env-summary">
-    <b id="globalEnvName">—</b>
-    <span id="globalEnvSummary">—</span>
-  </div>
-</div>
-
 <div class="grid cols-3 setup-essential">
-<label><span id="baseUrlLabel">Base URL</span><input autocomplete="off" id="baseUrl" placeholder="Router Base URL"/><small class="field-help" id="baseUrlHelp">הכתובת נטענת מה־Connection Profile וניתנת לעריכה.</small></label>
-<label><span id="tokenLabel">Token</span><input autocomplete="off" id="token" placeholder="Google CLI token" type="text" dir="ltr"/><small class="field-help" id="tokenExpiry">לא אומת עדיין</small><small class="field-help mono" id="tokenCommandHelp"></small></label>
-<label>User ID<input id="userId" inputmode="email" placeholder="User ID" value="aviorha@ita.gov.il"/></label>
+<label>TSH Base URL<input autocomplete="off" id="baseUrl" placeholder="כתובת Router בסביבת TSH" value="https://chat-router-942568278050.me-west1.run.app/ita-chat-router-api"/></label>
+<label>Identity Token<input autocomplete="off" id="token" placeholder="gcloud auth print-identity-token" type="password"/><small class="field-help" id="tokenExpiry">לא סומן זמן הפקה</small></label>
+<label>User ID<input id="userId" inputmode="email" placeholder="האימייל השע״מי שלך" value="aviorha@ita.gov.il"/></label>
 <label>App ID<input id="appId" placeholder="Desktop" value="Desktop"/></label>
-<label>Case ID<div class="field-inline"><input id="caseId" placeholder="מזהה בדיקה · ניתן לעריכה" value="123456789"/><button class="mini-btn field-inline-btn" id="generateCaseIdBtn" type="button">חדש</button></div><small class="field-help" id="caseIdHelp">Swagger 1.0.6 מגדיר 9 ספרות; בדוגמת Sandbox החדשה הופיע Case ID בן 10 ספרות. האתר לא יחסום מקומית ערך מספרי.</small></label>
+<label>Case ID<input id="caseId" placeholder="9 ספרות · כרגע אינו blocker" value="123456789"/></label>
 </div>
-
 <details class="setup-help advanced-settings">
 <summary>⚙️ אפשרויות מתקדמות</summary>
 <div class="setup-help-body">
 <div class="grid cols-3">
-<label>Execution Mode<select id="executionMode"><option value="direct">Browser Direct → Router</option><option value="proxy">Vercel Proxy → Router</option><option value="postman">Postman / cURL generator בלבד</option></select><small class="field-help" id="executionModeHelp"></small></label>
-<label>Auth Header<select id="authHeader"><option value="X-Serverless-Authorization">X-Serverless-Authorization</option><option value="Authorization">Authorization</option></select><small class="field-help">נטען מה־Profile, אך ניתן לשנות ידנית לצורך בדיקה.</small></label>
+<label>Execution Mode<select id="executionMode"><option value="proxy" selected>Vercel Proxy → Router</option><option value="direct">Browser Direct → Router</option><option value="postman">Postman / cURL generator בלבד</option></select></label>
+<label>Auth Headers<select id="authHeader" disabled><option value="dual" selected>Dual: X-Serverless-Authorization + Authorization</option></select><small class="field-help">אותו Identity Token נשלח בשני ה-Headers, בהתאם לבקשת Postman שעבדה.</small></label>
 <label>User ID B (אופציונלי)<input id="userIdB" placeholder="לבדיקות הרשאה"/></label>
-<label>Token B (אופציונלי)<input autocomplete="off" id="tokenB" placeholder="Token של משתמש B" type="text" dir="ltr"/></label>
+<label>Token B (אופציונלי)<input autocomplete="off" id="tokenB" placeholder="Token של משתמש B" type="password"/></label>
 <label>Conversation ID<input id="conversationId" placeholder="מתמלא אוטומטית"/></label>
 <label>Message ID<input id="messageId" placeholder="מתמלא אוטומטית"/></label>
-<label>AI Investigation Access Code<input autocomplete="off" id="aiAccessCode" placeholder="נדרש רק ל-AI עמוק" type="password"/><small class="field-help">נשאר בדפדפן בלבד ולא נשלח למודל.</small></label>
 </div>
-<label class="checkline"><input id="cloudAccessConfirmed" type="checkbox"/> <span>וידאתי שיש לי משתמש ענן והרשאת Invoker/גישה מתאימה לסביבה שנבחרה</span></label>
-<label class="checkline ai-optin"><input id="aiRemoteEnabled" type="checkbox"/> <span>אפשר AI Investigation עמוק דרך השרת. רק Evidence מצונזר נשלח למודל; Token לעולם לא נשלח.</span></label>
+<label class="checkline"><input id="cloudAccessConfirmed" type="checkbox"/> <span>וידאתי שיש לי משתמש ענן והרשאה להפעיל את שירות ה־Router</span></label>
 </div>
 </details>
 <details class="setup-help">
-<summary>ℹ️ הנחיות Connection Profile / Google CLI</summary>
+<summary>ℹ️ הנחיות TSH / Google CLI / בטיחות</summary>
 <div class="setup-help-body">
-<div class="notice" id="environmentGuideNotice">—</div>
-
-<details class="mobile-token-helper">
-<summary>📱 הפקת Token מהנייד</summary>
-<div class="mobile-token-helper-body">
-  <div class="mobile-token-actions">
-    <a class="btn ghost compact-btn" href="https://shell.cloud.google.com/?show=terminal" target="_blank" rel="noopener noreferrer">פתח Google Cloud Shell ↗</a>
-    <button class="btn ghost compact-btn" id="copyMobileTokenCommandBtn" type="button">העתק פקודה</button>
-  </div>
-  <code class="mobile-token-command" id="mobileTokenCommand" dir="ltr">—</code>
-  <small class="field-help" id="mobileTokenHelp">—</small>
-</div>
-</details>
-
-<div class="notice">⚠️ Token נשמר בנפרד לכל Environment ב־session של הדפדפן. מעבר בין Sandbox ל־NonProd מחליף Base URL, Token, Auth Header ו־Execution Mode יחד כדי למנוע ערבוב credentials.</div>
+<div class="notice">⚠️ השתמש רק ב־credentials של TSH/QA. לא ב־Production. אם ה־TSH פנימי, Vercel לא בהכרח יוכל להגיע אליו — השתמש ב־Browser Direct או העתק בקשה ל־Postman.</div>
+<div class="notice"><b>Google CLI:</b> אם צריך התחברות לחשבון: <code>gcloud init</code> או <code>gcloud init --no-launch-browser</code>. להפקת Identity Token: <code>gcloud auth print-identity-token</code>. ב-Runtime המאומת מול Postman אותו Identity Token נשלח בשניהם: <code>X-Serverless-Authorization: Bearer &lt;TOKEN&gt;</code> וגם <code>Authorization: Bearer &lt;TOKEN&gt;</code>.</div>
 </div>
 </details>
 <div class="readiness-head">
-<div><b>מוכנות להרצה אמיתית</b><span>נבדקת מול ה־Environment הפעיל.</span></div>
+<div><b>מוכנות להרצה אמיתית</b><span>האתר בודק מה חסר לפני שמתחילים.</span></div>
 <div class="actions-row"><button class="btn" id="readinessBtn">בדוק מוכנות</button></div>
 </div>
 <div class="readiness-grid" id="readinessGrid"></div>
+<details class="setup-help diagnostic-panel" open>
+<summary>🧪 Exact Postman Diagnostic — בידוד Vercel מול Router</summary>
+<div class="setup-help-body">
+<div class="notice"><b>מה הבדיקה עושה:</b> שולחת משרת Vercel בקשה קבועה וזהה לבקשת ה-Create שעבדה ב-Postman, בלי להשתמש ב-Base URL או ב-API Runner של האתר. ה-Token בלבד נלקח מהשדה למעלה ונשלח בשני ה-Headers. כך אפשר לדעת אם הבעיה היא במסלול Vercel → Router או בלוגיקת האתר.</div>
+<div class="actions-row">
+<button class="btn primary" id="exactPostmanBtn">▶ Exact Postman Test</button>
+<button class="btn ghost" id="copyExactDiagnosticBtn" disabled>העתק תוצאה</button>
+</div>
+<div class="diagnostic-meta" id="exactPostmanMeta">טרם הורץ</div>
+<pre class="diagnostic-output" id="exactPostmanOutput">הבדיקה תשלח:
+POST https://chat-router-942568278050.me-west1.run.app/ita-chat-router-api/v1/conversations/new
+X-Serverless-Authorization: Bearer [REDACTED]
+Authorization: Bearer [REDACTED]
+Content-Type: application/json
+
+{"appId":"Desktop","userId":"aviorha@ita.gov.il","caseId":"123456789"}</pre>
+</div>
+</details>
 </section>
 <nav class="tabs main-tabs">
 <button class="tab active" data-tab="dashboard">Dashboard</button>
@@ -112,7 +97,7 @@
 </nav>
 <section class="tabpage active" id="dashboard">
 <div class="card start-card">
-<div class="section-head"><div><h2>מה צריך כדי להתחיל</h2><p>Connection Profile נטען לפי Sandbox או NonProd. החסמים העיקריים להרצות מוגנות הם Token תקין והרשאת משתמש ענן; App ID ו־Case ID מקבלים ברירות מחדל.</p></div><span class="badge question" id="startBadge">ממתין לנתונים</span></div>
+<div class="section-head"><div><h2>מה צריך כדי להתחיל</h2><p>החסמים להתנעה כרגע: Base URL מדויק, Token תקין והרשאת משתמש ענן; App ID ו־Case ID כבר קיבלו ברירות מחדל.</p></div><span class="badge question" id="startBadge">ממתין לנתונים</span></div>
 <div class="blocking-summary" id="blockingSummary"></div>
 </div>
 <div class="kpis">
@@ -120,8 +105,6 @@
 <div class="kpi"><b id="kpiAuto">0</b><span>אוטומטיים/מסייעים</span></div>
 <div class="kpi"><b id="kpiPass">0</b><span>PASS</span></div>
 <div class="kpi"><b id="kpiFail">0</b><span>FAIL</span></div>
-<div class="kpi"><b id="kpiBlocked">0</b><span>BLOCKED</span></div>
-<div class="kpi"><b id="kpiQuestion">0</b><span>QUESTION</span></div>
 <div class="kpi"><b id="kpiNA">0</b><span>N/A</span></div>
 <div class="kpi"><b id="kpiDemo">0</b><span>DEMO</span></div>
 <div class="kpi"><b id="kpiOpen">37</b><span>שאלות פתוחות</span></div>
@@ -140,7 +123,6 @@
 <div class="bulk-progress" hidden="" id="bulkProgress"><div class="bulk-progress-bar" id="bulkProgressBar"></div><span id="bulkProgressText"></span></div>
 <div class="run-summary" id="runSummary"></div>
 </div>
-<div class="card run-history-card"><div class="section-head"><div><h2>Run History</h2><p>נשמרת מקומית רק תמונת מצב מסכמת של הרצות, ללא Token וללא Request/Response.</p></div><button class="btn ghost" id="clearRunHistoryBtn">נקה היסטוריה</button></div><div class="table-wrap" id="runHistoryTable"></div></div>
 <div class="card"><div class="section-head"><div><h2>מפת חבילות הבדיקות</h2><p>הדשבורד מפריד בין רכיב שנבדק, סוג הבדיקה וכלי ה־QA עצמו. Console Self-Test אינו בדיקת מוצר ואינו מעיד על תקינות ה־Router API.</p></div><span class="badge neutral">Coverage Map</span></div><div class="context-grid"><div class="context-card"><h3>Router / API</h3><p>Authentication · Conversations · Messages/SSE · State · Files/Chunks · Statistics</p></div><div class="context-card"><h3>AI Components</h3><p><button class="term-link" data-glossary="Routing">Routing</button> · Q&amp;A/RAG · שיחה כללית · <button class="term-link" data-glossary="Text2SQL">Text2SQL</button>. לפי תרשים ה־Serving, אלה מסלולי הניתוב המרכזיים שנבדוק.</p></div><div class="context-card"><h3>AI Quality</h3><p>Golden Regression · Retrieval · Grounding · Answer Correctness</p></div><div class="context-card"><h3>Cross-Cutting</h3><p>Security · Boundary/Negative · E2E/Happy Flow</p></div><div class="context-card"><h3>QA Tool — לא המוצר</h3><p><b>Console Self-Test</b>: בודק טאבים, כפתורים והודעות באתר הבדיקות עצמו בלבד.</p></div></div></div>
 <div class="card">
 <h2>מה האתר לא יכול לקבוע לבד</h2>
@@ -158,7 +140,6 @@
 <input id="searchTests" placeholder="חיפוש לפי ID / Endpoint / תרחיש"/>
 <select id="priorityFilter"><option value="">כל הרמות</option><option>P0</option><option>P1</option><option>P2</option></select>
 <select id="modeFilter"><option value="">כל המצבים</option><option value="auto">אוטומטי</option><option value="assisted">מסייע</option><option value="manual">ידני</option></select>
-<select id="statusFilter"><option value="">כל התוצאות</option><option>PASS</option><option>FAIL</option><option>BLOCKED</option><option>QUESTION</option><option>N/A</option><option>DEMO</option><option value="NOT_RUN">Not Run</option></select>
 </div>
 <div class="table-wrap" id="testsTableWrap"></div>
 </div>
@@ -184,7 +165,7 @@
 <div class="card">
 <h2>מה האתר הזה עושה?</h2>
 <div class="guide-grid">
-<div class="guide-step"><span>1</span><div><b>בוחרים Environment</b><p>Sandbox או NonProd / TSH. ה־Connection Profile טוען אוטומטית Base URL, סוג Token, Auth Header ונתיב הרצה; כל הבדיקות יורשות אותו.</p></div></div>
+<div class="guide-step"><span>1</span><div><b>מחברים ל־TSH</b><p>מזינים Base URL ו־Identity Token ובודקים שה־Router נגיש.</p></div></div>
 <div class="guide-step"><span>2</span><div><b>מריצים בדיקות</b><p>אפשר להריץ טסט יחיד, Pack, Happy Flow או את כל הבדיקות.</p></div></div>
 <div class="guide-step"><span>3</span><div><b>בודקים Evidence</b><p>בכל טסט אמיתי אפשר לראות Request, Response, HTTP status ו־latency ולהעתיק cURL.</p></div></div>
 <div class="guide-step"><span>4</span><div><b>מפרשים תוצאה</b><p>PASS/FAIL הם תוצאה אמיתית; N/A אומר שחסר תנאי; DEMO הוא סימולציה בלבד; QUESTION/BLOCKED דורשים בירור.</p></div></div>
@@ -204,7 +185,7 @@
 <div><b class="status-pass">PASS</b><span>התוצאה בפועל תאמה ל־Expected.</span></div>
 <div><b class="status-fail">FAIL</b><span>התוצאה בפועל לא תאמה ל־Expected.</span></div>
 <div><b class="status-na">N/A</b><span>הבדיקה לא רלוונטית/לא ניתנת להרצה כרגע בגלל נתון חסר.</span></div>
-<div><b class="status-demo">DEMO</b><span>סימולציה מקומית בלבד; לא נשלחה בקשה לסביבה הפעילה.</span></div>
+<div><b class="status-demo">DEMO</b><span>סימולציה מקומית בלבד; לא נשלחה בקשה ל־TSH.</span></div>
 <div><b class="status-question">QUESTION</b><span>אין Expected מוסכם או נדרש בירור.</span></div>
 <div><b class="status-blocked">BLOCKED</b><span>הבדיקה אמורה לרוץ אך חסומה טכנית/הרשאתית.</span></div>
 </div>
@@ -277,70 +258,24 @@
 
 
 <section class="tabpage" id="flow">
-<div class="card"><div class="section-head"><div><h2>Methodological E2E Flows</h2><p>תרחישי משתמש מלאים שמחברים כמה Endpoints לרצף אחד, עם State שעובר אוטומטית בין השלבים.</p></div></div><div class="journey-grid" id="journeyGrid"></div></div>
-<div class="card"><div class="section-head"><div><h2 id="activeFlowTitle">Conversation Lifecycle</h2><p id="activeFlowDescription">Create → History → Send → Get → Delete → Verify deletion.</p></div><button class="btn primary" id="flowRunBtn">▶ הרץ Flow</button></div><label>שאלה ל־AI<textarea id="flowQuestion" rows="3">מה אפשר להסיק מהמסמכים הרלוונטיים לשאלה זו?</textarea></label><div class="flow-steps" id="flowSteps"></div></div>
-<div class="card"><details class="guide-details"><summary>מטריצת תרחישים מתודולוגיים</summary><div class="table-wrap"><table class="method-table"><thead><tr><th>Flow</th><th>מטרה</th><th>רצף עיקרי</th><th>Priority</th><th>אוטומציה</th></tr></thead><tbody><tr><td>Conversation Lifecycle</td><td>מחזור חיים מלא של שיחה</td><td>Create → History → Send → Get → Delete → Verify</td><td>P0</td><td>מלאה</td></tr><tr><td>Continue Previous Conversation</td><td>חזרה לשיחה והמשך Context</td><td>Create → Question → Get → Follow-up → Get</td><td>P0</td><td>מלאה</td></tr><tr><td>Multi-Conversation Isolation</td><td>שתי שיחות נפרדות לאותו משתמש</td><td>Create A/B → Send A/B → Get A/B → History</td><td>P0</td><td>מלאה</td></tr><tr><td>Case Isolation</td><td>בידוד בין Cases</td><td>Create Case A/B → Messages → History per Case</td><td>P0 Security</td><td>מלאה</td></tr><tr><td>Golden RAG Journey</td><td>שאלה אמיתית מול Golden Dataset</td><td>Create → Golden Question → Answer/Sources → Review</td><td>P0 GenAI</td><td>חצי-אוטומטית</td></tr></tbody></table></div></details></div></section>
+<div class="card">
+<div class="section-head"><div><h2>Conversation Happy Flow</h2><p>Create → History → Send Message (SSE) → Get Conversation → Delete → Verify deletion.</p></div><button class="btn primary" id="flowRunBtn">▶ הרץ Flow</button></div>
+<label>שאלה ל־AI<textarea id="flowQuestion" rows="3">מה אפשר להסיק מהמסמכים הרלוונטיים לשאלה זו?</textarea></label>
+<div class="flow-steps" id="flowSteps"></div>
+</div>
+</section>
 <section class="tabpage" id="api">
-<div class="card api-postman-shell">
-  <div class="api-topline">
-    <div>
-      <h2>API Runner</h2>
-      <p>Swagger 1.0.6 · יורש את סביבת הבדיקה הגלובלית · URL מלא וניתן לעריכה.</p>
-    </div>
-    <div class="api-inherited-profile">
-      <span>Environment</span>
-      <b id="apiInheritedEnv">—</b>
-      <small>מהגדרות החיבור למעלה</small>
-    </div>
-  </div>
-
-  <div class="api-env-hint" id="apiEnvHint"></div>
-
-  <div class="request-line">
-    <input id="apiMethod" class="method-box" readonly />
-    <input id="apiFullUrl" class="api-url-edit mono" dir="ltr" aria-label="Full request URL" />
-    <button class="btn primary compact-btn" id="apiRunBtn">Send</button>
-  </div>
-  <div class="api-url-tools">
-    <span>ה־URL נבנה מה־Environment + Endpoint, וניתן לשנות אותו לבקשה הספציפית.</span>
-    <button class="btn ghost tiny-btn" id="apiResetUrlBtn" type="button">Reset URL</button>
-    <button class="btn ghost tiny-btn" id="apiOverrideBtn" type="button">Override Auth</button>
-  </div>
-
-  <div class="api-auth-override" id="apiOverridePanel" hidden>
-    <label>Override Token (ריק = Global Token)
-      <input id="apiOverrideToken" class="mono" dir="ltr" autocomplete="off" placeholder="השאר ריק כדי להשתמש ב־Token הגלובלי" />
-    </label>
-    <label>Override Auth Header
-      <input id="apiOverrideAuthHeader" class="mono" dir="ltr" placeholder="ריק = Global Auth Header" />
-    </label>
-  </div>
-
-  <div class="api-selector-row">
-    <label>Swagger Endpoint
-      <select id="endpointSelect"></select>
-    </label>
-    <button class="btn ghost compact-btn" id="copyCurlBtn">Copy cURL</button>
-  </div>
-
-  <div class="api-operation-meta">
-    <div><small>Operation</small><strong id="apiOperation">—</strong></div>
-    <div><small>Path</small><code id="apiPath">—</code></div>
-  </div>
+<div class="card">
+<div class="section-head"><div><h2>API Runner</h2><p>הרצה חופשית של כל Endpoint מה־Swagger, או יצירת cURL ל־Postman/סביבה פנימית.</p></div><div class="actions-row"><button class="btn primary" id="apiRunBtn">Run</button><button class="btn ghost" id="copyCurlBtn">העתק cURL</button></div></div>
+<div class="grid cols-2">
+<label>Endpoint<select id="endpointSelect"></select></label>
+<label>Method<input id="apiMethod" readonly=""/></label>
 </div>
-
-<div class="card api-postman-shell">
-  <div class="api-mini-head"><h2>שדות הבקשה</h2><span>משתנים אוטומטית לפי ה־Endpoint</span></div>
-  <div class="api-structured-fields" id="apiStructuredFields"></div>
-  <details class="api-json-details">
-    <summary>Raw JSON</summary>
-    <textarea id="apiBody" rows="8" spellcheck="false">{}</textarea>
-  </details>
+<label>Request JSON<textarea id="apiBody" rows="10" spellcheck="false">{}</textarea></label>
+<div class="result-grid">
+<div><h3>Response</h3><pre id="apiResponse">—</pre></div>
+<div><h3>Meta</h3><pre id="apiMeta">—</pre></div>
 </div>
-
-<div class="card api-postman-shell">
-  <div class="api-mini-head"><h2>Response</h2><span id="apiMeta">—</span></div>
-  <pre id="apiResponse">—</pre>
 </div>
 </section>
 <section class="tabpage" id="ai">
@@ -353,21 +288,11 @@
 </div>
 <div class="subpage active" data-subpage="aiInspector">
 <div class="card">
-<div class="section-head"><div><h2>GenAI / RAG Inspector</h2><p>שולח שאלה מקצה לקצה: אם אין Conversation האתר יוצר אחד, שולח Message/SSE, מושך Sources/Chunks ומפריד Technical Result מ־AI Evaluation.</p></div><button class="btn primary" id="aiRunBtn">▶ שאל</button></div>
-<div class="inspector-golden-row">
-<label>Golden Case (אופציונלי)<select id="aiGoldenSelect"><option value="">שאלה חופשית — ללא Judge אוטומטי</option></select></label>
-<button class="btn ghost compact-btn" id="aiLoadGoldenBtn" type="button">טען שאלה</button>
-</div>
-<label>Prompt<textarea class="rtl-textarea" dir="rtl" id="aiPrompt" rows="4">ענה על סמך מסמכי המקור בלבד. אם אין מספיק מידע, אמור שאין מספיק מידע.</textarea></label>
-
-<div class="judge-status-strip">
-<div class="judge-status-box"><small>Technical Test Result</small><b id="aiTechnicalStatus" class="status-chip status-na">NOT RUN</b><span id="aiTechnicalReason">—</span></div>
-<div class="judge-status-box"><small>AI Evaluation Result</small><b id="aiEvaluationStatus" class="status-chip status-na">NOT RUN</b><span id="aiEvaluationReason">בחר Golden Case כדי להפעיל Judge.</span></div>
-</div>
-
+<div class="section-head"><div><h2>GenAI / RAG Inspector</h2><p>הרץ שאלה, ראה את אירועי ה־SSE, בדוק Sources/Chunks וסמן איכות ידנית.</p></div><button class="btn primary" id="aiRunBtn">▶ שאל</button></div>
+<label>Prompt<textarea id="aiPrompt" rows="4">ענה על סמך מסמכי המקור בלבד. אם אין מספיק מידע, אמור שאין מספיק מידע.</textarea></label>
 <div class="result-grid">
-<div><h3>Streaming / Answer</h3><pre id="aiStream">—</pre><details class="inspector-collapse"><summary>אירועי SSE</summary><div class="event-list" id="aiEvents">—</div></details></div>
-<div><h3>הערכת QA ידנית</h3>
+<div><h3>Streaming / Answer</h3><pre id="aiStream">—</pre><h3>אירועי SSE שזוהו</h3><div class="event-list" id="aiEvents">—</div></div>
+<div><h3>הערכת QA</h3>
 <div class="rating-buttons">
 <button class="btn ghost" data-rating="Correct">Correct</button>
 <button class="btn ghost" data-rating="Partially Correct">Partially Correct</button>
@@ -375,31 +300,21 @@
 <button class="btn ghost" data-rating="Hallucination">Hallucination</button>
 <button class="btn ghost" data-rating="Wrong Source">Wrong Source</button>
 </div>
-<label>הערה<textarea id="aiNote" rows="5"></textarea></label>
+<label>הערה<textarea id="aiNote" rows="6"></textarea></label>
 <div class="notice" id="aiRating">טרם דורג</div>
 </div>
 </div>
-
-<details class="inspector-collapse" open>
-<summary>Sources / Chunks / Citations</summary>
-<div id="aiSourcesChunks" class="source-chunk-list"><div class="empty-state">טרם הורצה שאלה.</div></div>
-</details>
-<details class="inspector-collapse">
-<summary>Judge details</summary>
-<div id="aiJudgeDetails" class="judge-details"><div class="empty-state">בחר Golden Case והריץ שאלה כדי לראות Correctness / Completeness / Grounding / Hallucination.</div></div>
-</details>
 </div>
 </div>
 <div class="subpage" data-subpage="aiGolden">
 <div class="card golden-intro">
-<div class="section-head"><div><h2>Golden Release Sanity / Regression</h2><p>מריצים את <button class="term-link" data-glossary="Golden Dataset">שאלות הזהב</button> מול גרסה חדשה, שומרים Metadata, בודקים Source/Chunk, ומשווים לריצה קודמת.</p><p class="muted">מקור מובנה: <b>TaxRAG Evaluator v1.1</b> — 27 שאלות ותשובות זהב מתוך הגיליון <b>תשובות_זהב_גרסה1</b>.</p></div><div class="actions-row"><button class="btn primary" id="goldenRunAllBtn">▶ הרץ Release Sanity</button><button class="btn ghost" id="goldenLoadTaxRagBtn">טען/מזג TaxRAG v1.1</button><a class="btn ghost" href="http://136.113.176.140:8080/" target="_blank" rel="noopener noreferrer">פתח TaxRAG Evaluator ↗</a><a class="btn ghost" href="/data/TaxRAG-Evaluator-v1.1-31082026-RONEN.xlsx" download>הורד Excel מקור</a><button class="btn ghost" id="goldenExportBtn">ייצוא Dataset + Runs</button><button class="btn ghost" id="goldenImportBtn">ייבוא JSON</button></div></div>
-<div class="notice info"><b>הקשר:</b> קובץ ה־Excel הוא ה־Golden Dataset — השאלות, תשובות הזהב והמקורות הצפויים. TaxRAG Evaluator הוא כלי הערכה נפרד; כרגע הוא מקושר מהאתר, אך לא מחובר להרצה אוטומטית כל עוד אין לנו Contract/API מתועד שלו.</div>
+<div class="section-head"><div><h2>Golden Release Sanity / Regression</h2><p>מריצים את <button class="term-link" data-glossary="Golden Dataset">שאלות הזהב</button> מול גרסה חדשה, שומרים Metadata, בודקים Source/Chunk, ומשווים לריצה קודמת.</p></div><div class="actions-row"><button class="btn primary" id="goldenRunAllBtn">▶ הרץ Release Sanity</button><button class="btn ghost" id="goldenExportBtn">ייצוא Dataset + Runs</button><button class="btn ghost" id="goldenImportBtn">ייבוא JSON</button></div></div>
 <div class="notice info"><b>חשוב:</b> Similarity והציונים האוטומטיים הם Signals בלבד. PASS עסקי דורש בדיקה שהעובדות נכונות ושה־Source/Chunk באמת תומכים בתשובה. <button class="term-link" data-glossary="Review Queue">מה נכנס ל־Review Queue?</button></div>
 <input id="goldenImportFile" type="file" accept="application/json,.json" hidden/>
 </div>
 
-<details class="card release-card golden-collapse">
-<summary class="golden-collapse-summary"><div><h2>1. פרטי גרסה / Run Metadata</h2><p>המידע הזה נשמר עם התוצאות כדי שנדע מה השתנה בין גרסאות.</p></div><span class="badge neutral">Release Context</span></summary>
+<div class="card release-card">
+<div class="section-head"><div><h2>1. פרטי גרסה / Run Metadata</h2><p>המידע הזה נשמר עם התוצאות כדי שנדע מה השתנה בין גרסאות.</p></div><span class="badge neutral">Release Context</span></div>
 <div class="grid cols-3">
 <label>Run / Release Label<input id="goldenRunLabel" placeholder="למשל build-1.4.2 / release-2026-09-15"/></label>
 <label>Environment<input id="goldenEnvironment" value="TSH" placeholder="TSH / QA"/></label>
@@ -411,53 +326,41 @@
 <label>Tester<input id="goldenTester" placeholder="שם הבודק — לא נשמר בשרת"/></label>
 <label class="span-2">הערות לגרסה<input id="goldenRunNotes" placeholder="מה השתנה בגרסה הזו?"/></label>
 </div>
-<details class="guide-details"><summary>הגדרות הרצה / Judge</summary>
-<div class="grid cols-3">
-<label class="checkbox-label"><input id="goldenIsolate" type="checkbox" checked/> כל שאלה בשיחה חדשה</label>
-<label class="checkbox-label"><input id="goldenCleanup" type="checkbox" checked/> למחוק שיחת בדיקה אחרי ההרצה</label>
-<label class="checkbox-label"><input id="goldenFetchChunks" type="checkbox" checked/> לשלוף אוטומטית את ה־Chunks מה־Sources</label>
-<label>Correctness Pass ≥<input id="goldenCorrectnessThreshold" type="number" min="0" max="100" value="80"/></label>
-<label>Completeness Pass ≥<input id="goldenCompletenessThreshold" type="number" min="0" max="100" value="80"/></label>
-<label>Grounding Pass ≥<input id="goldenGroundingThreshold" type="number" min="0" max="100" value="70"/></label>
-<label>Hallucination Max ≤<input id="goldenHallucinationMax" type="number" min="0" max="100" value="20"/></label>
-<label class="checkbox-label"><input id="goldenUseLlmJudge" type="checkbox" checked/> השתמש ב־LLM Judge כאשר AI עמוק מאופשר</label>
+<details class="guide-details"><summary>הגדרות הרצה מתקדמות</summary><div class="grid cols-3"><label class="checkbox-label"><input id="goldenIsolate" type="checkbox" checked/> כל שאלה בשיחה חדשה</label><label class="checkbox-label"><input id="goldenCleanup" type="checkbox" checked/> למחוק שיחת בדיקה אחרי ההרצה</label><label class="checkbox-label"><input id="goldenFetchChunks" type="checkbox" checked/> לשלוף אוטומטית את ה־Chunks מה־Sources</label></div><p class="muted">בידוד שיחות מונע זליגת Context. שליפת Chunks מאפשרת להפריד בין <button class="term-link" data-glossary="Retrieval Failure">Retrieval Failure</button> לבין <button class="term-link" data-glossary="Generation Failure">Generation Failure</button>.</p></details>
 </div>
-<p class="muted">Technical Result נקבע מה־API/SSE בלבד. AI Evaluation נקבע בנפרד לפי Correctness, Completeness, Grounding ו־Hallucination. אם LLM Judge אינו זמין, האתר מציג Heuristic fallback במפורש.</p></details>
-</details>
 
-<details class="card golden-collapse">
-<summary class="golden-collapse-summary"><div><h2>2. Dataset — הוספת / עריכת שאלת זהב</h2><p>הוספה או עריכה ידנית של שאלה, תשובת זהב ומקור צפוי.</p></div><span class="badge neutral">Dataset editor</span></summary>
+<div class="card">
+<h2>2. Dataset — הוספת / עריכת שאלת זהב</h2>
 <div class="grid cols-2 golden-form">
 <label>ID<input id="goldenId" placeholder="GOLD-001"/></label>
 <label>תגיות<input id="goldenTags" placeholder="tax, no-answer, security"/></label>
 <label class="span-2">שאלה<textarea id="goldenQuestion" rows="3" placeholder="השאלה שתישלח ל־AI"></textarea></label>
 <label class="span-2">תשובת זהב<textarea id="goldenExpected" rows="4" placeholder="העובדות שחייבות להיות בתשובה. אין צורך לניסוח זהה."></textarea></label>
-<label>Required Points<textarea id="goldenMustInclude" rows="3" placeholder="נקודה אחת בכל שורה, או הפרדה בפסיקים"></textarea></label>
-<label>Expected Sources / Citations<textarea id="goldenExpectedSource" rows="3" placeholder="מקור / filename / document id / citation אחד בכל שורה"></textarea></label>
+<label>מילות/ביטויי חובה<input id="goldenMustInclude" placeholder="הפרד בפסיקים"/></label>
+<label>מקור צפוי<input id="goldenExpectedSource" placeholder="שם קובץ / document id / chunk ידוע (אופציונלי)"/></label>
 <label class="span-2">הערות<textarea id="goldenNotes" rows="2" placeholder="למשל: שאלה שאושרה ע״י מומחה תוכן"></textarea></label>
 </div>
 <div class="actions-row"><button class="btn primary" id="goldenSaveBtn">שמור שאלה</button><button class="btn ghost" id="goldenResetBtn">נקה טופס</button><button class="btn danger" id="goldenClearBtn">מחק Dataset מקומי</button></div>
-</details>
-<details class="card golden-collapse">
-<summary class="golden-collapse-summary"><div><h2>שאלות זהב</h2><p>נשמרות מקומית בדפדפן בלבד. ה־Token אינו נשמר.</p></div><span class="badge neutral" id="goldenCount">0 שאלות</span></summary><div class="table-wrap" id="goldenTable"></div></details>
+</div>
+<div class="card"><div class="section-head"><div><h2>שאלות זהב</h2><p>נשמרות מקומית בדפדפן בלבד. ה־Token אינו נשמר.</p></div><span class="badge neutral" id="goldenCount">0 שאלות</span></div><div class="table-wrap" id="goldenTable"></div></div>
 
-<details class="card golden-collapse">
-<summary class="golden-collapse-summary"><div><h2>3. תוצאות Release Sanity</h2><p>המערכת מפרידה בין <b>Technical Test Result</b> לבין <b>AI Evaluation Result</b>. ה־Judge בודק Correctness, Completeness, Grounding ו־Hallucination מול Thresholds מוגדרים.</p></div><span class="badge neutral" id="goldenRunBadge">אין Run שמור</span></summary>
+<div class="card">
+<div class="section-head"><div><h2>3. תוצאות Release Sanity</h2><p>המערכת מפרידה בין <button class="term-link" data-glossary="Retrieval Quality">Retrieval</button>, <button class="term-link" data-glossary="Answer Correctness">Answer</button> ו־<button class="term-link" data-glossary="Grounding">Grounding</button>. הציונים הם Heuristic בלבד.</p></div><span class="badge neutral" id="goldenRunBadge">אין Run שמור</span></div>
 <div class="kpis" id="goldenRunSummary"></div>
 <div class="table-wrap" id="goldenResults"></div>
-</details>
+</div>
 
-<details class="card review-card golden-collapse">
-<summary class="golden-collapse-summary"><div><h2>4. Review Queue</h2><p>כאן מופיעים רק מקרים שדורשים עין אנושית: Source לא צפוי, Chunk חסר, Answer/Grounding חלשים, שגיאה או FAIL.</p></div><span class="badge question" id="goldenReviewCount">0 לבדיקה</span></summary>
+<div class="card review-card">
+<div class="section-head"><div><h2>4. Review Queue</h2><p>כאן מופיעים רק מקרים שדורשים עין אנושית: Source לא צפוי, Chunk חסר, Answer/Grounding חלשים, שגיאה או FAIL.</p></div><span class="badge question" id="goldenReviewCount">0 לבדיקה</span></div>
 <div class="table-wrap" id="goldenReviewQueue"></div>
-</details>
+</div>
 
-<details class="card golden-collapse">
-<summary class="golden-collapse-summary"><div><h2>5. השוואת Releases</h2><p>בחר שתי ריצות כדי לראות שיפור/רגרסיה, שינוי במקור ושינוי בציוני האיכות.</p></div><span class="badge neutral">Release compare</span></summary><div class="compare-controls golden-compare-controls"><select id="goldenCompareBase"></select><span>מול</span><select id="goldenCompareCurrent"></select><button class="btn ghost" id="goldenCompareBtn">השווה</button></div>
+<div class="card">
+<div class="section-head"><div><h2>5. השוואת Releases</h2><p>בחר שתי ריצות כדי לראות שיפור/רגרסיה, שינוי במקור ושינוי בציוני האיכות.</p></div><div class="compare-controls"><select id="goldenCompareBase"></select><span>מול</span><select id="goldenCompareCurrent"></select><button class="btn ghost" id="goldenCompareBtn">השווה</button></div></div>
 <div class="kpis" id="goldenCompareSummary"></div>
 <div class="table-wrap" id="goldenCompareTable"></div>
 <details class="guide-details"><summary>היסטוריית ריצות שמורות</summary><div class="table-wrap" id="goldenRunsTable"></div></details>
-</details>
+</div>
 </div>
 </section><section class="tabpage" id="qaDocs">
 <div class="card">
@@ -474,10 +377,10 @@
 <button class="btn ghost" id="exportStpBtn">הורד STP בעברית</button>
 </div>
 <div class="context-grid">
-<div class="context-card"><h3>מטרת הבדיקות</h3><p>לוודא שה־GenAI Router עובד תקין בסביבת הבדיקה שנבחרה, שומר על הרשאות ובידוד מידע, מנהל שיחות ו־state נכון, ומחזיר תשובות GenAI/RAG אמינות ובטוחות.</p></div>
+<div class="context-card"><h3>מטרת הבדיקות</h3><p>לוודא שה־GenAI Router עובד תקין בסביבת TSH, שומר על הרשאות ובידוד מידע, מנהל שיחות ו־state נכון, ומחזיר תשובות GenAI/RAG אמינות ובטוחות.</p></div>
 <div class="context-card"><h3>Scope – בתוך הבדיקה</h3><p>API, Authentication, Conversations, History, Messages/SSE, Delete, Files/Chunks, Feedback, Statistics, Boundaries, הרשאות, Prompt Injection, RAG ו־State.</p></div>
 <div class="context-card"><h3>מחוץ ל־Scope כרגע</h3><p>Production, עומסים מלאים ללא SLA, אימות DB מלא ללא גישה לטבלאות, ואיכות עסקית סופית ללא Golden Dataset/SME.</p></div>
-<div class="context-card"><h3>סביבת בדיקה</h3><p>Sandbox או NonProd / TSH מתוך Connection Profile גלובלי. לכל סביבה Base URL, Token ו־Auth Header משלה, והבדיקות האוטומטיות יורשות את הבחירה.</p></div>
+<div class="context-card"><h3>סביבת בדיקה</h3><p>TSH / NON-PROD. הזדהות באמצעות Identity Token שמופק ב־gcloud ונשלח ב־X-Serverless-Authorization. תוקף משוער של Token: שעה.</p></div>
 </div>
 </div>
 <div class="card">
@@ -487,13 +390,13 @@
 <div class="card">
 <h2>תנאי כניסה ויציאה</h2>
 <div class="result-grid">
-<div><h3>Entry Criteria – אפשר להתחיל כש...</h3><ul><li>נבחר Connection Profile: Sandbox או NonProd.</li><li>יש משתמש ענן והרשאה ל־Router/Invoker.</li><li>ניתן להפיק את סוג ה־Token הנדרש לסביבה הפעילה.</li><li>Swagger/Contract זמין.</li><li>קיימים App ID, User ID ו־Case ID לבדיקה.</li></ul></div>
+<div><h3>Entry Criteria – אפשר להתחיל כש...</h3><ul><li>יש TSH Base URL.</li><li>יש משתמש ענן והרשאה ל־Router.</li><li>ניתן להפיק Identity Token תקין.</li><li>Swagger/Contract זמין.</li><li>קיימים App ID, User ID ו־Case ID לבדיקה.</li></ul></div>
 <div><h3>Exit Criteria – אפשר לסיים כש...</h3><ul><li>כל בדיקות P0 הקריטיות עברו או שיש חריגה מאושרת ומתועדת.</li><li>אין תקלת אבטחה קריטית פתוחה.</li><li>תוצאות P1/P2 תועדו והסיכונים ידועים.</li><li>פערי Contract שחוסמים PASS/FAIL נסגרו או סומנו במפורש.</li><li>דוח הרצה הופק ונשמר.</li></ul></div>
 </div>
 </div>
 <div class="card">
 <h2>סיכונים ותלויות</h2>
-<ul><li>Token קצר־חיים עלול לפוג באמצע ריצה.</li><li>גישה ל־Sandbox/NonProd תלויה ברשת ובהרשאות המתאימות.</li><li>חלק מה־Expected Results עדיין אינם מוגדרים פורמלית ב־Swagger.</li><li>בדיקות State/Delete דורשות גישה או אישור על AlloyDB/לוגים.</li><li>בדיקות GenAI דורשות מקור אמת או SME כדי להכריע איכות עסקית.</li></ul>
+<ul><li>Token קצר־חיים עלול לפוג באמצע ריצה.</li><li>גישה ל־TSH תלויה ברשת ובהרשאות.</li><li>חלק מה־Expected Results עדיין אינם מוגדרים פורמלית ב־Swagger.</li><li>בדיקות State/Delete דורשות גישה או אישור על AlloyDB/לוגים.</li><li>בדיקות GenAI דורשות מקור אמת או SME כדי להכריע איכות עסקית.</li></ul>
 </div>
 </div>
 <div class="subpage" data-subpage="qaStd">
@@ -524,8 +427,7 @@
 
 <section class="tabpage" id="report">
 <div class="card">
-<div class="section-head"><div><h2>Test Run Report</h2><p>ה־Token לעולם לא נכנס לדוח. מכאן אפשר לתחקר FAIL וליצור Bug מוכן ל־Azure.</p></div><div><button class="btn primary" id="runAiSummaryBtn">🤖 תחקר את ההרצה</button> <button class="btn" id="exportJson">Export JSON</button> <button class="btn ghost" id="exportCsv">Export CSV</button></div></div>
-<div class="ai-run-summary" id="aiRunSummary"></div>
+<div class="section-head"><div><h2>Test Run Report</h2><p>ה־Token לעולם לא נכנס לדוח.</p></div><div><button class="btn" id="exportJson">Export JSON</button> <button class="btn ghost" id="exportCsv">Export CSV</button></div></div>
 <div class="table-wrap" id="reportTable"></div>
 </div>
 </section>
@@ -535,7 +437,6 @@
 <div class="section-head"><div><h2 id="dialogTitle">Test</h2><p id="dialogSubtitle"></p></div><button class="btn ghost" value="cancel">✕</button></div>
 <div class="dialog-body" id="dialogBody"></div>
 <div class="dialog-evidence" id="dialogEvidence"></div>
-<div class="investigation-panel" id="dialogInvestigation"></div>
 <label>הערת QA<textarea id="manualNote" placeholder="מה בדקת ומה בפועל קרה?" rows="4"></textarea></label>
 <div class="grid cols-2 bug-classifier"><label>סיווג כשל<select id="manualBugCategory"><option value="">לא סווג</option><option>Retrieval Failure</option><option>Generation Failure</option><option>Grounding Failure</option><option>Authorization/Security Failure</option><option>Routing Failure</option><option>SQL Generation Failure</option><option>Data/Execution Failure</option></select><span class="field-help">רלוונטי בעיקר ל־FAIL. הסבר במילון AI.</span></label><div class="bug-type-help"><button class="term-link" type="button" data-glossary="Failure Taxonomy">הסבר על סיווגי הכשל</button></div></div>
 <div class="actions-row dialog-actions">
@@ -545,21 +446,11 @@
 <button class="btn" data-manual-status="QUESTION" type="button">QUESTION</button>
 <button class="btn ghost" hidden="" id="dialogCopyCurlBtn" type="button">העתק cURL / Postman</button>
 <button class="btn ghost" id="dialogBugEvidenceBtn" type="button">צור Bug Evidence</button>
-<button class="btn ghost" id="dialogInvestigateBtn" type="button">🤖 Investigate</button>
-<button class="btn ghost" id="dialogGenerateBugBtn" type="button">🐞 Generate Bug</button>
 <button class="btn primary" id="dialogRunBtn" type="button">Run</button>
 </div>
 </form>
 </dialog>
-<dialog class="test-dialog bug-dialog" id="bugDialog">
-<form class="dialog-card" method="dialog">
-<div class="section-head"><div><h2>🐞 Azure Bug Draft</h2><p>נוצר אוטומטית מה־Test Case ומה־Runtime Evidence. מומלץ לעבור עליו לפני פתיחת Bug.</p></div><button class="btn ghost" value="cancel">✕</button></div>
-<label>Title<input id="bugDraftTitle"/></label>
-<label>Description<textarea id="bugDraftBody" rows="18"></textarea></label>
-<div class="actions-row dialog-actions"><button class="btn primary" id="copyBugDraftBtn" type="button">העתק Bug</button><button class="btn" id="downloadBugDraftBtn" type="button">הורד Markdown</button></div>
-</form>
-</dialog>
-<footer>GenAI Router QA Console · Swagger 1.0.6 · גרסה 0.02</footer>
+<footer>GenAI Router QA Console · Swagger 1.0.6 · גרסה 0.01</footer>
 <script src="/app.js" type="module"></script>
 </body>
 </html>
