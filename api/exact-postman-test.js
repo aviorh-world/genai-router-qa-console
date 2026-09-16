@@ -1,6 +1,41 @@
 const TARGET = 'https://chat-router-942568278050.me-west1.run.app/ita-chat-router-api/v1/conversations/new';
 const BODY = { appId: 'Desktop', userId: 'aviorha@ita.gov.il', caseId: '123456789' };
 
+const EXPECTED_AUDIENCE = 'https://chat-router-942568278050.me-west1.run.app';
+
+function decodeJwtPayload(auth){
+  try{
+    const raw=String(auth||'').replace(/^Bearer\s+/i,'').trim();
+    const parts=raw.split('.');
+    if(parts.length!==3) return {isJwt:false};
+    const json=Buffer.from(parts[1].replace(/-/g,'+').replace(/_/g,'/'),'base64').toString('utf8');
+    const c=JSON.parse(json);
+    const now=Math.floor(Date.now()/1000);
+    return {
+      isJwt:true,
+      iss:c.iss||null,
+      aud:c.aud||null,
+      email:c.email||null,
+      emailVerified:c.email_verified??null,
+      iat:c.iat||null,
+      exp:c.exp||null,
+      expired:typeof c.exp==='number'?c.exp<=now:null,
+      expiresInSec:typeof c.exp==='number'?c.exp-now:null,
+      audienceMatchesService:c.aud?c.aud===EXPECTED_AUDIENCE||c.aud===EXPECTED_AUDIENCE+'/':null
+    };
+  }catch(e){ return {isJwt:false,decodeError:e?.message||String(e)}; }
+}
+
+function diagnosisFor(status, tokenInfo, contentType, text){
+  const hints=[];
+  if(tokenInfo?.expired) hints.push('ה-Identity Token פג תוקף.');
+  if(tokenInfo?.aud && tokenInfo.audienceMatchesService===false) hints.push(`ה-aud של הטוקן אינו כתובת שירות ה-Cloud Run הצפויה (${EXPECTED_AUDIENCE}).`);
+  if(status===403) hints.push('403 מ-Cloud Run מתאים בין היתר למצב שבו הזהות שבטוקן אינה מורשית כ-Cloud Run Invoker (run.routes.invoke / roles/run.invoker), או כשהאימות שנשלח אינו מתקבל עבור השירות.');
+  if(status===401) hints.push('401 מתאים בדרך כלל לטוקן חסר/לא תקין/לא מתאים ליעד.');
+  if(/text\/html/i.test(contentType||'') || /^\s*<!doctype/i.test(String(text||''))) hints.push('ה-Upstream החזיר HTML ולא JSON; ה-bodyPreview למטה נועד לזהות מי החזיר את דף החסימה.');
+  return hints;
+}
+
 function bearer(token) {
   const t = String(token || '').trim();
   if (!t) return '';
@@ -36,6 +71,7 @@ export default async function handler(req,res){
     const auth=bearer(payload.token);
     if(!auth) return res.status(400).json({error:'Identity Token is required',logId:id});
 
+    const tokenInfo=decodeJwtPayload(auth);
     const requestEvidence={
       method:'POST',
       url:TARGET,
@@ -67,6 +103,7 @@ export default async function handler(req,res){
       test:'EXACT_POSTMAN_CREATE_FROM_VERCEL',
       classification,
       request:requestEvidence,
+      tokenDiagnostics:tokenInfo,
       response:{
         status:upstream.status,
         statusText:upstream.statusText||'',
@@ -74,7 +111,8 @@ export default async function handler(req,res){
         contentType,
         headers:safeHeaders(upstream.headers),
         bodyPreview:text.slice(0,5000)
-      }
+      },
+      diagnosis:diagnosisFor(upstream.status,tokenInfo,contentType,text)
     };
     console.log('[EXACT_POSTMAN_TEST]',JSON.stringify({...result,response:{...result.response,bodyPreview:result.response.bodyPreview.slice(0,1000)}}));
     return res.status(200).json(result);
