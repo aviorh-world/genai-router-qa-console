@@ -137,7 +137,12 @@ export function joinUrl(base, path) {
 }
 
 function inferEnvironment(report, runMeta) {
-  return String(report?.environment || report?.configuration?.environment || report?.config?.environment || runMeta?.environment || '').toLowerCase();
+  const candidates = [report?.configuration?.environment, report?.config?.environment, runMeta?.environment, report?.environment];
+  for (const v of candidates) if (typeof v === 'string' && v.trim()) return v.trim().toLowerCase();
+  const base = String(report?.configuration?.baseUrl || report?.config?.baseUrl || '');
+  if (/t-sh-apic|nonprod|non-prod/i.test(base)) return 'nonprod';
+  if (/run\.app|sandbox/i.test(base)) return 'sandbox';
+  return '';
 }
 
 function extendedClassify(r) {
