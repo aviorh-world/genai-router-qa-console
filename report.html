@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="robots" content="noindex,nofollow,noarchive" />
+  <title>RouterQA Report</title>
+  <style>
+:root {
+  --bg:#f6f8fb; --card:#fff; --text:#172033; --muted:#667085; --line:#dfe5ec;
+  --pass:#067647; --fail:#b42318; --warn:#b54708; --blocked:#6941c6; --skip:#667085; --error:#912018;
+  --primary:#155eef; --primary-soft:#eef4ff; --code:#101828; --codeText:#f2f4f7;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif;line-height:1.45}
+.page-header{position:static;background:#fff;border-bottom:1px solid var(--line);padding:16px 18px}
+h1{margin:0 0 4px;font-size:23px}.page-header p{margin:0;color:var(--muted);font-size:13px}
+main{max-width:1500px;margin:0 auto;padding:12px}
+.hidden{display:none!important}.muted{color:var(--muted)}
+.panel{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0}
+.state-panel{padding:28px;text-align:center}.state-panel.error{text-align:right;background:#fff1f0;border-color:#fda29b;color:#912018}
+.notice{background:#fffaeb;border:1px solid #fedf89;border-radius:10px;padding:10px 12px;margin:10px 0;font-size:12px;color:#7a2e0e}
+.summary-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:10px 0}
+.stat{background:#fff;border:1px solid var(--line);border-radius:11px;padding:10px;text-align:center}
+.stat span{font-size:11px;color:var(--muted)}.stat b{display:block;font-size:22px}.stat small{display:block;color:var(--muted);font-size:10px;margin-top:2px}
+.stat.pass b{color:var(--pass)}.stat.fail b,.stat.error b{color:var(--fail)}.stat.warning b{color:var(--warn)}.stat.blocked b{color:var(--blocked)}.stat.skip b{color:var(--skip)}
+.tabs,.filters,.actions-row,.retest-head{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.tabs{margin-bottom:10px}
+.tab,button,select,input{font:inherit}.tab,button{border:1px solid #cfd7e3;background:#fff;border-radius:9px;padding:8px 11px;cursor:pointer}.tab.active,button.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.filters input,.filters select{border:1px solid #cfd7e3;background:#fff;border-radius:8px;padding:8px}.filters input{flex:1;min-width:260px}.actions-row{margin-top:10px}.retest-head{justify-content:space-between}.retest-head h2{margin:0}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:1080px}th,td{padding:9px;border-bottom:1px solid #edf0f4;text-align:right;vertical-align:middle}th{position:sticky;top:0;background:#f9fafb;z-index:1;color:#475467;font-size:12px}tr.data-row:hover{background:#fafcff}
+.badge,.chip{display:inline-block;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:700;white-space:nowrap}.badge.PASS{background:#dcfae6;color:#05603a}.badge.FAIL,.badge.ERROR{background:#fee4e2;color:#912018}.badge.WARNING{background:#fef0c7;color:#93370d}.badge.BLOCKED{background:#f0eaff;color:#5925dc}.badge.SKIP{background:#f2f4f7;color:#475467}.chip{background:#f2f4f7;color:#344054;font-weight:600}.chip.high{background:#fee4e2;color:#912018}.chip.medium{background:#fff1e6;color:#9a3412}.chip.review{background:#fef0c7;color:#93370d}.chip.info{background:#eef2f6;color:#475467}
+.endpoint{direction:ltr;text-align:left;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.testname{max-width:390px}.expand-btn{padding:5px 8px;font-size:12px}.issue-select{transform:scale(1.1)}
+.detail-row td{background:#fcfdff;padding:0}.detail{padding:14px}.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.box{border:1px solid var(--line);border-radius:9px;padding:10px;background:#fff}.box h4{margin:0 0 6px;font-size:13px}.box p{margin:4px 0}
+pre{direction:ltr;text-align:left;white-space:pre-wrap;overflow:auto;max-width:100%;max-height:460px;background:var(--code);color:var(--codeText);padding:10px;border-radius:8px;font-size:11px}code.inline{direction:ltr;display:inline-block;background:#f2f4f7;border-radius:5px;padding:2px 5px;overflow-wrap:anywhere;max-width:100%}details{margin-top:8px}summary{cursor:pointer;font-weight:700}
+.mobile-list{display:none}.retest-panel textarea{width:100%;min-height:320px;direction:ltr;text-align:left;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;border:1px solid #b2ccff;border-radius:8px;padding:10px;background:#fff}
+@media(max-width:760px){main{padding:8px}.page-header{padding:11px 12px}h1{font-size:20px}.summary-grid{grid-template-columns:repeat(2,1fr)}.table-wrap{display:none}.mobile-list{display:block}.mobile-card{background:#fff;border:1px solid var(--line);border-radius:11px;padding:10px;margin:8px 0}.mobile-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.mobile-title{font-weight:700;font-size:13px;margin:6px 0}.mobile-endpoint{direction:ltr;text-align:left;font-family:ui-monospace,monospace;font-size:11px;color:#475467;overflow-wrap:anywhere}.detail-grid{grid-template-columns:1fr}.filters input{min-width:100%}.tab{flex:1}}
+
+</style>
+</head>
+<body>
+  <header class="page-header">
+    <div>
+      <h1>GenAI Router — QA Report</h1>
+      <p id="subtitle">טוען דוח…</p>
+    </div>
+  </header>
+
+  <main>
+    <section id="loading" class="panel state-panel">טוען את הדוח…</section>
+    <section id="error" class="panel state-panel error hidden"></section>
+
+    <div id="app" class="hidden">
+      <section id="envNotice" class="notice hidden"></section>
+
+      <section id="summary" class="summary-grid"></section>
+
+      <section class="panel">
+        <div class="tabs" role="tablist" aria-label="תצוגת בדיקות">
+          <button id="tabIssues" class="tab active" data-view="issues">Issues</button>
+          <button id="tabAll" class="tab" data-view="all">All tests</button>
+        </div>
+
+        <div class="filters">
+          <input id="search" type="search" placeholder="חיפוש לפי בדיקה / endpoint / classification…" />
+          <select id="statusFilter"><option value="">כל הסטטוסים</option></select>
+          <select id="groupFilter"><option value="">כל הקבוצות</option></select>
+          <select id="classFilter"><option value="">כל הסיווגים</option></select>
+        </div>
+
+        <div class="actions-row">
+          <button id="expandIssues">פתח תקלות</button>
+          <button id="collapseAll">סגור הכל</button>
+          <button id="selectVisible">בחר תקלות מוצגות</button>
+          <button id="clearSelection">נקה בחירה</button>
+          <button id="buildRetest" class="primary">צור Retest Pack</button>
+        </div>
+      </section>
+
+      <section id="tableHost" class="table-wrap"></section>
+      <section id="mobileHost" class="mobile-list"></section>
+
+      <section id="retestPanel" class="panel retest-panel hidden">
+        <div class="retest-head">
+          <div>
+            <h2>Retest Pack</h2>
+            <p id="retestNote" class="muted"></p>
+          </div>
+          <div class="actions-row">
+            <button id="copyRetest" class="primary">העתק</button>
+            <button id="closeRetest">סגור</button>
+          </div>
+        </div>
+        <textarea id="retestText" readonly></textarea>
+      </section>
+    </div>
+  </main>
+
+  <script type="module">
+const API = 'https://zckgzevslifettgujawz.supabase.co/functions/v1/routerqa-report-data';
+const STATUSES = ['PASS','FAIL','WARNING','BLOCKED','SKIP','ERROR'];
+const ISSUE_STATUSES = new Set(['FAIL','WARNING','ERROR']);
+
+const state = { data:null, items:[], view:'issues', opened:new Set(), selected:new Set() };
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pretty = v => { try { return typeof v === 'string' ? v : JSON.stringify(v, null, 2); } catch { return String(v ?? ''); } };
+const arr = v => Array.isArray(v) ? v : [];
+const lower = v => String(v ?? '').toLowerCase();
+
+export function readLinkParams(loc = window.location) {
+  const hash = new URLSearchParams((loc.hash || '').replace(/^#/,''));
+  const query = new URLSearchParams(loc.search || '');
+  return {
+    run: hash.get('run') || query.get('run') || '',
+    token: hash.get('token') || query.get('token') || '',
+  };
+}
+
+export function sanitizeHeaders(h) {
+  const src = h && typeof h === 'object' && !Array.isArray(h) ? h : {};
+  const out = {};
+  for (const [k,v] of Object.entries(src)) {
+    const lk = k.toLowerCase();
+    if (lk === 'authorization' || lk === 'x-serverless-authorization') out[k] = 'Bearer $TOKEN';
+    else if (lk.includes('secret') || lk === 'cookie' || lk === 'x-api-key' || lk === 'apikey') out[k] = '$' + k.toUpperCase().replace(/[^A-Z0-9]/g,'_');
+    else out[k] = v;
+  }
+  return out;
+}
+
+export function joinUrl(base, path) {
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path;
+  return String(base || '').replace(/\/$/,'') + (String(path).startsWith('/') ? '' : '/') + path;
+}
+
+function inferEnvironment(report, runMeta) {
+  return String(report?.environment || report?.configuration?.environment || report?.config?.environment || runMeta?.environment || '').toLowerCase();
+}
+
+function extendedClassify(r) {
+  const g = Number(r.group); const t = lower(r.test);
+  if (g === 7) return {classification:'Derived summary — לא לפתוח Defect נוסף', severity:'Info', family:'Derived stability summary'};
+  if (g === 11) return {classification:'Manual security review', severity:'Review', family:'Security review'};
+  if (g === 0 || g === 2) return {classification:'Product defect — RAG / grounding', severity:'High', family:'RAG / grounding reliability'};
+  if (g === 5 && t.includes('wrong content-type')) return {classification:'Contract / Spec review', severity:'Medium', family:'Unsupported Content-Type accepted'};
+  if (g === 5 && t.includes('extra field')) return {classification:'Contract / Spec review', severity:'Medium', family:'Undocumented extra field accepted'};
+  if (g === 5 && t.includes('baseline')) return {classification:'Swagger ↔ runtime drift — Spec review', severity:'Medium', family:'Swagger/runtime response drift'};
+  return {classification:'Needs QA/spec review', severity:'Review', family:'Other'};
+}
+
+function basicClassify(r) {
+  const t = lower(r.test), cat = String(r.category || '');
+  if (t.includes('golden question') || t.includes('fetch chunk') || t.includes('citation')) return {classification:'Product/RAG or execution issue', severity:'High', family:'RAG / execution'};
+  if (t.includes('wrong content-type')) return {classification:'Contract / Spec review', severity:'Medium', family:'Unsupported Content-Type accepted'};
+  if (t.includes('unexpected json field') || t.includes('extra field')) return {classification:'Contract / Spec review', severity:'Medium', family:'Undocumented extra field accepted'};
+  if (cat === 'EXECUTION_ERROR') return {classification:'Execution / transport issue', severity:'High', family:'Execution error'};
+  if (cat === 'CONTRACT' || cat === 'PROTOCOL_NEGATIVE') return {classification:'Contract / Spec review', severity:'Medium', family:'Contract behavior'};
+  return {classification:'Needs QA/spec review', severity:'Review', family:'Other'};
+}
+
+function purposeFor(item) {
+  switch (item.family) {
+    case 'RAG / grounding reliability': case 'RAG / execution': return 'לוודא שהשירות מחזיר תשובה פונקציונלית ומבוססת מקורות, ללא fallback/כשל אחזור לא צפוי.';
+    case 'Unsupported Content-Type accepted': return 'לוודא מהי התנהגות ה־Spec כאשר מתקבל Content-Type שאינו נתמך, והאם הבקשה אמורה להידחות.';
+    case 'Undocumented extra field accepted': return 'לוודא האם שדות JSON שאינם מוגדרים בחוזה אמורים להידחות או להיות מותרי התעלמות.';
+    case 'Swagger/runtime response drift': return 'לוודא שה־Swagger והתגובה בפועל מייצגים אותו חוזה מבחינת schema ו־Content-Type.';
+    case 'Security review': return 'בדיקת עמידות בפני prompt injection / חשיפת מידע; נדרש review סמנטי.';
+    case 'Derived stability summary': return 'סיכום נגזר מהרצות אחרות; אינו דפקט עצמאי.';
+    default: return 'לאמת את ההתנהגות בפועל מול הציפייה המוגדרת בבדיקה.';
+  }
+}
+
+function failedChecks(r) { return arr(r.checks).filter(c => c && c.result === 'FAIL'); }
+
+function expectedActual(r) {
+  const fs = failedChecks(r); const expected = [], actual = [];
+  for (const c of fs) {
+    const name = String(c.check || '');
+    if (/Expected HTTP status/i.test(name) && c.actual && typeof c.actual === 'object' && c.actual.expected) expected.push(`${name}: ${pretty(c.actual.expected)}`);
+    else if (/Wrong Content-Type rejected/i.test(name) && r.expectedStatuses) expected.push(`${name}: ${pretty(r.expectedStatuses)}`);
+    else if (/Content-Type|schema|Swagger/i.test(name)) expected.push(`${name}: חייב להתאים ל־Swagger/Spec המאושר`);
+    else if (/source|retrieval|fallback|ground|chunk/i.test(name)) expected.push(`${name}: התוצאה הפונקציונלית והמקורות חייבים לעמוד ב־Spec/Golden expectations`);
+    else expected.push(name || 'הבדיקה חייבת לעבור');
+    actual.push(`${name || 'Actual'}: ${pretty(c.actual)}`);
+  }
+  if (!expected.length && r.expectedStatuses) expected.push(`HTTP status: ${pretty(r.expectedStatuses)}`);
+  if (!actual.length && r.status != null) actual.push(`HTTP status בפועל: ${r.status}`);
+  return {expected: expected.join('\n') || '—', actual: actual.join('\n') || '—'};
+}
+
+function primaryHttpEvidence(r) {
+  const ev = arr(r.evidence).filter(e => e && e.method && e.path);
+  return ev.length ? ev[ev.length - 1] : {};
+}
+
+export function normalizeReportPayload(payload) {
+  const report = payload?.report || {};
+  const runMeta = payload?.run || {};
+  const isBasic = !!(report.runnerVersion || report.findingSummary || report.config) && !report.configuration;
+  const env = inferEnvironment(report, runMeta);
+  if (isBasic) return normalizeBasic(report, runMeta, env);
+  return normalizeExtended(report, runMeta, env);
+}
+
+function normalizeExtended(report, runMeta, env) {
+  const base = report.configuration?.baseUrl || '';
+  const items = arr(report.results).map((r,i) => {
+    const e = primaryHttpEvidence(r), c = extendedClassify(r), ea = expectedActual(r);
+    const headers = sanitizeHeaders(e.requestHeaders || {'Content-Type': e.requestContentType || 'application/json'});
+    if (e.method && !Object.keys(headers).some(k => k.toLowerCase() === 'authorization')) headers.Authorization = 'Bearer $TOKEN';
+    return {
+      id:`E-${i}`, suite:'Extended', raw:r, status:r.result || '', group:String(r.group ?? ''), test:r.test || '',
+      method:e.method || '', path:e.path || '', url:joinUrl(base, e.path || ''), http:e.status ?? '',
+      requestBody:e.requestBody, requestHeaders:headers, responseBody:e.text ?? e.json ?? e.answer ?? '', responseHeaders:e.headers || {},
+      checks:r.checks || [], evidence:r.evidence || [], classification:c.classification, severity:c.severity, family:c.family,
+      expected:ea.expected, actual:ea.actual, reason:r.reason || '', dependencies:arr(r.evidence).filter(x => x && x.method && x.path),
+      env
+    };
+  });
+  return {
+    kind:'extended', label:'Extended', env, report, runMeta, items,
+    summary: report.summary || {}, groupSummary: report.selectedGroupSummary || {},
+    title:`Extended · ${env || 'environment unknown'} · Swagger ${report.contract?.file || '1.0.7'}`
+  };
+}
+
+function normalizeBasic(report, runMeta, env) {
+  const items = arr(report.results).map((r,i) => {
+    const c = basicClassify(r), ea = expectedActual(r);
+    const headers = sanitizeHeaders(r.requestHeaders || {});
+    if (r.method && !Object.keys(headers).some(k => k.toLowerCase() === 'authorization')) headers.Authorization = 'Bearer $TOKEN';
+    return {
+      id:`B-${i}`, suite:'Basic', raw:r, status:r.result || '', group:r.category || 'Basic', test:r.test || '',
+      method:r.method || '', path:r.url || '', url:r.url || '', http:r.status ?? '', requestBody:r.requestBody,
+      requestHeaders:headers, responseBody:r.responseBody ?? '', responseHeaders:r.responseHeaders || {}, checks:r.checks || [], evidence:[],
+      classification:c.classification, severity:c.severity, family:c.family, expected:ea.expected, actual:ea.actual,
+      reason:r.reasonCode || r.errorType || '', dependencies:[r].filter(x => x.method && x.url), env
+    };
+  });
+  return {
+    kind:'basic', label:'Basic', env, report, runMeta, items,
+    summary: report.summary?.tests || {}, groupSummary:{},
+    title:`Basic · ${env || 'environment unknown'} · runner ${report.runnerVersion || ''}`
+  };
+}
+
+function statusCounts(model) {
+  const out = Object.fromEntries(STATUSES.map(s => [s, Number(model.summary?.[s] || 0)]));
+  if (STATUSES.every(s => out[s] === 0)) for (const x of model.items) if (out[x.status] != null) out[x.status]++;
+  return out;
+}
+
+function renderSummary(model) {
+  const counts = statusCounts(model);
+  document.getElementById('summary').innerHTML = STATUSES.map(s => `<div class="stat ${s.toLowerCase()}"><span>${s}</span><b>${counts[s]}</b><small>${model.label}</small></div>`).join('');
+  document.getElementById('subtitle').textContent = `${model.title} · Run ${model.runMeta?.id || ''}`;
+  const notice = document.getElementById('envNotice');
+  if (model.env === 'nonprod' || model.env === 'non-prod') {
+    notice.classList.remove('hidden');
+    notice.textContent = 'Nonprod משתמש בדאטה אמיתי ושונה מ־Sandbox. תוצאות RAG/תוכן מנותחות בפני עצמן ואינן מושוות אוטומטית ל־Sandbox. Contract/validation נשפטים מול ה־Spec בלבד.';
+  } else if (model.env === 'sandbox') {
+    notice.classList.remove('hidden');
+    notice.textContent = 'Sandbox: תוצאות RAG/תוכן תלויות בדאטה של הסביבה. אין להסיק מהן לבדן על Nonprod; Contract/validation נבדקים מול ה־Spec.';
+  }
+}
+
+function populateFilters(model) {
+  const statuses = [...new Set(model.items.map(x => x.status).filter(Boolean))];
+  const groups = [...new Set(model.items.map(x => x.group))].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
+  const classes = [...new Set(model.items.map(x => x.classification))].sort();
+  const sf = document.getElementById('statusFilter'), gf = document.getElementById('groupFilter'), cf = document.getElementById('classFilter');
+  sf.innerHTML = '<option value="">כל הסטטוסים</option>' + statuses.map(x=>`<option>${esc(x)}</option>`).join('');
+  gf.innerHTML = '<option value="">כל הקבוצות</option>' + groups.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+  cf.innerHTML = '<option value="">כל הסיווגים</option>' + classes.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+}
+
+function baseItems() { return state.view === 'issues' ? state.items.filter(x => ISSUE_STATUSES.has(x.status)) : state.items; }
+function visibleItems() {
+  const q = lower(document.getElementById('search')?.value?.trim());
+  const st = document.getElementById('statusFilter')?.value || '', g = document.getElementById('groupFilter')?.value || '', c = document.getElementById('classFilter')?.value || '';
+  return baseItems().filter(x => (!st || x.status===st) && (!g || x.group===g) && (!c || x.classification===c) && (!q || lower([x.test,x.url,x.classification,x.family,x.group].join(' ')).includes(q)));
+}
+
+function checkboxHtml(x) { return ISSUE_STATUSES.has(x.status) ? `<input class="issue-select" type="checkbox" data-select="${x.id}" ${state.selected.has(x.id)?'checked':''}>` : ''; }
+function sevClass(s) { return lower(s); }
+
+function detailHtml(x) {
+  return `<div class="detail">
+    <div class="detail-grid">
+      <div class="box"><h4>מטרת הבדיקה</h4><p>${esc(purposeFor(x))}</p></div>
+      <div class="box"><h4>Classification / Severity</h4><p>${esc(x.classification)} · <b>${esc(x.severity)}</b></p><p class="muted">Family: ${esc(x.family)}</p></div>
+      <div class="box"><h4>Expected</h4><pre>${esc(x.expected)}</pre></div>
+      <div class="box"><h4>Actual</h4><pre>${esc(x.actual)}</pre></div>
+    </div>
+    <div class="box" style="margin-top:10px"><h4>Manual Reproduction</h4>
+      <ol>${manualSteps(x).map(s=>`<li>${esc(s)}</li>`).join('')}</ol>
+      <p><b>Method:</b> <code class="inline">${esc(x.method || '—')}</code></p>
+      <p><b>Full URL:</b> <code class="inline">${esc(x.url || '—')}</code></p>
+      <p><b>HTTP בפועל:</b> <code class="inline">${esc(x.http || '—')}</code></p>
+      <h4>Request headers</h4><pre>${esc(pretty(x.requestHeaders))}</pre>
+      <h4>Request body</h4><pre>${esc(pretty(x.requestBody ?? null))}</pre>
+      <h4>Actual response</h4><pre>${esc(pretty(x.responseBody || '(empty)'))}</pre>
+      <h4>Dependencies / Setup</h4><pre>${esc(dependencySummary(x))}</pre>
+      <details><summary>Copy-ready cURL</summary><pre>${esc(curlFor(x))}</pre></details>
+      <details><summary>Raw checks / evidence</summary><pre>${esc(pretty({checks:x.checks,evidence:x.evidence,raw:x.raw}))}</pre></details>
+    </div>
+  </div>`;
+}
+
+function rowHtml(x) {
+  return `<tr class="data-row"><td>${checkboxHtml(x)}</td><td><span class="badge ${esc(x.status)}">${esc(x.status)}</span></td><td>${esc(x.group)}</td><td class="testname">${esc(x.test)}</td><td>${esc(x.method)}</td><td class="endpoint" title="${esc(x.url)}">${esc(x.url || '—')}</td><td>${esc(x.http || '—')}</td><td><span class="chip">${esc(x.family)}</span></td><td><span class="chip ${sevClass(x.severity)}">${esc(x.severity)}</span></td><td><button class="expand-btn" data-open="${x.id}">${state.opened.has(x.id)?'▲ סגור':'▼ פרטים'}</button></td></tr>${state.opened.has(x.id)?`<tr class="detail-row"><td colspan="10">${detailHtml(x)}</td></tr>`:''}`;
+}
+
+function mobileCard(x) {
+  return `<div class="mobile-card"><div class="mobile-top"><div>${checkboxHtml(x)} <span class="badge ${esc(x.status)}">${esc(x.status)}</span> <span class="chip ${sevClass(x.severity)}">${esc(x.severity)}</span></div><span class="chip">${esc(x.group)}</span></div><div class="mobile-title">${esc(x.test)}</div><div class="mobile-endpoint">${esc((x.method||'')+' '+(x.url||''))}</div><div style="margin-top:6px"><span class="chip">${esc(x.family)}</span></div><button class="expand-btn" style="margin-top:8px" data-open="${x.id}">${state.opened.has(x.id)?'▲ סגור':'▼ פרטים'}</button>${state.opened.has(x.id)?detailHtml(x):''}</div>`;
+}
+
+function render() {
+  const items = visibleItems();
+  const header = '<table><thead><tr><th></th><th>Status</th><th>Group</th><th>Test</th><th>Method</th><th>Endpoint</th><th>HTTP</th><th>Family</th><th>Severity</th><th></th></tr></thead><tbody>';
+  document.getElementById('tableHost').innerHTML = header + items.map(rowHtml).join('') + '</tbody></table>';
+  document.getElementById('mobileHost').innerHTML = items.map(mobileCard).join('');
+  bindDynamicEvents();
+}
+
+function bindDynamicEvents() {
+  document.querySelectorAll('[data-open]').forEach(el => el.addEventListener('click', () => { const id=el.dataset.open; state.opened.has(id)?state.opened.delete(id):state.opened.add(id); render(); }));
+  document.querySelectorAll('[data-select]').forEach(el => el.addEventListener('change', () => { el.checked?state.selected.add(el.dataset.select):state.selected.delete(el.dataset.select); }));
+}
+
+function manualSteps(x) {
+  const steps = ['ודא שההרשאה לסביבה פעילה ושה־TOKEN תקף.'];
+  if (x.dependencies?.length > 1) steps.push('בצע את קריאות ה־setup/dependencies בסדר שנלכד בהרצה, עם IDs דינמיים חדשים.');
+  else if (hasDynamicDependency(x)) steps.push('הבדיקה משתמשת ב־ID דינמי אך שרשרת ה־setup לא נלכדה במלואה; צור prerequisite חדש לפני replay או הרץ את הקבוצה הרלוונטית.');
+  steps.push(`שלח ${x.method || 'את הבקשה'} אל ${x.url || 'ה־endpoint המתועד'} עם ה־headers וה־body המוצגים.`);
+  steps.push('השווה HTTP status וגוף תגובה ל־Expected.');
+  steps.push(x.family === 'Derived stability summary' ? 'אין לפתוח Defect נוסף; בצע retest למקרי המקור.' : 'לאחר תיקון, הרץ את הבדיקה הממוקדת, את הקבוצה הרלוונטית, ולפני סגירה Full Regression.');
+  return steps;
+}
+
+function hasDynamicDependency(x) {
+  const b = x.requestBody && typeof x.requestBody === 'object' ? x.requestBody : (()=>{try{return JSON.parse(x.requestBody||'{}')}catch{return {}}})();
+  return !!(b.conversationId || b.messageId || b.chunkId);
+}
+
+function dependencySummary(x) {
+  const ds = x.dependencies || [];
+  if (ds.length <= 1) return hasDynamicDependency(x) ? 'קיים ID דינמי בבקשה, אך שרשרת setup מלאה לא נלכדה באותה בדיקה. Retest Pack לא ימציא dependency.' : 'לא נלכדה שרשרת setup נוספת עבור בדיקה זו.';
+  return ds.map((d,i)=>`${i+1}. ${d.method||''} ${d.path||d.url||''} -> HTTP ${d.status??''}`).join('\n');
+}
+
+function curlFor(x, bodyOverride=null, urlOverride=null) {
+  const url = urlOverride || x.url; if (!url) return '# אין URL מתועד';
+  const hs = sanitizeHeaders(x.requestHeaders || {});
+  if (!Object.keys(hs).some(k=>k.toLowerCase()==='authorization')) hs.Authorization='Bearer $TOKEN';
+  let lines = [`curl -sS -i -X ${x.method || 'GET'} '${url}'`];
+  for (const [k,v] of Object.entries(hs)) lines.push(`  -H '${k}: ${String(v).replace(/'/g,"'\\''")}'`);
+  const body = bodyOverride ?? x.requestBody;
+  if (body != null) {
+    const txt = typeof body === 'string' ? body : JSON.stringify(body);
+    lines.push(`  --data '${txt.replace(/'/g,"'\\''")}'`);
+  }
+  return lines.join(' \\\n');
+}
+
+function replaceDynamicIds(value, vars) {
+  if (Array.isArray(value)) return value.map(v=>replaceDynamicIds(v,vars));
+  if (value && typeof value === 'object') {
+    const out={}; for (const [k,v] of Object.entries(value)) out[k]=replaceDynamicIds(v,vars); return out;
+  }
+  if (typeof value === 'string' && vars[value]) return vars[value];
+  return value;
+}
+
+export function buildRetestPackFor(items, model) {
+  const lines = [`# RouterQA Retest Pack — ${model.label} / ${model.env || 'unknown env'}`, '# Generated from captured evidence only. It does NOT replace group retest or full regression.', "# Set a valid token first: export TOKEN='...'", ''];
+  const seen = new Set();
+  for (const x of items) {
+    lines.push('', '# ==================================================', `# ${x.status} | ${x.test}`, `# ${x.classification} | Severity: ${x.severity}`);
+    const ds = x.dependencies || [];
+    if (model.kind === 'extended' && ds.length > 1) {
+      const vars = {};
+      ds.forEach((d, idx) => {
+        const url = joinUrl(model.report.configuration?.baseUrl || '', d.path || '');
+        let body = replaceDynamicIds(d.requestBody ?? null, vars);
+        const headers = sanitizeHeaders(d.requestHeaders || {'Content-Type':d.requestContentType || 'application/json'});
+        const tmp = {method:d.method||'GET', url, requestHeaders:headers, requestBody:body};
+        const key = `${tmp.method}|${url}|${pretty(body)}`;
+        if (seen.has(key)) { lines.push(`# Step ${idx+1}: duplicate identical call omitted`); return; }
+        seen.add(key);
+        lines.push(`# Step ${idx+1}: ${tmp.method} ${url}`);
+        if (d.path === '/v1/conversations/new') {
+          const call = curlFor(tmp);
+          lines.push(`CREATE_RESPONSE=$( ${call} | sed -n '/^{/,$p' )`);
+          lines.push(`CONVERSATION_ID=$(printf '%s' "$CREATE_RESPONSE" | python -c 'import sys,json; print(json.load(sys.stdin)["conversationId"])')`);
+          if (d.json?.conversationId) vars[d.json.conversationId] = '${CONVERSATION_ID}';
+          lines.push('test -n "$CONVERSATION_ID" || { echo "Missing conversationId"; exit 1; }');
+        } else {
+          lines.push(curlFor(tmp));
+        }
+        lines.push('');
+      });
+    } else {
+      if (hasDynamicDependency(x)) {
+        lines.push('# PREREQUISITE REQUIRED: request contains a dynamic ID but its creation chain was not captured in this finding.');
+        lines.push('# Safer option: run the relevant RouterQA group, or create the prerequisite manually before replay.');
+      } else {
+        const key = `${x.method}|${x.url}|${pretty(x.requestBody)}`;
+        if (!seen.has(key)) { seen.add(key); lines.push(curlFor(x)); }
+      }
+    }
+  }
+  lines.push('', '# After targeted retest: run the relevant group, then full regression before closure.');
+  return lines.join('\n');
+}
+
+function buildRetest() {
+  const items = state.items.filter(x => state.selected.has(x.id));
+  if (!items.length) { alert('בחר לפחות FAIL/WARNING/ERROR אחד.'); return; }
+  const txt = buildRetestPackFor(items, state.data);
+  document.getElementById('retestText').value = txt;
+  document.getElementById('retestNote').textContent = `${items.length} findings selected. Dynamic dependencies are reused only when captured; missing prerequisites are explicitly flagged.`;
+  document.getElementById('retestPanel').classList.remove('hidden');
+  document.getElementById('retestPanel').scrollIntoView({behavior:'smooth'});
+}
+
+function bindStaticEvents() {
+  document.getElementById('tabIssues').addEventListener('click',()=>setView('issues'));
+  document.getElementById('tabAll').addEventListener('click',()=>setView('all'));
+  ['search','statusFilter','groupFilter','classFilter'].forEach(id => document.getElementById(id).addEventListener(id==='search'?'input':'change', render));
+  document.getElementById('expandIssues').addEventListener('click',()=>{visibleItems().filter(x=>ISSUE_STATUSES.has(x.status)).forEach(x=>state.opened.add(x.id));render();});
+  document.getElementById('collapseAll').addEventListener('click',()=>{state.opened.clear();render();});
+  document.getElementById('selectVisible').addEventListener('click',()=>{visibleItems().filter(x=>ISSUE_STATUSES.has(x.status)).forEach(x=>state.selected.add(x.id));render();});
+  document.getElementById('clearSelection').addEventListener('click',()=>{state.selected.clear();render();});
+  document.getElementById('buildRetest').addEventListener('click',buildRetest);
+  document.getElementById('closeRetest').addEventListener('click',()=>document.getElementById('retestPanel').classList.add('hidden'));
+  document.getElementById('copyRetest').addEventListener('click',async()=>{const t=document.getElementById('retestText');try{await navigator.clipboard.writeText(t.value);alert('Retest Pack הועתק.')}catch{t.select();document.execCommand('copy');}});
+}
+
+function setView(v) {
+  state.view=v; state.opened.clear();
+  document.getElementById('tabIssues').classList.toggle('active',v==='issues');
+  document.getElementById('tabAll').classList.toggle('active',v==='all');
+  render();
+}
+
+async function init() {
+  bindStaticEvents();
+  const {run,token}=readLinkParams();
+  if (!run || !token) return showError('הקישור חסר run או token. יש לפתוח את הקישור שנוצר בסיום ההרצה.');
+  try {
+    const resp = await fetch(`${API}?run=${encodeURIComponent(run)}`, {cache:'no-store',headers:{'x-routerqa-view-token':token}});
+    let payload=null; try{payload=await resp.json()}catch{}
+    if (!resp.ok) {
+      const code=payload?.error || `HTTP ${resp.status}`;
+      if (resp.status===410) throw new Error('הקישור פג תוקף או בוטל.');
+      if (resp.status===404) throw new Error('הדוח או הקישור לא נמצאו.');
+      throw new Error(`טעינת הדוח נכשלה: ${code}`);
+    }
+    const model = normalizeReportPayload(payload);
+    state.data=model; state.items=model.items;
+    renderSummary(model); populateFilters(model);
+    document.getElementById('loading').classList.add('hidden'); document.getElementById('app').classList.remove('hidden'); render();
+  } catch (e) { showError(e.message || String(e)); }
+}
+
+function showError(msg) {
+  document.getElementById('loading').classList.add('hidden');
+  const el=document.getElementById('error'); el.classList.remove('hidden'); el.innerHTML=`<b>לא ניתן לפתוח את הדוח.</b><br>${esc(msg)}`;
+}
+
+if (typeof window !== 'undefined' && typeof document !== 'undefined') init();
+
+</script>
+</body>
+</html>
